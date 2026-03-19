@@ -1,16 +1,35 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { NotesProvider } from "@/contexts/NotesContext";
+import AppSidebar from "@/components/AppSidebar";
+import NotesList from "@/components/NotesList";
+import NoteEditor from "@/components/NoteEditor";
+import ChatPanel from "@/components/ChatPanel";
+import MobileLayout from "@/components/MobileLayout";
+import { useIsMobile } from "@/hooks/use-mobile";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const DesktopLayout = () => (
+  <div className="h-screen flex overflow-hidden">
+    <AppSidebar />
+    <NotesList />
+    <NoteEditor />
+    <ChatPanel />
+  </div>
+);
+
+const Index = () => {
+  const isMobile = useIsMobile();
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
-    </div>
+    <NotesProvider>
+      {isMobile ? (
+        <>
+          <MobileLayout />
+          <ChatPanel />
+        </>
+      ) : (
+        <DesktopLayout />
+      )}
+    </NotesProvider>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
