@@ -11,6 +11,7 @@ const NotesList = () => {
     deleteNote,
     selectedCategoryId,
     categories,
+    notes,
   } = useNotes();
 
   const getCategoryIcon = (catId: string) =>
@@ -19,6 +20,62 @@ const NotesList = () => {
   const formatDate = (date: string) => {
     const d = new Date(date);
     return d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  };
+
+  // Group by root notes first, then children beneath
+  const rootNotes = filteredNotes.filter((n) => !n.parentNoteId || !filteredNotes.some((fn) => fn.id === n.parentNoteId));
+  const childNotesOf = (parentId: string) => filteredNotes.filter((n) => n.parentNoteId === parentId);
+
+  const renderNote = (note: typeof filteredNotes[0], depth = 0) => {
+    const children = childNotesOf(note.id);
+    return (
+      <div key={note.id}>
+        <motion.button
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          onClick={() => setSelectedNoteId(note.id)}
+          className={`w-full text-left p-3 rounded-lg transition-all group ${
+            selectedNoteId === note.id
+              ? "bg-primary/10 border border-primary/20"
+              : "hover:bg-muted/50 border border-transparent"
+          }`}
+          style={{ paddingLeft: `${12 + depth * 16}px` }}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 mb-1">
+                {depth > 0 && <span className="text-[10px] text-muted-foreground">↳</span>}
+                <span className="text-xs">{getCategoryIcon(note.categoryId)}</span>
+                <h3 className="text-sm font-medium truncate text-card-foreground font-body">
+                  {note.title}
+                </h3>
+              </div>
+              <p className="text-xs text-muted-foreground line-clamp-2 font-body">
+                {note.content || "Sin contenido..."}
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-[10px] text-muted-foreground">{formatDate(note.updatedAt)}</span>
+                {note.checklist.length > 0 && (
+                  <span className="text-[10px] text-muted-foreground">
+                    ✓ {note.checklist.filter((i) => i.completed).length}/{note.checklist.length}
+                  </span>
+                )}
+                {note.linkedNoteIds.length > 0 && (
+                  <span className="text-[10px] text-muted-foreground">🔗 {note.linkedNoteIds.length}</span>
+                )}
+              </div>
+            </div>
+            <Trash2
+              size={14}
+              className="opacity-0 group-hover:opacity-50 hover:!opacity-100 text-destructive mt-0.5 shrink-0 transition-opacity"
+              onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}
+            />
+          </div>
+        </motion.button>
+        {children.map((child) => renderNote(child, depth + 1))}
+      </div>
+    );
   };
 
   return (
@@ -37,7 +94,7 @@ const NotesList = () => {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-2 space-y-1">
+      <div className="flex-1 overflow-y-auto scrollbar-thin p-2 space-y-0.5">
         <AnimatePresence>
           {filteredNotes.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm">
@@ -46,47 +103,7 @@ const NotesList = () => {
               <p className="text-xs mt-1">Crea una nueva nota para empezar</p>
             </div>
           ) : (
-            filteredNotes.map((note) => (
-              <motion.button
-                key={note.id}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                onClick={() => setSelectedNoteId(note.id)}
-                className={`w-full text-left p-3 rounded-lg transition-all group ${
-                  selectedNoteId === note.id
-                    ? "bg-primary/10 border border-primary/20"
-                    : "hover:bg-muted/50 border border-transparent"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-xs">{getCategoryIcon(note.categoryId)}</span>
-                      <h3 className="text-sm font-medium truncate text-card-foreground font-body">
-                        {note.title}
-                      </h3>
-                    </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2 font-body">
-                      {note.content || "Sin contenido..."}
-                    </p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-[10px] text-muted-foreground">{formatDate(note.updatedAt)}</span>
-                      {note.checklist.length > 0 && (
-                        <span className="text-[10px] text-muted-foreground">
-                          ✓ {note.checklist.filter((i) => i.completed).length}/{note.checklist.length}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <Trash2
-                    size={14}
-                    className="opacity-0 group-hover:opacity-50 hover:!opacity-100 text-destructive mt-0.5 shrink-0 transition-opacity"
-                    onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}
-                  />
-                </div>
-              </motion.button>
-            ))
+            rootNotes.map((note) => renderNote(note))
           )}
         </AnimatePresence>
       </div>
