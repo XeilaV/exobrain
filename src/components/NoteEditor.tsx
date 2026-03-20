@@ -47,6 +47,11 @@ const NoteEditor = () => {
   const [showToc, setShowToc] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const headings = useMemo(
+    () => (selectedNote ? extractHeadings(selectedNote.content) : []),
+    [selectedNote?.content]
+  );
+
   if (!selectedNote) {
     return (
       <div className="flex-1 flex items-center justify-center bg-background">
@@ -73,7 +78,6 @@ const NoteEditor = () => {
   const completedCount = selectedNote.checklist.filter((i) => i.completed).length;
 
   const isLong = selectedNote.content.length > LONG_CONTENT_THRESHOLD;
-  const headings = useMemo(() => extractHeadings(selectedNote.content), [selectedNote.content]);
   const showMiniToc = isLong && headings.length > 0;
 
   const availableToLink = notes.filter(
