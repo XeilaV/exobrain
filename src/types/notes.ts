@@ -9,6 +9,8 @@ export interface Note {
   title: string;
   content: string;
   categoryId: string;
+  parentNoteId: string | null;
+  linkedNoteIds: string[];
   checklist: ChecklistItem[];
   createdAt: string;
   updatedAt: string;
@@ -19,6 +21,7 @@ export interface Category {
   name: string;
   icon: string;
   color: string;
+  parentId: string | null;
 }
 
 export interface ChatMessage {
