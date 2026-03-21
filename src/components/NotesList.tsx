@@ -79,7 +79,7 @@ const NotesList = () => {
   };
 
   return (
-    <div className="w-72 h-full border-r border-border bg-card flex flex-col">
+    <div className="w-full md:w-72 h-full border-r border-border bg-card flex flex-col">
       <div className="p-4 border-b border-border flex items-center justify-between">
         <h2 className="font-display text-lg font-semibold text-card-foreground">
           {selectedCategoryId
