@@ -71,7 +71,7 @@ const MobileLayout = () => {
         )}
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden flex flex-col">
         {view === "sidebar" && (
           <div onClick={(e) => {
             const target = e.target as HTMLElement;
