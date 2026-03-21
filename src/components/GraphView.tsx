@@ -222,8 +222,13 @@ const GraphView = () => {
     if (nodeId.startsWith("cat-")) {
       toggleCategory(nodeId.replace("cat-", ""));
     } else if (nodeId.startsWith("note-")) {
-      setSelectedNoteId(nodeId.replace("note-", ""));
-      setActiveView("notes");
+      const noteId = nodeId.replace("note-", "");
+      // Force re-selection even if same note, so mobile navigates to editor
+      setSelectedNoteId(null);
+      setTimeout(() => {
+        setSelectedNoteId(noteId);
+        setActiveView("notes");
+      }, 0);
     }
   };
 
