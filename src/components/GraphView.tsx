@@ -247,7 +247,7 @@ const GraphView = () => {
   return (
     <div
       ref={containerRef}
-      className="flex-1 bg-background overflow-hidden relative select-none touch-none"
+      className="flex-1 h-full w-full bg-background overflow-hidden relative select-none touch-none"
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
