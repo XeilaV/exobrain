@@ -15,7 +15,7 @@ const MobileLayout = () => {
 
   // Auto-switch to editor when a note is selected (from list, chat, or graph)
   useEffect(() => {
-    if (selectedNoteId && selectedNoteId !== prevNoteId.current) {
+    if (selectedNoteId && (selectedNoteId !== prevNoteId.current || view === "graph")) {
       setView("editor");
     }
     prevNoteId.current = selectedNoteId;
