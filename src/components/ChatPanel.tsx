@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useNotes } from "@/contexts/NotesContext";
 import { ChatMessage } from "@/types/notes";
-import { Send, MessageCircle, X, Sparkles, Loader2 } from "lucide-react";
+import { Send, X, Sparkles, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
@@ -13,11 +14,21 @@ const ChatPanel = () => {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { createNoteFromChat, categories } = useNotes();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + "px";
+    }
+  }, [input]);
 
   const send = async () => {
     const text = input.trim();
@@ -88,7 +99,6 @@ const ChatPanel = () => {
         }
       }
 
-      // Check if the response suggests creating a note
       if (assistantSoFar.includes("---NOTA---")) {
         const match = assistantSoFar.match(/---NOTA---\n(.+?)\n([\s\S]+?)---FIN---/);
         if (match) {
@@ -106,9 +116,25 @@ const ChatPanel = () => {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  };
+
+  // Mobile: fullscreen overlay. Desktop: bottom-right panel.
+  const panelClasses = isMobile
+    ? "fixed inset-0 bg-card flex flex-col z-50"
+    : "fixed bottom-6 right-6 w-96 h-[500px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden z-50";
+
+  // Move toggle button higher on mobile to avoid blocking bottom actions
+  const toggleClasses = isMobile
+    ? "fixed bottom-20 right-4 p-3.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-opacity z-50"
+    : "fixed bottom-6 right-6 p-4 rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-opacity z-50";
+
   return (
     <>
-      {/* Toggle button */}
       <AnimatePresence>
         {!isOpen && (
           <motion.button
@@ -116,24 +142,23 @@ const ChatPanel = () => {
             animate={{ scale: 1 }}
             exit={{ scale: 0 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 p-4 rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-opacity z-50"
+            className={toggleClasses}
           >
-            <Sparkles size={22} />
+            <Sparkles size={isMobile ? 20 : 22} />
           </motion.button>
         )}
       </AnimatePresence>
 
-      {/* Chat panel */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-6 right-6 w-96 h-[500px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden z-50"
+            className={panelClasses}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border bg-chat">
+            <div className="flex items-center justify-between p-4 border-b border-border bg-chat shrink-0">
               <div className="flex items-center gap-2">
                 <Sparkles size={18} className="text-primary" />
                 <h3 className="font-display font-semibold text-card-foreground text-sm">
@@ -168,7 +193,7 @@ const ChatPanel = () => {
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm font-body ${
+                    className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm font-body ${
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground rounded-br-md"
                         : "bg-chat-ai text-foreground rounded-bl-md"
@@ -179,7 +204,7 @@ const ChatPanel = () => {
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
                     ) : (
-                      msg.content
+                      <span className="whitespace-pre-wrap">{msg.content}</span>
                     )}
                   </div>
                 </motion.div>
@@ -196,21 +221,23 @@ const ChatPanel = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
-            <div className="p-3 border-t border-border bg-chat">
-              <div className="flex items-center gap-2">
-                <input
+            {/* Input - ChatGPT-style textarea */}
+            <div className="p-3 border-t border-border bg-chat shrink-0">
+              <div className="flex items-end gap-2">
+                <textarea
+                  ref={textareaRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
+                  onKeyDown={handleKeyDown}
                   placeholder="Escribe un mensaje..."
-                  className="flex-1 bg-background rounded-xl px-3.5 py-2.5 text-sm outline-none text-foreground placeholder:text-muted-foreground font-body focus:ring-1 focus:ring-ring"
+                  rows={1}
+                  className="flex-1 bg-background rounded-xl px-3.5 py-2.5 text-sm outline-none text-foreground placeholder:text-muted-foreground font-body focus:ring-1 focus:ring-ring resize-none max-h-[120px] overflow-y-auto"
                   disabled={isLoading}
                 />
                 <button
                   onClick={send}
                   disabled={isLoading || !input.trim()}
-                  className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
+                  className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40 shrink-0"
                 >
                   <Send size={16} />
                 </button>

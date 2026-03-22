@@ -10,7 +10,7 @@ type MobileView = "sidebar" | "list" | "editor" | "graph";
 
 const MobileLayout = () => {
   const [view, setView] = useState<MobileView>("list");
-  const { selectedNoteId, setSelectedCategoryId, activeView, setActiveView } = useNotes();
+  const { selectedNoteId, setSelectedNoteId, setSelectedCategoryId, activeView, setActiveView } = useNotes();
   const prevNoteId = useRef(selectedNoteId);
 
   // Auto-switch to editor when a note is selected (from list, chat, or graph)
@@ -30,6 +30,7 @@ const MobileLayout = () => {
 
   const handleBack = () => {
     if (view === "editor" || view === "graph") {
+      setSelectedNoteId(null); // Clear selection to avoid stale state
       setView("list");
       if (activeView === "graph") setActiveView("notes");
     } else if (view === "sidebar") {
