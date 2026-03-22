@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Menu, ArrowLeft, Map } from "lucide-react";
+import { Menu, ArrowLeft, Network } from "lucide-react";
 import AppSidebar from "./AppSidebar";
 import NotesList from "./NotesList";
 import NoteEditor from "./NoteEditor";
@@ -13,7 +13,6 @@ const MobileLayout = () => {
   const { selectedNoteId, setSelectedNoteId, setSelectedCategoryId, activeView, setActiveView } = useNotes();
   const prevNoteId = useRef(selectedNoteId);
 
-  // Auto-switch to editor when a note is selected (from list, chat, or graph)
   useEffect(() => {
     if (selectedNoteId && selectedNoteId !== prevNoteId.current) {
       setView("editor");
@@ -21,7 +20,6 @@ const MobileLayout = () => {
     prevNoteId.current = selectedNoteId;
   }, [selectedNoteId]);
 
-  // Sync graph view toggle
   useEffect(() => {
     if (activeView === "graph" && view !== "graph") {
       setView("graph");
@@ -30,7 +28,7 @@ const MobileLayout = () => {
 
   const handleBack = () => {
     if (view === "editor" || view === "graph") {
-      setSelectedNoteId(null); // Clear selection to avoid stale state
+      setSelectedNoteId(null);
       setView("list");
       if (activeView === "graph") setActiveView("notes");
     } else if (view === "sidebar") {
@@ -38,45 +36,46 @@ const MobileLayout = () => {
     }
   };
 
-  const titles: Record<MobileView, string> = {
-    sidebar: "Categorías",
-    list: "Notas",
-    editor: "Editor",
-    graph: "Mapa",
-  };
-
   return (
     <div className="h-screen flex flex-col bg-background">
-      {/* Mobile header */}
-      <div className="flex items-center gap-3 p-3 border-b border-border bg-card">
+      {/* Mobile header - always visible */}
+      <div className="flex items-center gap-3 p-3 border-b border-border bg-card shrink-0">
         {view === "list" ? (
-          <>
-            <button onClick={() => setView("sidebar")} className="p-1.5 rounded-md hover:bg-muted">
-              <Menu size={20} className="text-foreground" />
-            </button>
-            <h1 className="font-display font-bold text-foreground flex-1">{titles[view]}</h1>
-            <button
-              onClick={() => { setActiveView("graph"); setView("graph"); }}
-              className="p-1.5 rounded-md hover:bg-muted"
-            >
-              <Map size={18} className="text-muted-foreground" />
-            </button>
-          </>
+          <button onClick={() => setView("sidebar")} className="p-1.5 rounded-md hover:bg-muted">
+            <Menu size={20} className="text-foreground" />
+          </button>
         ) : (
-          <>
-            <button onClick={handleBack} className="p-1.5 rounded-md hover:bg-muted">
-              <ArrowLeft size={20} className="text-foreground" />
-            </button>
-            <h1 className="font-display font-bold text-foreground">{titles[view]}</h1>
-          </>
+          <button onClick={handleBack} className="p-1.5 rounded-md hover:bg-muted">
+            <ArrowLeft size={20} className="text-foreground" />
+          </button>
         )}
+
+        <h1 className="font-display font-bold text-foreground flex-1">
+          {view === "sidebar" ? "Categorías" : view === "graph" ? "Mapa" : view === "editor" ? "Editor" : "Notas"}
+        </h1>
+
+        {/* Map icon always visible top-right */}
+        <button
+          onClick={() => {
+            if (view === "graph") {
+              setActiveView("notes");
+              setView("list");
+            } else {
+              setActiveView("graph");
+              setView("graph");
+            }
+          }}
+          className={`p-1.5 rounded-md hover:bg-muted ${view === "graph" ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}
+        >
+          <Network size={18} />
+        </button>
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col">
         {view === "sidebar" && (
-          <div onClick={(e) => {
+          <div className="flex-1 overflow-hidden" onClick={(e) => {
             const target = e.target as HTMLElement;
-            if (target.closest("button") || target.closest("nav")) {
+            if (target.closest("button[data-category-select]") || target.closest("[data-all-notes]")) {
               setTimeout(() => setView("list"), 100);
             }
           }}>

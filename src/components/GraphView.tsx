@@ -10,6 +10,7 @@ interface NodePosition {
   icon: string;
   type: "category" | "note";
   categoryId?: string;
+  parentNoteId?: string | null;
   visible: boolean;
 }
 
@@ -21,50 +22,40 @@ interface Edge {
 
 const CAT_RADIUS = 28;
 const NOTE_RADIUS = 20;
+const PADDING = 40;
 
 const GraphView = () => {
-  const { notes, categories, setSelectedNoteId, setActiveView, getRootCategories, getSubcategories } = useNotes();
+  const { notes, categories, setSelectedNoteId, setActiveView } = useNotes();
   const containerRef = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<NodePosition[]>([]);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [drag, setDrag] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
-
-  // Collect all category ids (including nested) for a given root
-  const getAllCatIds = useCallback((catId: string): string[] => {
-    const subs = getSubcategories(catId);
-    return [catId, ...subs.flatMap((s) => getAllCatIds(s.id))];
-  }, [getSubcategories]);
-
-  // Build flat list of all categories with hierarchy info
-  const allCats = useMemo(() => {
-    const result: { id: string; name: string; icon: string; parentId: string | null; depth: number }[] = [];
-    const walk = (parentId: string | null, depth: number) => {
-      const cats = parentId === null ? getRootCategories() : getSubcategories(parentId);
-      cats.forEach((c) => {
-        result.push({ ...c, depth });
-        walk(c.id, depth + 1);
-      });
-    };
-    walk(null, 0);
-    return result;
-  }, [categories, getRootCategories, getSubcategories]);
 
   const toggleCategory = useCallback((catId: string) => {
     setExpandedCats((prev) => {
       const next = new Set(prev);
-      if (next.has(catId)) {
-        // Collapse: remove this and all children
-        const allIds = getAllCatIds(catId);
-        allIds.forEach((id) => next.delete(id));
-      } else {
-        next.add(catId);
-      }
+      if (next.has(catId)) next.delete(catId);
+      else next.add(catId);
       return next;
     });
-  }, [getAllCatIds]);
+  }, []);
 
-  // Calculate positions whenever expansion changes
+  const toggleNoteExpand = useCallback((noteId: string) => {
+    setExpandedNotes((prev) => {
+      const next = new Set(prev);
+      if (next.has(noteId)) next.delete(noteId);
+      else next.add(noteId);
+      return next;
+    });
+  }, []);
+
+  // Clamp position within container bounds
+  const clamp = useCallback((val: number, max: number, radius: number) => {
+    return Math.max(PADDING + radius, Math.min(max - PADDING - radius, val));
+  }, []);
+
   useEffect(() => {
     const w = containerRef.current?.clientWidth || 400;
     const h = containerRef.current?.clientHeight || 600;
@@ -72,14 +63,13 @@ const GraphView = () => {
     const cy = h / 2;
     const newPos: NodePosition[] = [];
 
-    const rootCats = getRootCategories();
-    const catCount = rootCats.length || 1;
-    const baseRadius = Math.min(w, h) * 0.28;
+    const catCount = categories.length || 1;
+    const baseRadius = Math.min(w, h) * 0.25;
 
-    rootCats.forEach((cat, i) => {
+    categories.forEach((cat, i) => {
       const angle = (2 * Math.PI * i) / catCount - Math.PI / 2;
-      const catX = cx + Math.cos(angle) * baseRadius;
-      const catY = cy + Math.sin(angle) * baseRadius;
+      const catX = clamp(cx + Math.cos(angle) * baseRadius, w, CAT_RADIUS);
+      const catY = clamp(cy + Math.sin(angle) * baseRadius, h, CAT_RADIUS);
 
       newPos.push({
         id: `cat-${cat.id}`,
@@ -88,87 +78,72 @@ const GraphView = () => {
         type: "category", visible: true,
       });
 
-      // Place subcategories and notes if expanded
       if (expandedCats.has(cat.id)) {
-        placeChildren(cat.id, catX, catY, angle, 1, newPos);
+        // Root notes (no parent) in this category
+        const rootNotes = notes.filter((n) => n.categoryId === cat.id && !n.parentNoteId);
+        const armLength = Math.min(80, (Math.min(w, h) - PADDING * 2) / 4);
+        const spread = Math.min(Math.PI * 0.8, rootNotes.length * 0.4);
+        const startAngle = angle - spread / 2;
+
+        rootNotes.forEach((note, j) => {
+          const nAngle = rootNotes.length === 1 ? angle : startAngle + (spread * j) / (rootNotes.length - 1);
+          const nx = clamp(catX + Math.cos(nAngle) * armLength, w, NOTE_RADIUS);
+          const ny = clamp(catY + Math.sin(nAngle) * armLength, h, NOTE_RADIUS);
+
+          newPos.push({
+            id: `note-${note.id}`, x: nx, y: ny,
+            label: note.title, icon: "",
+            type: "note", categoryId: note.categoryId,
+            parentNoteId: null, visible: true,
+          });
+
+          // If parent note is expanded, show child notes hanging from it
+          if (expandedNotes.has(note.id)) {
+            const children = notes.filter((n) => n.parentNoteId === note.id);
+            const childArm = Math.min(55, (Math.min(w, h) - PADDING * 2) / 5);
+            const childSpread = Math.min(Math.PI * 0.6, children.length * 0.35);
+            const childStart = nAngle - childSpread / 2;
+
+            children.forEach((child, ci) => {
+              const cAngle = children.length === 1 ? nAngle : childStart + (childSpread * ci) / (children.length - 1);
+              newPos.push({
+                id: `note-${child.id}`,
+                x: clamp(nx + Math.cos(cAngle) * childArm, w, NOTE_RADIUS),
+                y: clamp(ny + Math.sin(cAngle) * childArm, h, NOTE_RADIUS),
+                label: child.title, icon: "",
+                type: "note", categoryId: cat.id,
+                parentNoteId: child.parentNoteId, visible: true,
+              });
+            });
+          }
+        });
       }
     });
 
     setPositions(newPos);
-  }, [expandedCats, notes, categories]);
+  }, [expandedCats, expandedNotes, notes, categories, clamp]);
 
-  const placeChildren = (
-    catId: string, parentX: number, parentY: number,
-    parentAngle: number, depth: number, out: NodePosition[]
-  ) => {
-    const subs = getSubcategories(catId);
-    const catNotes = notes.filter((n) => n.categoryId === catId);
-    const children = [
-      ...subs.map((s) => ({ kind: "cat" as const, ...s })),
-      ...catNotes.map((n) => ({ kind: "note" as const, ...n })),
-    ];
-    if (children.length === 0) return;
-
-    const spread = Math.min(Math.PI * 0.8, children.length * 0.4);
-    const startAngle = parentAngle - spread / 2;
-    const armLength = 70 + depth * 20;
-
-    children.forEach((child, j) => {
-      const angle = children.length === 1
-        ? parentAngle
-        : startAngle + (spread * j) / (children.length - 1);
-      const x = parentX + Math.cos(angle) * armLength;
-      const y = parentY + Math.sin(angle) * armLength;
-
-      if (child.kind === "cat") {
-        out.push({
-          id: `cat-${child.id}`, x, y,
-          label: child.name, icon: child.icon,
-          type: "category", visible: true,
-        });
-        if (expandedCats.has(child.id)) {
-          placeChildren(child.id, x, y, angle, depth + 1, out);
-        }
-      } else {
-        out.push({
-          id: `note-${child.id}`, x, y,
-          label: child.title, icon: "",
-          type: "note", categoryId: child.categoryId, visible: true,
-        });
-        // Show child notes if this note has children and parent cat is expanded
-        const childNotes = notes.filter((n) => n.parentNoteId === child.id);
-        childNotes.forEach((cn, ci) => {
-          const cAngle = angle + (ci - (childNotes.length - 1) / 2) * 0.3;
-          out.push({
-            id: `note-${cn.id}`,
-            x: x + Math.cos(cAngle) * 55,
-            y: y + Math.sin(cAngle) * 55,
-            label: cn.title, icon: "",
-            type: "note", categoryId: cn.categoryId, visible: true,
-          });
-        });
-      }
-    });
-  };
-
-  // Build edges from visible positions
+  // Build edges
   const edges = useMemo<Edge[]>(() => {
     const posIds = new Set(positions.map((p) => p.id));
     const e: Edge[] = [];
 
     positions.forEach((p) => {
       if (p.type === "note") {
-        // Category -> note
-        const catKey = `cat-${p.categoryId}`;
-        if (posIds.has(catKey)) {
-          e.push({ from: catKey, to: p.id, type: "category" });
-        }
-        // Parent note -> child note
         const noteId = p.id.replace("note-", "");
         const note = notes.find((n) => n.id === noteId);
-        if (note?.parentNoteId && posIds.has(`note-${note.parentNoteId}`)) {
-          e.push({ from: `note-${note.parentNoteId}`, to: p.id, type: "parent" });
+
+        if (p.parentNoteId && posIds.has(`note-${p.parentNoteId}`)) {
+          // Child note -> parent note edge
+          e.push({ from: `note-${p.parentNoteId}`, to: p.id, type: "parent" });
+        } else {
+          // Root note -> category edge
+          const catKey = `cat-${p.categoryId}`;
+          if (posIds.has(catKey)) {
+            e.push({ from: catKey, to: p.id, type: "category" });
+          }
         }
+
         // Manual links
         if (note) {
           note.linkedNoteIds.forEach((lid) => {
@@ -178,21 +153,13 @@ const GraphView = () => {
           });
         }
       }
-      if (p.type === "category") {
-        // Subcategory edges
-        const catId = p.id.replace("cat-", "");
-        const cat = categories.find((c) => c.id === catId);
-        if (cat?.parentId && posIds.has(`cat-${cat.parentId}`)) {
-          e.push({ from: `cat-${cat.parentId}`, to: p.id, type: "category" });
-        }
-      }
     });
     return e;
-  }, [positions, notes, categories]);
+  }, [positions, notes]);
 
   const getPos = (id: string) => positions.find((p) => p.id === id);
 
-  // Drag handlers
+  // Drag handlers - when dragging a category, move its notes too
   const handlePointerDown = useCallback((e: React.PointerEvent, nodeId: string) => {
     const pos = positions.find((p) => p.id === nodeId);
     if (!pos) return;
@@ -208,11 +175,43 @@ const GraphView = () => {
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!drag) return;
     const rect = containerRef.current?.getBoundingClientRect();
+    const w = rect?.width || 400;
+    const h = rect?.height || 600;
     const x = e.clientX - (rect?.left || 0) - drag.offsetX;
     const y = e.clientY - (rect?.top || 0) - drag.offsetY;
-    setPositions((prev) =>
-      prev.map((p) => (p.id === drag.id ? { ...p, x, y } : p))
-    );
+
+    setPositions((prev) => {
+      const dragNode = prev.find((p) => p.id === drag.id);
+      if (!dragNode) return prev;
+      const dx = x - dragNode.x;
+      const dy = y - dragNode.y;
+
+      // If dragging a category, move its notes too
+      if (dragNode.type === "category") {
+        const catId = dragNode.id.replace("cat-", "");
+        return prev.map((p) => {
+          if (p.id === drag.id) return { ...p, x, y };
+          if (p.type === "note" && p.categoryId === catId) {
+            return { ...p, x: p.x + dx, y: p.y + dy };
+          }
+          return p;
+        });
+      }
+
+      // If dragging a parent note, move its children too
+      if (dragNode.type === "note") {
+        const noteId = dragNode.id.replace("note-", "");
+        return prev.map((p) => {
+          if (p.id === drag.id) return { ...p, x, y };
+          if (p.type === "note" && p.parentNoteId === noteId) {
+            return { ...p, x: p.x + dx, y: p.y + dy };
+          }
+          return p;
+        });
+      }
+
+      return prev.map((p) => (p.id === drag.id ? { ...p, x, y } : p));
+    });
   }, [drag]);
 
   const handlePointerUp = useCallback(() => setDrag(null), []);
@@ -223,7 +222,13 @@ const GraphView = () => {
       toggleCategory(nodeId.replace("cat-", ""));
     } else if (nodeId.startsWith("note-")) {
       const noteId = nodeId.replace("note-", "");
-      // Force re-selection even if same note, so mobile navigates to editor
+      const note = notes.find((n) => n.id === noteId);
+      // If note has children, toggle expand
+      const hasChildren = notes.some((n) => n.parentNoteId === noteId);
+      if (hasChildren) {
+        toggleNoteExpand(noteId);
+      }
+      // Navigate to note
       setSelectedNoteId(null);
       setTimeout(() => {
         setSelectedNoteId(noteId);
@@ -232,10 +237,7 @@ const GraphView = () => {
     }
   };
 
-  const noteCount = (catId: string): number => {
-    const allIds = getAllCatIds(catId);
-    return notes.filter((n) => allIds.includes(n.categoryId)).length;
-  };
+  const noteCount = (catId: string) => notes.filter((n) => n.categoryId === catId).length;
 
   if (notes.length === 0) {
     return (
@@ -257,10 +259,9 @@ const GraphView = () => {
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
     >
-      {/* Edges */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
         <AnimatePresence>
-          {edges.map((edge, i) => {
+          {edges.map((edge) => {
             const from = getPos(edge.from);
             const to = getPos(edge.to);
             if (!from || !to) return null;
@@ -287,13 +288,15 @@ const GraphView = () => {
         </AnimatePresence>
       </svg>
 
-      {/* Nodes */}
       <AnimatePresence>
         {positions.filter((n) => n.visible).map((node) => {
           const isCat = node.type === "category";
           const r = isCat ? CAT_RADIUS : NOTE_RADIUS;
           const isExpanded = isCat && expandedCats.has(node.id.replace("cat-", ""));
           const count = isCat ? noteCount(node.id.replace("cat-", "")) : 0;
+          const noteId = !isCat ? node.id.replace("note-", "") : "";
+          const hasChildren = !isCat && notes.some((n) => n.parentNoteId === noteId);
+          const isNoteExpanded = !isCat && expandedNotes.has(noteId);
 
           return (
             <motion.div
@@ -313,7 +316,7 @@ const GraphView = () => {
                 className={`flex items-center justify-center rounded-full transition-all cursor-pointer ${
                   isCat
                     ? `border-2 ${isExpanded ? "bg-primary/20 border-primary/50" : "bg-primary/10 border-primary/25"} shadow-md`
-                    : "bg-card border border-border shadow-sm hover:shadow-md hover:border-primary/40"
+                    : `bg-card border ${hasChildren ? "border-primary/40" : "border-border"} shadow-sm hover:shadow-md hover:border-primary/40`
                 } ${hovered === node.id ? "scale-110" : ""}`}
                 style={{ width: r * 2, height: r * 2 }}
               >
@@ -338,20 +341,24 @@ const GraphView = () => {
                   {isExpanded ? "▾ colapsar" : "▸ expandir"}
                 </span>
               )}
+              {hasChildren && !isCat && (
+                <span className="text-[8px] text-muted-foreground mt-0.5">
+                  {isNoteExpanded ? "▾" : "▸"} hijas
+                </span>
+              )}
             </motion.div>
           );
         })}
       </AnimatePresence>
 
-      {/* Legend */}
       <div className="absolute bottom-3 left-3 bg-card/80 backdrop-blur-sm border border-border rounded-lg p-2.5 text-[9px] font-body text-muted-foreground space-y-1">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-primary/15 border border-primary/30" />
-          <span>Categoría (tap para expandir)</span>
+          <span>Categoría (tap expandir)</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-card border border-border" />
-          <span>Nota (tap para abrir)</span>
+          <span>Nota (tap abrir)</span>
         </div>
         <div className="flex items-center gap-2">
           <svg width={14} height={2}><line x1={0} y1={1} x2={14} y2={1} stroke="hsl(var(--primary) / 0.5)" strokeWidth={2} strokeDasharray="4 2" /></svg>
