@@ -220,17 +220,23 @@ const NoteEditor = () => {
         />
 
         <div className="flex items-center gap-3 flex-wrap">
-          <select
-            value={selectedNote.categoryId}
-            onChange={(e) => updateNote(selectedNote.id, { categoryId: e.target.value })}
-            className="text-xs bg-muted text-muted-foreground rounded-md px-2 py-1 outline-none font-body"
-          >
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.icon} {c.name}
-              </option>
-            ))}
-          </select>
+          {selectedNote.parentNoteId ? (
+            <span className="text-xs bg-muted text-muted-foreground rounded-md px-2 py-1 font-body">
+              {categories.find((c) => c.id === selectedNote.categoryId)?.icon} {categories.find((c) => c.id === selectedNote.categoryId)?.name} (heredada)
+            </span>
+          ) : (
+            <select
+              value={selectedNote.categoryId}
+              onChange={(e) => updateNote(selectedNote.id, { categoryId: e.target.value })}
+              className="text-xs bg-muted text-muted-foreground rounded-md px-2 py-1 outline-none font-body"
+            >
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.icon} {c.name}
+                </option>
+              ))}
+            </select>
+          )}
           <span className="text-xs text-muted-foreground">
             {new Date(selectedNote.updatedAt).toLocaleDateString("es-ES", {
               day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",

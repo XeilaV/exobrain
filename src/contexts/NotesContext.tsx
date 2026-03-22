@@ -5,8 +5,6 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: "personal", name: "Personal", icon: "📝", color: "30 80% 52%", parentId: null },
   { id: "work", name: "Trabajo", icon: "💼", color: "220 70% 55%", parentId: null },
   { id: "ideas", name: "Ideas", icon: "💡", color: "45 90% 55%", parentId: null },
-  { id: "ideas-tasks", name: "Tareas", icon: "✅", color: "45 70% 50%", parentId: "ideas" },
-  { id: "ideas-projects", name: "Proyectos", icon: "🚀", color: "160 60% 45%", parentId: "ideas" },
 ];
 
 interface NotesContextType {
@@ -22,6 +20,7 @@ interface NotesContextType {
   updateNote: (id: string, updates: Partial<Note>) => void;
   deleteNote: (id: string) => void;
   addCategory: (name: string, icon: string, parentId?: string | null) => void;
+  updateCategory: (id: string, updates: Partial<Pick<Category, "name" | "icon">>) => void;
   deleteCategory: (id: string) => void;
   addChecklistItem: (noteId: string, text: string) => void;
   toggleChecklistItem: (noteId: string, itemId: string) => void;
@@ -56,7 +55,6 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
   }
 };
 
-// Migrate old data without new fields
 const migrateNotes = (notes: Note[]): Note[] =>
   notes.map((n) => ({
     ...n,
@@ -64,8 +62,9 @@ const migrateNotes = (notes: Note[]): Note[] =>
     linkedNoteIds: n.linkedNoteIds ?? [],
   }));
 
+// Remove subcategories on load - flatten to root only
 const migrateCategories = (cats: Category[]): Category[] =>
-  cats.map((c) => ({ ...c, parentId: c.parentId ?? null }));
+  cats.map((c) => ({ ...c, parentId: null }));
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notes, setNotes] = useState<Note[]>(() => migrateNotes(loadFromStorage("notes", [])));
@@ -84,7 +83,15 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       id: crypto.randomUUID(),
       title: "Nueva nota",
       content: "",
-      categoryId,
+      // Child notes inherit parent's category
+      categoryId: parentNoteId
+        ? (() => {
+            const stored = localStorage.getItem("notes");
+            const allNotes: Note[] = stored ? JSON.parse(stored) : [];
+            const parent = allNotes.find((n) => n.id === parentNoteId);
+            return parent?.categoryId || categoryId;
+          })()
+        : categoryId,
       parentNoteId: parentNoteId ?? null,
       linkedNoteIds: [],
       checklist: [],
@@ -104,7 +111,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const deleteNote = useCallback((id: string) => {
     setNotes((prev) => {
-      // Orphan children instead of deleting them
       return prev
         .filter((n) => n.id !== id)
         .map((n) => ({
@@ -116,36 +122,23 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setSelectedNoteId((prev) => (prev === id ? null : prev));
   }, []);
 
-  const addCategory = useCallback((name: string, icon: string, parentId?: string | null) => {
+  const addCategory = useCallback((name: string, icon: string, _parentId?: string | null) => {
     setCategories((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), name, icon, color: "30 50% 50%", parentId: parentId ?? null },
+      { id: crypto.randomUUID(), name, icon, color: "30 50% 50%", parentId: null },
     ]);
   }, []);
 
+  const updateCategory = useCallback((id: string, updates: Partial<Pick<Category, "name" | "icon">>) => {
+    setCategories((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...updates } : c))
+    );
+  }, []);
+
   const deleteCategory = useCallback((id: string) => {
-    setCategories((prev) => {
-      // Also delete subcategories
-      const toDelete = new Set<string>();
-      const collect = (cid: string) => {
-        toDelete.add(cid);
-        prev.filter((c) => c.parentId === cid).forEach((c) => collect(c.id));
-      };
-      collect(id);
-      return prev.filter((c) => !toDelete.has(c.id));
-    });
-    setNotes((prev) => prev.filter((n) => {
-      // Recalculate which cats are deleted
-      const allCats = categories;
-      const toDelete = new Set<string>();
-      const collect = (cid: string) => {
-        toDelete.add(cid);
-        allCats.filter((c) => c.parentId === cid).forEach((c) => collect(c.id));
-      };
-      collect(id);
-      return !toDelete.has(n.categoryId);
-    }));
-  }, [categories]);
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+    setNotes((prev) => prev.filter((n) => n.categoryId !== id));
+  }, []);
 
   const addChecklistItem = useCallback((noteId: string, text: string) => {
     setNotes((prev) =>
@@ -233,29 +226,16 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return notes.find((n) => n.id === note.parentNoteId);
   }, [notes]);
 
-  const getSubcategories = useCallback((categoryId: string) => categories.filter((c) => c.parentId === categoryId), [categories]);
-  const getRootCategories = useCallback(() => categories.filter((c) => c.parentId === null), [categories]);
+  // No subcategories - return empty
+  const getSubcategories = useCallback((_categoryId: string) => [] as Category[], []);
+  const getRootCategories = useCallback(() => categories, [categories]);
   const getCategoryPath = useCallback((categoryId: string): Category[] => {
-    const path: Category[] = [];
-    let current = categories.find((c) => c.id === categoryId);
-    while (current) {
-      path.unshift(current);
-      current = current.parentId ? categories.find((c) => c.id === current!.parentId) : undefined;
-    }
-    return path;
+    const cat = categories.find((c) => c.id === categoryId);
+    return cat ? [cat] : [];
   }, [categories]);
 
   const filteredNotes = selectedCategoryId
-    ? notes.filter((n) => {
-        // Include notes from this category and all subcategories
-        const allCatIds = new Set<string>();
-        const collect = (cid: string) => {
-          allCatIds.add(cid);
-          categories.filter((c) => c.parentId === cid).forEach((c) => collect(c.id));
-        };
-        collect(selectedCategoryId);
-        return allCatIds.has(n.categoryId);
-      })
+    ? notes.filter((n) => n.categoryId === selectedCategoryId)
     : notes;
 
   const selectedNote = notes.find((n) => n.id === selectedNoteId);
@@ -265,7 +245,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       value={{
         notes, categories, selectedCategoryId, selectedNoteId, activeView, setActiveView,
         setSelectedCategoryId, setSelectedNoteId,
-        addNote, updateNote, deleteNote, addCategory, deleteCategory,
+        addNote, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
         addChecklistItem, toggleChecklistItem, deleteChecklistItem,
         linkNotes, unlinkNotes,
         filteredNotes, selectedNote, createNoteFromChat,
