@@ -267,7 +267,7 @@ const GraphView = () => {
             if (!from || !to) return null;
             return (
               <motion.line
-                key={`${edge.from}-${edge.to}`}
+                key={`edge-${idx}-${edge.from}-${edge.to}`}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1, x1: from.x, y1: from.y, x2: to.x, y2: to.y }}
                 exit={{ opacity: 0 }}
