@@ -215,7 +215,8 @@ const AppSidebar = () => {
           </div>
         ) : (
           <button
-            onClick={() => setIsAdding(true)}
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsAdding(true); }}
             className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all"
           >
             <Plus size={16} />

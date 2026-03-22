@@ -1,7 +1,7 @@
 import { useNotes } from "@/contexts/NotesContext";
-import { useState, useMemo, useRef, useEffect } from "react";
-import { Plus, Trash2, CheckSquare, Square, ChevronRight, Link2, Unlink, FileText, ArrowUp, List } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { Plus, Trash2, CheckSquare, Square, ChevronRight, Link2, Unlink, FileText, ArrowUp, List, GripVertical, Pencil } from "lucide-react";
+import { motion, AnimatePresence, Reorder } from "framer-motion";
 
 /** Extract headings from content for mini-TOC */
 const extractHeadings = (content: string): { text: string; index: number }[] => {
@@ -10,7 +10,6 @@ const extractHeadings = (content: string): { text: string; index: number }[] => 
   let charIndex = 0;
   for (const line of lines) {
     const trimmed = line.trim();
-    // Detect markdown-style headings or lines that look like section titles (ALL CAPS or ending with :)
     if (trimmed.startsWith("# ") || trimmed.startsWith("## ") || trimmed.startsWith("### ")) {
       headings.push({ text: trimmed.replace(/^#+\s*/, ""), index: charIndex });
     } else if (trimmed.length > 3 && trimmed.length < 80 && trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed)) {
@@ -21,15 +20,91 @@ const extractHeadings = (content: string): { text: string; index: number }[] => 
   return headings;
 };
 
-const LONG_CONTENT_THRESHOLD = 600; // characters
+const LONG_CONTENT_THRESHOLD = 600;
+
+interface ChecklistItemRowProps {
+  item: { id: string; text: string; completed: boolean };
+  noteId: string;
+}
+
+const ChecklistItemRow = ({ item, noteId }: ChecklistItemRowProps) => {
+  const { toggleChecklistItem, deleteChecklistItem, updateNote, selectedNote } = useNotes();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(item.text);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing) inputRef.current?.focus();
+  }, [isEditing]);
+
+  const saveEdit = () => {
+    if (!selectedNote) return;
+    const trimmed = editText.trim();
+    if (trimmed && trimmed !== item.text) {
+      updateNote(noteId, {
+        checklist: selectedNote.checklist.map((i) =>
+          i.id === item.id ? { ...i, text: trimmed } : i
+        ),
+      });
+    } else {
+      setEditText(item.text);
+    }
+    setIsEditing(false);
+  };
+
+  return (
+    <Reorder.Item
+      value={item}
+      className="flex items-center gap-2 group bg-background rounded-md"
+      dragListener={true}
+    >
+      <GripVertical size={14} className="text-muted-foreground/40 cursor-grab shrink-0" />
+      <button
+        onClick={() => toggleChecklistItem(noteId, item.id)}
+        className="text-primary hover:opacity-80 transition-opacity shrink-0"
+      >
+        {item.completed ? <CheckSquare size={18} /> : <Square size={18} />}
+      </button>
+      {isEditing ? (
+        <input
+          ref={inputRef}
+          value={editText}
+          onChange={(e) => setEditText(e.target.value)}
+          onBlur={saveEdit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") saveEdit();
+            if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); }
+          }}
+          className="flex-1 text-sm font-body bg-muted rounded px-2 py-1 outline-none text-foreground focus:ring-1 focus:ring-ring"
+        />
+      ) : (
+        <span
+          onDoubleClick={() => { setIsEditing(true); setEditText(item.text); }}
+          className={`flex-1 text-sm font-body cursor-default ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
+        >
+          {item.text}
+        </span>
+      )}
+      <button
+        onClick={() => { setIsEditing(true); setEditText(item.text); }}
+        className="opacity-0 group-hover:opacity-50 hover:!opacity-100 text-muted-foreground transition-opacity shrink-0"
+      >
+        <Pencil size={12} />
+      </button>
+      <Trash2
+        size={14}
+        className="opacity-0 group-hover:opacity-50 hover:!opacity-100 text-destructive cursor-pointer transition-opacity shrink-0"
+        onClick={() => deleteChecklistItem(noteId, item.id)}
+      />
+    </Reorder.Item>
+  );
+};
 
 const NoteEditor = () => {
   const {
     selectedNote,
     updateNote,
     addChecklistItem,
-    toggleChecklistItem,
-    deleteChecklistItem,
     categories,
     notes,
     getChildNotes,
@@ -50,6 +125,14 @@ const NoteEditor = () => {
   const headings = useMemo(
     () => (selectedNote ? extractHeadings(selectedNote.content) : []),
     [selectedNote?.content]
+  );
+
+  const handleReorder = useCallback(
+    (newOrder: typeof selectedNote extends undefined ? never : NonNullable<typeof selectedNote>["checklist"]) => {
+      if (!selectedNote) return;
+      updateNote(selectedNote.id, { checklist: newOrder });
+    },
+    [selectedNote, updateNote]
   );
 
   if (!selectedNote) {
@@ -94,7 +177,6 @@ const NoteEditor = () => {
     const ta = textareaRef.current;
     ta.focus();
     ta.setSelectionRange(index, index);
-    // Scroll the textarea to show that position
     const lineHeight = 20;
     const linesBefore = selectedNote.content.substring(0, index).split("\n").length;
     ta.scrollTop = Math.max(0, (linesBefore - 3) * lineHeight);
@@ -104,13 +186,12 @@ const NoteEditor = () => {
     <div className="flex-1 flex flex-col bg-background overflow-hidden">
       {/* Breadcrumb + context bar */}
       <div className="px-6 pt-4 pb-2 border-b border-border space-y-3">
-        {/* Breadcrumb */}
         <div className="flex items-center gap-1 text-xs text-muted-foreground font-body flex-wrap">
           {categoryPath.map((cat, i) => (
             <span key={cat.id} className="flex items-center gap-1">
               {i > 0 && <ChevronRight size={10} className="text-muted-foreground/50" />}
               <button
-                onClick={() => { /* could navigate */ }}
+                onClick={() => {}}
                 className="hover:text-foreground transition-colors"
               >
                 {cat.icon} {cat.name}
@@ -131,7 +212,6 @@ const NoteEditor = () => {
           )}
         </div>
 
-        {/* Title */}
         <input
           value={selectedNote.title}
           onChange={(e) => updateNote(selectedNote.id, { title: e.target.value })}
@@ -139,7 +219,6 @@ const NoteEditor = () => {
           placeholder="Título de la nota..."
         />
 
-        {/* Meta row */}
         <div className="flex items-center gap-3 flex-wrap">
           <select
             value={selectedNote.categoryId}
@@ -182,7 +261,6 @@ const NoteEditor = () => {
           )}
         </div>
 
-        {/* Link picker */}
         <AnimatePresence>
           {showLinkPicker && (
             <motion.div
@@ -225,7 +303,6 @@ const NoteEditor = () => {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Mini TOC sidebar */}
         <AnimatePresence>
           {showToc && showMiniToc && (
             <motion.div
@@ -252,7 +329,6 @@ const NoteEditor = () => {
           )}
         </AnimatePresence>
 
-        {/* Main editor area */}
         <div className="flex-1 overflow-y-auto scrollbar-thin p-6 space-y-6">
           <textarea
             ref={textareaRef}
@@ -262,7 +338,6 @@ const NoteEditor = () => {
             placeholder="Escribe tu nota aquí... Usa # para crear secciones y generar un mini-índice automático."
           />
 
-          {/* Relationships panel */}
           {(childNotes.length > 0 || linkedNotes.length > 0) && (
             <div className="border-t border-border pt-4 space-y-3">
               {childNotes.length > 0 && (
@@ -325,46 +400,34 @@ const NoteEditor = () => {
               </h3>
             </div>
 
-            <div className="space-y-1.5">
-              <AnimatePresence>
-                {selectedNote.checklist.map((item) => (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="flex items-center gap-2.5 group"
-                  >
-                    <button
-                      onClick={() => toggleChecklistItem(selectedNote.id, item.id)}
-                      className="text-primary hover:opacity-80 transition-opacity shrink-0"
-                    >
-                      {item.completed ? <CheckSquare size={18} /> : <Square size={18} />}
-                    </button>
-                    <span className={`flex-1 text-sm font-body ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                      {item.text}
-                    </span>
-                    <Trash2
-                      size={14}
-                      className="opacity-0 group-hover:opacity-50 hover:!opacity-100 text-destructive cursor-pointer transition-opacity"
-                      onClick={() => deleteChecklistItem(selectedNote.id, item.id)}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
+            <Reorder.Group
+              axis="y"
+              values={selectedNote.checklist}
+              onReorder={handleReorder}
+              className="space-y-1.5"
+            >
+              {selectedNote.checklist.map((item) => (
+                <ChecklistItemRow key={item.id} item={item} noteId={selectedNote.id} />
+              ))}
+            </Reorder.Group>
 
             <div className="flex items-center gap-2 mt-3">
-              <input
+              <textarea
                 value={newItemText}
                 onChange={(e) => setNewItemText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAddItem()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAddItem();
+                  }
+                }}
                 placeholder="Añadir tarea..."
-                className="flex-1 text-sm bg-muted rounded-md px-3 py-2 outline-none text-foreground placeholder:text-muted-foreground font-body focus:ring-1 focus:ring-ring"
+                rows={2}
+                className="flex-1 text-sm bg-muted rounded-md px-3 py-2.5 outline-none text-foreground placeholder:text-muted-foreground font-body focus:ring-1 focus:ring-ring resize-none"
               />
               <button
                 onClick={handleAddItem}
-                className="p-2 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+                className="p-2 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity self-end"
               >
                 <Plus size={14} />
               </button>
