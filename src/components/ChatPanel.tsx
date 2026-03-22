@@ -123,9 +123,9 @@ const ChatPanel = () => {
     }
   };
 
-  // Mobile: fullscreen overlay. Desktop: bottom-right panel.
+  // Mobile: floating panel adapted to screen. Desktop: bottom-right panel.
   const panelClasses = isMobile
-    ? "fixed inset-0 bg-card flex flex-col z-50"
+    ? "fixed bottom-4 left-3 right-3 h-[70vh] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden z-50"
     : "fixed bottom-6 right-6 w-96 h-[500px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden z-50";
 
   // Move toggle button higher on mobile to avoid blocking bottom actions
