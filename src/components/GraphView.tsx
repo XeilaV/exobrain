@@ -261,7 +261,7 @@ const GraphView = () => {
     >
       <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
         <AnimatePresence>
-          {edges.map((edge) => {
+          {edges.map((edge, idx) => {
             const from = getPos(edge.from);
             const to = getPos(edge.to);
             if (!from || !to) return null;
