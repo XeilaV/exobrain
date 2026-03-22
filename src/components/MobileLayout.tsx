@@ -30,6 +30,7 @@ const MobileLayout = () => {
 
   const handleBack = () => {
     if (view === "editor" || view === "graph") {
+      setSelectedNoteId(null); // Clear selection to avoid stale state
       setView("list");
       if (activeView === "graph") setActiveView("notes");
     } else if (view === "sidebar") {
