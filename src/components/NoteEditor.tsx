@@ -89,22 +89,6 @@ const ChecklistItemRow = ({ item, noteId }: ChecklistItemRowProps) => {
         size={14}
         className="text-muted-foreground/40 cursor-grab shrink-0 touch-none"
         style={{ touchAction: "none" }}
-        onPointerDown={(e) => {
-          // This allows framer-motion Reorder to pick up drag from this handle
-          const reorderItem = (e.currentTarget as HTMLElement).closest('[data-framer-component-type]') as any;
-          if (reorderItem) {
-            const pointerDown = new PointerEvent("pointerdown", {
-              bubbles: true,
-              cancelable: true,
-              pointerId: e.pointerId,
-              pointerType: e.pointerType,
-              clientX: e.clientX,
-              clientY: e.clientY,
-            });
-            // We need the Reorder.Item to handle the drag, 
-            // but dragListener={false} prevents it. Let's use a different approach.
-          }
-        }}
       />
       <button
         onClick={() => toggleChecklistItem(noteId, item.id)}
