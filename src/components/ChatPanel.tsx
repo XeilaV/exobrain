@@ -15,7 +15,7 @@ const ChatPanel = () => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { createNoteFromChat, categories } = useNotes();
+  const { notes, categories } = useNotes();
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -29,6 +29,17 @@ const ChatPanel = () => {
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + "px";
     }
   }, [input]);
+
+  const buildNotesContext = () => {
+    return notes.map((note) => {
+      const cat = categories.find((c) => c.id === note.categoryId);
+      return {
+        title: note.title,
+        category: cat?.name || "Sin categoría",
+        content: note.content.slice(0, 500),
+      };
+    });
+  };
 
   const send = async () => {
     const text = input.trim();
@@ -50,7 +61,10 @@ const ChatPanel = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: allMessages }),
+        body: JSON.stringify({
+          messages: allMessages,
+          notesContext: buildNotesContext(),
+        }),
       });
 
       if (!resp.ok || !resp.body) {
@@ -98,13 +112,6 @@ const ChatPanel = () => {
           }
         }
       }
-
-      if (assistantSoFar.includes("---NOTA---")) {
-        const match = assistantSoFar.match(/---NOTA---\n(.+?)\n([\s\S]+?)---FIN---/);
-        if (match) {
-          createNoteFromChat(match[1], match[2].trim());
-        }
-      }
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) => [
@@ -123,15 +130,13 @@ const ChatPanel = () => {
     }
   };
 
-  // Mobile: floating panel adapted to screen. Desktop: bottom-right panel.
   const panelClasses = isMobile
     ? "fixed bottom-4 left-3 right-3 h-[70vh] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden z-50"
     : "fixed bottom-6 right-6 w-96 h-[500px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden z-50";
 
-  // Move toggle button higher on mobile to avoid blocking bottom actions
   const toggleClasses = isMobile
-    ? "fixed bottom-20 right-4 p-3.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-opacity z-50"
-    : "fixed bottom-6 right-6 p-4 rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-opacity z-50";
+    ? "fixed bottom-28 right-4 p-3.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-opacity z-50"
+    : "fixed bottom-8 right-6 p-4 rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-opacity z-50";
 
   return (
     <>
@@ -180,7 +185,7 @@ const ChatPanel = () => {
                   <Sparkles size={32} className="mx-auto mb-3 text-primary/40" />
                   <p className="text-sm font-body">¡Hola! Soy tu asistente.</p>
                   <p className="text-xs mt-1">
-                    Puedo ayudarte a organizar ideas, crear notas y listas de tareas.
+                    Puedo responder preguntas sobre tus notas y ayudarte a reflexionar sobre tus ideas.
                   </p>
                 </div>
               )}
@@ -221,7 +226,7 @@ const ChatPanel = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input - ChatGPT-style textarea */}
+            {/* Input */}
             <div className="p-3 border-t border-border bg-chat shrink-0">
               <div className="flex items-end gap-2">
                 <textarea
