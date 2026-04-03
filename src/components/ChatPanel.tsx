@@ -1,20 +1,30 @@
 import { useState, useRef, useEffect } from "react";
 import { useNotes } from "@/contexts/NotesContext";
 import { ChatMessage } from "@/types/notes";
-import { Send, X, Sparkles, Loader2 } from "lucide-react";
+import { Send, X, Sparkles, Loader2, Image, Mic, MicOff, Paperclip } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { toast } from "sonner";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
+interface ChatMessageWithMedia extends ChatMessage {
+  imageUrl?: string;
+}
+
 const ChatPanel = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessageWithMedia[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
   const { notes, categories } = useNotes();
   const isMobile = useIsMobile();
 
@@ -22,7 +32,6 @@ const ChatPanel = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -33,27 +42,90 @@ const ChatPanel = () => {
   const buildNotesContext = () => {
     return notes.map((note) => {
       const cat = categories.find((c) => c.id === note.categoryId);
+      const checklistText = note.checklist.length > 0
+        ? "\nChecklist:\n" + note.checklist.map((item) => `- [${item.completed ? "x" : " "}] ${item.text}`).join("\n")
+        : "";
       return {
         title: note.title,
         category: cat?.name || "Sin categoría",
-        content: note.content.slice(0, 500),
+        content: note.content.slice(0, 500) + checklistText,
       };
     });
   };
 
-  const send = async () => {
-    const text = input.trim();
-    if (!text || isLoading) return;
+  const handleImageAttach = () => {
+    fileInputRef.current?.click();
+  };
 
-    const userMsg: ChatMessage = { role: "user", content: text };
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Solo se permiten imágenes");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La imagen no puede superar 5MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAttachedImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const toggleRecording = async () => {
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result as string;
+          // Send audio as a message to the AI
+          sendWithMedia(input.trim() || "He enviado un audio. Transcríbelo o responde según su contenido.", undefined, base64);
+        };
+        reader.readAsDataURL(blob);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      toast.info("Grabando audio...");
+    } catch {
+      toast.error("No se pudo acceder al micrófono");
+    }
+  };
+
+  const sendWithMedia = async (text: string, imageData?: string, audioData?: string) => {
+    if ((!text && !imageData && !audioData) || isLoading) return;
+
+    const displayContent = text || (imageData ? "📷 Imagen enviada" : "🎤 Audio enviado");
+    const userMsg: ChatMessageWithMedia = { role: "user", content: displayContent, imageUrl: imageData };
     setInput("");
+    setAttachedImage(null);
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
     let assistantSoFar = "";
 
     try {
-      const allMessages = [...messages, userMsg];
+      const allMessages = [...messages, { role: "user" as const, content: text || "" }];
 
       const resp = await fetch(CHAT_URL, {
         method: "POST",
@@ -64,10 +136,17 @@ const ChatPanel = () => {
         body: JSON.stringify({
           messages: allMessages,
           notesContext: buildNotesContext(),
+          image: imageData || undefined,
+          audio: audioData || undefined,
         }),
       });
 
       if (!resp.ok || !resp.body) {
+        if (resp.status === 429) {
+          toast.error("Demasiadas solicitudes. Espera un momento.");
+        } else if (resp.status === 402) {
+          toast.error("Créditos agotados.");
+        }
         throw new Error(`Error: ${resp.status}`);
       }
 
@@ -123,6 +202,12 @@ const ChatPanel = () => {
     }
   };
 
+  const send = async () => {
+    const text = input.trim();
+    if (!text && !attachedImage) return;
+    await sendWithMedia(text, attachedImage || undefined);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -140,6 +225,14 @@ const ChatPanel = () => {
 
   return (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       <AnimatePresence>
         {!isOpen && (
           <motion.button
@@ -185,7 +278,7 @@ const ChatPanel = () => {
                   <Sparkles size={32} className="mx-auto mb-3 text-primary/40" />
                   <p className="text-sm font-body">¡Hola! Soy tu asistente.</p>
                   <p className="text-xs mt-1">
-                    Puedo responder preguntas sobre tus notas y ayudarte a reflexionar sobre tus ideas.
+                    Puedo responder preguntas sobre tus notas, checklists e imágenes.
                   </p>
                 </div>
               )}
@@ -204,6 +297,13 @@ const ChatPanel = () => {
                         : "bg-chat-ai text-foreground rounded-bl-md"
                     }`}
                   >
+                    {msg.imageUrl && (
+                      <img
+                        src={msg.imageUrl}
+                        alt="Imagen adjunta"
+                        className="max-w-full max-h-40 rounded-lg mb-2"
+                      />
+                    )}
                     {msg.role === "assistant" ? (
                       <div className="prose prose-sm max-w-none [&>p]:m-0 [&>ul]:my-1 [&>ol]:my-1">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -226,9 +326,39 @@ const ChatPanel = () => {
               <div ref={messagesEndRef} />
             </div>
 
+            {/* Attached image preview */}
+            {attachedImage && (
+              <div className="px-3 pb-1 flex items-center gap-2">
+                <img src={attachedImage} alt="Preview" className="h-12 w-12 rounded-lg object-cover border border-border" />
+                <button onClick={() => setAttachedImage(null)} className="text-xs text-destructive hover:underline">
+                  Quitar
+                </button>
+              </div>
+            )}
+
             {/* Input */}
             <div className="p-3 border-t border-border bg-chat shrink-0">
               <div className="flex items-end gap-2">
+                <div className="flex gap-1 shrink-0 self-end">
+                  <button
+                    onClick={handleImageAttach}
+                    className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title="Adjuntar imagen"
+                  >
+                    <Image size={16} />
+                  </button>
+                  <button
+                    onClick={toggleRecording}
+                    className={`p-2 rounded-lg transition-colors ${
+                      isRecording
+                        ? "text-destructive bg-destructive/10"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    }`}
+                    title={isRecording ? "Detener grabación" : "Grabar audio"}
+                  >
+                    {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                  </button>
+                </div>
                 <textarea
                   ref={textareaRef}
                   value={input}
@@ -241,7 +371,7 @@ const ChatPanel = () => {
                 />
                 <button
                   onClick={send}
-                  disabled={isLoading || !input.trim()}
+                  disabled={isLoading || (!input.trim() && !attachedImage)}
                   className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40 shrink-0"
                 >
                   <Send size={16} />
