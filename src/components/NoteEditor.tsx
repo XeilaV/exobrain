@@ -81,8 +81,7 @@ const ChecklistItemRow = ({ item, noteId }: ChecklistItemRowProps) => {
   return (
     <Reorder.Item
       value={item}
-      className="flex items-center gap-2 group bg-background rounded-md touch-none"
-      dragListener={false}
+      className="flex items-center gap-2 group bg-background rounded-md"
       id={item.id}
     >
       <GripVertical
