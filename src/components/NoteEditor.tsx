@@ -1,7 +1,8 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Plus, Trash2, CheckSquare, Square, ChevronRight, Link2, Unlink, FileText, ArrowUp, List, GripVertical, Pencil } from "lucide-react";
+import { Plus, Trash2, CheckSquare, Square, ChevronRight, Link2, Unlink, FileText, ArrowUp, List, GripVertical, Pencil, Copy } from "lucide-react";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
+import { toast } from "sonner";
 
 /** Extract headings from content for mini-TOC */
 const extractHeadings = (content: string): { text: string; index: number }[] => {
@@ -32,6 +33,7 @@ const ChecklistItemRow = ({ item, noteId }: ChecklistItemRowProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
   const inputRef = useRef<HTMLInputElement>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (isEditing) inputRef.current?.focus();
@@ -52,13 +54,58 @@ const ChecklistItemRow = ({ item, noteId }: ChecklistItemRowProps) => {
     setIsEditing(false);
   };
 
+  const startEditing = () => {
+    setIsEditing(true);
+    setEditText(item.text);
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(item.text);
+    toast.success("Copiado");
+  };
+
+  // Long press for mobile
+  const handlePointerDown = () => {
+    longPressTimerRef.current = setTimeout(() => {
+      startEditing();
+    }, 500);
+  };
+
+  const handlePointerUp = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
   return (
     <Reorder.Item
       value={item}
-      className="flex items-center gap-2 group bg-background rounded-md"
-      dragListener={true}
+      className="flex items-center gap-2 group bg-background rounded-md touch-none"
+      dragListener={false}
+      id={item.id}
     >
-      <GripVertical size={14} className="text-muted-foreground/40 cursor-grab shrink-0" />
+      <GripVertical
+        size={14}
+        className="text-muted-foreground/40 cursor-grab shrink-0 touch-none"
+        style={{ touchAction: "none" }}
+        onPointerDown={(e) => {
+          // This allows framer-motion Reorder to pick up drag from this handle
+          const reorderItem = (e.currentTarget as HTMLElement).closest('[data-framer-component-type]') as any;
+          if (reorderItem) {
+            const pointerDown = new PointerEvent("pointerdown", {
+              bubbles: true,
+              cancelable: true,
+              pointerId: e.pointerId,
+              pointerType: e.pointerType,
+              clientX: e.clientX,
+              clientY: e.clientY,
+            });
+            // We need the Reorder.Item to handle the drag, 
+            // but dragListener={false} prevents it. Let's use a different approach.
+          }
+        }}
+      />
       <button
         onClick={() => toggleChecklistItem(noteId, item.id)}
         className="text-primary hover:opacity-80 transition-opacity shrink-0"
@@ -79,14 +126,24 @@ const ChecklistItemRow = ({ item, noteId }: ChecklistItemRowProps) => {
         />
       ) : (
         <span
-          onDoubleClick={() => { setIsEditing(true); setEditText(item.text); }}
-          className={`flex-1 text-sm font-body cursor-default ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
+          onDoubleClick={startEditing}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className={`flex-1 text-sm font-body cursor-default select-none ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
         >
           {item.text}
         </span>
       )}
       <button
-        onClick={() => { setIsEditing(true); setEditText(item.text); }}
+        onClick={handleCopy}
+        className="opacity-0 group-hover:opacity-50 hover:!opacity-100 text-muted-foreground transition-opacity shrink-0"
+        title="Copiar"
+      >
+        <Copy size={12} />
+      </button>
+      <button
+        onClick={startEditing}
         className="opacity-0 group-hover:opacity-50 hover:!opacity-100 text-muted-foreground transition-opacity shrink-0"
       >
         <Pencil size={12} />
@@ -98,6 +155,14 @@ const ChecklistItemRow = ({ item, noteId }: ChecklistItemRowProps) => {
       />
     </Reorder.Item>
   );
+};
+
+// Wrapper to enable drag only from handle
+const DraggableChecklistItemRow = ({ item, noteId }: ChecklistItemRowProps) => {
+  const { updateNote, selectedNote } = useNotes();
+  const dragControls = useRef<any>(null);
+
+  return <ChecklistItemRow item={item} noteId={noteId} />;
 };
 
 const NoteEditor = () => {

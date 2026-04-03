@@ -10,7 +10,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, notesContext } = await req.json();
+    const { messages, notesContext, image, audio } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -18,12 +18,43 @@ serve(async (req) => {
 
 NO puedes crear, modificar ni eliminar notas. Solo puedes conversar con el usuario, responder preguntas, dar ideas y ayudarle a reflexionar.
 
-Si el usuario te pide crear o modificar una nota, explícale amablemente que debe hacerlo directamente en la app.`;
+Si el usuario te pide crear o modificar una nota, explícale amablemente que debe hacerlo directamente en la app.
+
+Puedes analizar imágenes que el usuario te envíe y describir o responder preguntas sobre ellas.
+Si el usuario te envía audio, transcríbelo y responde según su contenido.`;
 
     if (notesContext && notesContext.length > 0) {
-      systemContent += `\n\nEl usuario tiene las siguientes notas en su app. Puedes referenciarlas para responder preguntas sobre su contenido:\n\n`;
+      systemContent += `\n\nEl usuario tiene las siguientes notas en su app (incluyendo checklists). Puedes referenciarlas para responder preguntas sobre su contenido:\n\n`;
       for (const note of notesContext) {
         systemContent += `--- Nota: "${note.title}" (Categoría: ${note.category}) ---\n${note.content}\n\n`;
+      }
+    }
+
+    // Build the last user message with multimodal content if image/audio provided
+    const processedMessages = [...messages];
+    if (image || audio) {
+      const lastMsg = processedMessages[processedMessages.length - 1];
+      if (lastMsg && lastMsg.role === "user") {
+        const contentParts: any[] = [];
+        if (lastMsg.content) {
+          contentParts.push({ type: "text", text: lastMsg.content });
+        }
+        if (image) {
+          contentParts.push({
+            type: "image_url",
+            image_url: { url: image },
+          });
+        }
+        if (audio) {
+          contentParts.push({
+            type: "input_audio",
+            input_audio: { data: audio.split(",")[1] || audio, format: "wav" },
+          });
+        }
+        processedMessages[processedMessages.length - 1] = {
+          role: "user",
+          content: contentParts,
+        };
       }
     }
 
@@ -34,10 +65,10 @@ Si el usuario te pide crear o modificar una nota, explícale amablemente que deb
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemContent },
-          ...messages,
+          ...processedMessages,
         ],
         stream: true,
       }),
