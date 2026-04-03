@@ -140,13 +140,7 @@ const ChecklistItemRow = ({ item, noteId }: ChecklistItemRowProps) => {
   );
 };
 
-// Wrapper to enable drag only from handle
-const DraggableChecklistItemRow = ({ item, noteId }: ChecklistItemRowProps) => {
-  const { updateNote, selectedNote } = useNotes();
-  const dragControls = useRef<any>(null);
 
-  return <ChecklistItemRow item={item} noteId={noteId} />;
-};
 
 const NoteEditor = () => {
   const {
