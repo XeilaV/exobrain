@@ -10,9 +10,22 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages } = await req.json();
+    const { messages, notesContext } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+    let systemContent = `Eres un asistente conversacional dentro de una app de notas llamada Exobrain. Responde siempre en español. Sé conciso y útil.
+
+NO puedes crear, modificar ni eliminar notas. Solo puedes conversar con el usuario, responder preguntas, dar ideas y ayudarle a reflexionar.
+
+Si el usuario te pide crear o modificar una nota, explícale amablemente que debe hacerlo directamente en la app.`;
+
+    if (notesContext && notesContext.length > 0) {
+      systemContent += `\n\nEl usuario tiene las siguientes notas en su app. Puedes referenciarlas para responder preguntas sobre su contenido:\n\n`;
+      for (const note of notesContext) {
+        systemContent += `--- Nota: "${note.title}" (Categoría: ${note.category}) ---\n${note.content}\n\n`;
+      }
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -23,20 +36,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          {
-            role: "system",
-            content: `Eres un asistente de notas inteligente. Ayudas al usuario a organizar ideas, crear notas y listas de tareas. 
-            
-Responde siempre en español. Sé conciso y útil.
-
-Cuando el usuario te pida crear una nota, genera el contenido en este formato especial:
----NOTA---
-Título de la nota
-Contenido de la nota aquí...
----FIN---
-
-También puedes incluir texto explicativo fuera de esas marcas.`,
-          },
+          { role: "system", content: systemContent },
           ...messages,
         ],
         stream: true,
