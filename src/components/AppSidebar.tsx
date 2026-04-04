@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNotes } from "@/contexts/NotesContext";
-import { Plus, Trash2, FolderOpen, Pencil, Check, X } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Plus, Trash2, FolderOpen, Pencil, Check, X, LogOut } from "lucide-react";
 import { Category } from "@/types/notes";
 
 const CategoryRow = ({ category }: { category: Category }) => {
