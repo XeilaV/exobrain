@@ -92,6 +92,7 @@ const CategoryRow = ({ category }: { category: Category }) => {
 
 const AppSidebar = () => {
   const { selectedCategoryId, setSelectedCategoryId, notes, setSelectedNoteId, categories, addCategory } = useNotes();
+  const { signOut, user } = useAuth();
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newIcon, setNewIcon] = useState("📌");
