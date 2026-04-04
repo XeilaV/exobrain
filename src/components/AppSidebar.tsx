@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNotes } from "@/contexts/NotesContext";
-import { Plus, Trash2, FolderOpen, Pencil, Check, X } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Plus, Trash2, FolderOpen, Pencil, Check, X, LogOut } from "lucide-react";
 import { Category } from "@/types/notes";
 
 const CategoryRow = ({ category }: { category: Category }) => {
@@ -91,6 +92,7 @@ const CategoryRow = ({ category }: { category: Category }) => {
 
 const AppSidebar = () => {
   const { selectedCategoryId, setSelectedCategoryId, notes, setSelectedNoteId, categories, addCategory } = useNotes();
+  const { signOut, user } = useAuth();
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newIcon, setNewIcon] = useState("📌");
@@ -156,6 +158,18 @@ const AppSidebar = () => {
           </button>
         )}
       </div>
+
+      {user && (
+        <div className="p-3 border-t border-sidebar-border">
+          <button
+            onClick={signOut}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
+          >
+            <LogOut size={16} />
+            Cerrar sesión
+          </button>
+        </div>
+      )}
     </aside>
   );
 };

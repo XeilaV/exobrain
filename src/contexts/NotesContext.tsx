@@ -1,11 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import { Note, Category, ChecklistItem } from "@/types/notes";
-
-const DEFAULT_CATEGORIES: Category[] = [
-  { id: "personal", name: "Personal", icon: "📝", color: "30 80% 52%", parentId: null },
-  { id: "work", name: "Trabajo", icon: "💼", color: "220 70% 55%", parentId: null },
-  { id: "ideas", name: "Ideas", icon: "💡", color: "45 90% 55%", parentId: null },
-];
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 interface NotesContextType {
   notes: Note[];
@@ -13,10 +10,11 @@ interface NotesContextType {
   selectedCategoryId: string | null;
   selectedNoteId: string | null;
   activeView: "notes" | "graph";
+  loading: boolean;
   setActiveView: (v: "notes" | "graph") => void;
   setSelectedCategoryId: (id: string | null) => void;
   setSelectedNoteId: (id: string | null) => void;
-  addNote: (categoryId: string, parentNoteId?: string | null) => Note;
+  addNote: (categoryId: string, parentNoteId?: string | null) => Promise<Note | null>;
   updateNote: (id: string, updates: Partial<Note>) => void;
   deleteNote: (id: string) => void;
   addCategory: (name: string, icon: string, parentId?: string | null) => void;
@@ -46,213 +44,244 @@ export const useNotes = () => {
   return ctx;
 };
 
-const loadFromStorage = <T,>(key: string, fallback: T): T => {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : fallback;
-  } catch {
-    return fallback;
-  }
-};
+// Map DB row to app Note
+const dbToNote = (row: any): Note => ({
+  id: row.id,
+  title: row.title,
+  content: row.content,
+  categoryId: row.category_id,
+  parentNoteId: row.parent_note_id ?? null,
+  linkedNoteIds: row.linked_note_ids ?? [],
+  checklist: (row.checklist as ChecklistItem[]) ?? [],
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
 
-const migrateNotes = (notes: Note[]): Note[] =>
-  notes.map((n) => ({
-    ...n,
-    parentNoteId: n.parentNoteId ?? null,
-    linkedNoteIds: n.linkedNoteIds ?? [],
-  }));
-
-// Remove subcategories on load - flatten to root only
-const migrateCategories = (cats: Category[]): Category[] =>
-  cats.map((c) => ({ ...c, parentId: null }));
+const dbToCategory = (row: any): Category => ({
+  id: row.id,
+  name: row.name,
+  icon: row.icon,
+  color: row.color,
+  parentId: null,
+});
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [notes, setNotes] = useState<Note[]>(() => migrateNotes(loadFromStorage("notes", [])));
-  const [categories, setCategories] = useState<Category[]>(() =>
-    migrateCategories(loadFromStorage("categories", DEFAULT_CATEGORIES))
-  );
+  const { user } = useAuth();
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<"notes" | "graph">("notes");
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { localStorage.setItem("notes", JSON.stringify(notes)); }, [notes]);
-  useEffect(() => { localStorage.setItem("categories", JSON.stringify(categories)); }, [categories]);
+  // Load data from DB
+  useEffect(() => {
+    if (!user) { setNotes([]); setCategories([]); setLoading(false); return; }
+    setLoading(true);
+    const load = async () => {
+      const [catsRes, notesRes] = await Promise.all([
+        supabase.from("categories").select("*").order("created_at"),
+        supabase.from("notes").select("*").order("created_at", { ascending: false }),
+      ]);
+      if (catsRes.data) setCategories(catsRes.data.map(dbToCategory));
+      if (notesRes.data) setNotes(notesRes.data.map(dbToNote));
+      setLoading(false);
+    };
+    load();
+  }, [user]);
 
-  const addNote = useCallback((categoryId: string, parentNoteId?: string | null) => {
-    const note: Note = {
-      id: crypto.randomUUID(),
+  // Debounced save for note updates
+  const updateTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const addNote = useCallback(async (categoryId: string, parentNoteId?: string | null) => {
+    if (!user) return null;
+    // Child notes inherit parent's category
+    let catId = categoryId;
+    if (parentNoteId) {
+      const parent = notes.find(n => n.id === parentNoteId);
+      if (parent) catId = parent.categoryId;
+    }
+    const { data, error } = await supabase.from("notes").insert({
+      user_id: user.id,
+      category_id: catId,
+      parent_note_id: parentNoteId ?? null,
       title: "Nueva nota",
       content: "",
-      // Child notes inherit parent's category
-      categoryId: parentNoteId
-        ? (() => {
-            const stored = localStorage.getItem("notes");
-            const allNotes: Note[] = stored ? JSON.parse(stored) : [];
-            const parent = allNotes.find((n) => n.id === parentNoteId);
-            return parent?.categoryId || categoryId;
-          })()
-        : categoryId,
-      parentNoteId: parentNoteId ?? null,
-      linkedNoteIds: [],
       checklist: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setNotes((prev) => [note, ...prev]);
+      linked_note_ids: [],
+    }).select().single();
+    if (error) { toast.error("Error al crear nota"); return null; }
+    const note = dbToNote(data);
+    setNotes(prev => [note, ...prev]);
     setSelectedNoteId(note.id);
     return note;
-  }, []);
+  }, [user, notes]);
 
   const updateNote = useCallback((id: string, updates: Partial<Note>) => {
-    setNotes((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, ...updates, updatedAt: new Date().toISOString() } : n))
-    );
+    // Optimistic update locally
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, ...updates, updatedAt: new Date().toISOString() } : n));
+    // Debounce DB save
+    clearTimeout(updateTimers.current[id]);
+    updateTimers.current[id] = setTimeout(async () => {
+      const dbUpdates: any = { updated_at: new Date().toISOString() };
+      if (updates.title !== undefined) dbUpdates.title = updates.title;
+      if (updates.content !== undefined) dbUpdates.content = updates.content;
+      if (updates.categoryId !== undefined) dbUpdates.category_id = updates.categoryId;
+      if (updates.parentNoteId !== undefined) dbUpdates.parent_note_id = updates.parentNoteId;
+      if (updates.checklist !== undefined) dbUpdates.checklist = updates.checklist;
+      if (updates.linkedNoteIds !== undefined) dbUpdates.linked_note_ids = updates.linkedNoteIds;
+      await supabase.from("notes").update(dbUpdates).eq("id", id);
+    }, 500);
   }, []);
 
-  const deleteNote = useCallback((id: string) => {
-    setNotes((prev) => {
-      return prev
-        .filter((n) => n.id !== id)
-        .map((n) => ({
-          ...n,
-          parentNoteId: n.parentNoteId === id ? null : n.parentNoteId,
-          linkedNoteIds: n.linkedNoteIds.filter((lid) => lid !== id),
-        }));
-    });
-    setSelectedNoteId((prev) => (prev === id ? null : prev));
+  const deleteNote = useCallback(async (id: string) => {
+    setNotes(prev => prev.filter(n => n.id !== id).map(n => ({
+      ...n,
+      parentNoteId: n.parentNoteId === id ? null : n.parentNoteId,
+      linkedNoteIds: n.linkedNoteIds.filter(lid => lid !== id),
+    })));
+    setSelectedNoteId(prev => prev === id ? null : prev);
+    // Also update notes that referenced this one
+    const affected = notes.filter(n => n.linkedNoteIds.includes(id));
+    for (const n of affected) {
+      await supabase.from("notes").update({ linked_note_ids: n.linkedNoteIds.filter(lid => lid !== id) }).eq("id", n.id);
+    }
+    // Remove orphan parent refs
+    await supabase.from("notes").update({ parent_note_id: null }).eq("parent_note_id", id);
+    await supabase.from("notes").delete().eq("id", id);
+  }, [notes]);
+
+  const addCategory = useCallback(async (name: string, icon: string, _parentId?: string | null) => {
+    if (!user) return;
+    const { data, error } = await supabase.from("categories").insert({
+      user_id: user.id, name, icon, color: "30 50% 50%",
+    }).select().single();
+    if (error) { toast.error("Error al crear categoría"); return; }
+    setCategories(prev => [...prev, dbToCategory(data)]);
+  }, [user]);
+
+  const updateCategory = useCallback(async (id: string, updates: Partial<Pick<Category, "name" | "icon">>) => {
+    setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    await supabase.from("categories").update(updates).eq("id", id);
   }, []);
 
-  const addCategory = useCallback((name: string, icon: string, _parentId?: string | null) => {
-    setCategories((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), name, icon, color: "30 50% 50%", parentId: null },
-    ]);
-  }, []);
-
-  const updateCategory = useCallback((id: string, updates: Partial<Pick<Category, "name" | "icon">>) => {
-    setCategories((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...updates } : c))
-    );
-  }, []);
-
-  const deleteCategory = useCallback((id: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== id));
-    setNotes((prev) => prev.filter((n) => n.categoryId !== id));
+  const deleteCategory = useCallback(async (id: string) => {
+    setCategories(prev => prev.filter(c => c.id !== id));
+    setNotes(prev => prev.filter(n => n.categoryId !== id));
+    await supabase.from("categories").delete().eq("id", id);
   }, []);
 
   const addChecklistItem = useCallback((noteId: string, text: string) => {
-    setNotes((prev) =>
-      prev.map((n) =>
-        n.id === noteId
-          ? { ...n, checklist: [...n.checklist, { id: crypto.randomUUID(), text, completed: false }], updatedAt: new Date().toISOString() }
-          : n
-      )
-    );
+    setNotes(prev => prev.map(n => {
+      if (n.id !== noteId) return n;
+      const newChecklist = [...n.checklist, { id: crypto.randomUUID(), text, completed: false }];
+      // Save to DB
+      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
+      return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
+    }));
   }, []);
 
   const toggleChecklistItem = useCallback((noteId: string, itemId: string) => {
-    setNotes((prev) =>
-      prev.map((n) =>
-        n.id === noteId
-          ? { ...n, checklist: n.checklist.map((i) => i.id === itemId ? { ...i, completed: !i.completed } : i), updatedAt: new Date().toISOString() }
-          : n
-      )
-    );
+    setNotes(prev => prev.map(n => {
+      if (n.id !== noteId) return n;
+      const newChecklist = n.checklist.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
+      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
+      return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
+    }));
   }, []);
 
   const deleteChecklistItem = useCallback((noteId: string, itemId: string) => {
-    setNotes((prev) =>
-      prev.map((n) =>
-        n.id === noteId
-          ? { ...n, checklist: n.checklist.filter((i) => i.id !== itemId), updatedAt: new Date().toISOString() }
-          : n
-      )
-    );
+    setNotes(prev => prev.map(n => {
+      if (n.id !== noteId) return n;
+      const newChecklist = n.checklist.filter(i => i.id !== itemId);
+      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
+      return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
+    }));
   }, []);
 
   const linkNotes = useCallback((noteIdA: string, noteIdB: string) => {
     if (noteIdA === noteIdB) return;
-    setNotes((prev) =>
-      prev.map((n) => {
+    setNotes(prev => {
+      const updated = prev.map(n => {
         if (n.id === noteIdA && !n.linkedNoteIds.includes(noteIdB)) {
-          return { ...n, linkedNoteIds: [...n.linkedNoteIds, noteIdB], updatedAt: new Date().toISOString() };
+          const newLinks = [...n.linkedNoteIds, noteIdB];
+          supabase.from("notes").update({ linked_note_ids: newLinks, updated_at: new Date().toISOString() }).eq("id", noteIdA);
+          return { ...n, linkedNoteIds: newLinks, updatedAt: new Date().toISOString() };
         }
         if (n.id === noteIdB && !n.linkedNoteIds.includes(noteIdA)) {
-          return { ...n, linkedNoteIds: [...n.linkedNoteIds, noteIdA], updatedAt: new Date().toISOString() };
+          const newLinks = [...n.linkedNoteIds, noteIdA];
+          supabase.from("notes").update({ linked_note_ids: newLinks, updated_at: new Date().toISOString() }).eq("id", noteIdB);
+          return { ...n, linkedNoteIds: newLinks, updatedAt: new Date().toISOString() };
         }
         return n;
-      })
-    );
+      });
+      return updated;
+    });
   }, []);
 
   const unlinkNotes = useCallback((noteIdA: string, noteIdB: string) => {
-    setNotes((prev) =>
-      prev.map((n) => {
-        if (n.id === noteIdA) return { ...n, linkedNoteIds: n.linkedNoteIds.filter((id) => id !== noteIdB) };
-        if (n.id === noteIdB) return { ...n, linkedNoteIds: n.linkedNoteIds.filter((id) => id !== noteIdA) };
-        return n;
-      })
-    );
+    setNotes(prev => prev.map(n => {
+      if (n.id === noteIdA) {
+        const newLinks = n.linkedNoteIds.filter(id => id !== noteIdB);
+        supabase.from("notes").update({ linked_note_ids: newLinks }).eq("id", noteIdA);
+        return { ...n, linkedNoteIds: newLinks };
+      }
+      if (n.id === noteIdB) {
+        const newLinks = n.linkedNoteIds.filter(id => id !== noteIdA);
+        supabase.from("notes").update({ linked_note_ids: newLinks }).eq("id", noteIdB);
+        return { ...n, linkedNoteIds: newLinks };
+      }
+      return n;
+    }));
   }, []);
 
   const createNoteFromChat = useCallback((title: string, content: string, categoryId?: string) => {
-    const catId = categoryId || categories[0]?.id || "personal";
+    // Kept for interface compatibility but chat is conversational-only
+    const catId = categoryId || categories[0]?.id || "";
     const note: Note = {
-      id: crypto.randomUUID(),
-      title,
-      content,
-      categoryId: catId,
-      parentNoteId: null,
-      linkedNoteIds: [],
-      checklist: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      id: crypto.randomUUID(), title, content, categoryId: catId,
+      parentNoteId: null, linkedNoteIds: [], checklist: [],
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
-    setNotes((prev) => [note, ...prev]);
-    setSelectedNoteId(note.id);
-    setSelectedCategoryId(catId);
     return note;
   }, [categories]);
 
-  const getChildNotes = useCallback((noteId: string) => notes.filter((n) => n.parentNoteId === noteId), [notes]);
+  const getChildNotes = useCallback((noteId: string) => notes.filter(n => n.parentNoteId === noteId), [notes]);
   const getLinkedNotes = useCallback((noteId: string) => {
-    const note = notes.find((n) => n.id === noteId);
+    const note = notes.find(n => n.id === noteId);
     if (!note) return [];
-    return notes.filter((n) => note.linkedNoteIds.includes(n.id));
+    return notes.filter(n => note.linkedNoteIds.includes(n.id));
   }, [notes]);
   const getParentNote = useCallback((noteId: string) => {
-    const note = notes.find((n) => n.id === noteId);
+    const note = notes.find(n => n.id === noteId);
     if (!note?.parentNoteId) return undefined;
-    return notes.find((n) => n.id === note.parentNoteId);
+    return notes.find(n => n.id === note.parentNoteId);
   }, [notes]);
 
-  // No subcategories - return empty
   const getSubcategories = useCallback((_categoryId: string) => [] as Category[], []);
   const getRootCategories = useCallback(() => categories, [categories]);
   const getCategoryPath = useCallback((categoryId: string): Category[] => {
-    const cat = categories.find((c) => c.id === categoryId);
+    const cat = categories.find(c => c.id === categoryId);
     return cat ? [cat] : [];
   }, [categories]);
 
   const filteredNotes = selectedCategoryId
-    ? notes.filter((n) => n.categoryId === selectedCategoryId)
+    ? notes.filter(n => n.categoryId === selectedCategoryId)
     : notes;
 
-  const selectedNote = notes.find((n) => n.id === selectedNoteId);
+  const selectedNote = notes.find(n => n.id === selectedNoteId);
 
   return (
-    <NotesContext.Provider
-      value={{
-        notes, categories, selectedCategoryId, selectedNoteId, activeView, setActiveView,
-        setSelectedCategoryId, setSelectedNoteId,
-        addNote, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
-        addChecklistItem, toggleChecklistItem, deleteChecklistItem,
-        linkNotes, unlinkNotes,
-        filteredNotes, selectedNote, createNoteFromChat,
-        getChildNotes, getLinkedNotes, getParentNote,
-        getSubcategories, getRootCategories, getCategoryPath,
-      }}
-    >
+    <NotesContext.Provider value={{
+      notes, categories, selectedCategoryId, selectedNoteId, activeView, loading,
+      setActiveView, setSelectedCategoryId, setSelectedNoteId,
+      addNote, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
+      addChecklistItem, toggleChecklistItem, deleteChecklistItem,
+      linkNotes, unlinkNotes,
+      filteredNotes, selectedNote, createNoteFromChat,
+      getChildNotes, getLinkedNotes, getParentNote,
+      getSubcategories, getRootCategories, getCategoryPath,
+    }}>
       {children}
     </NotesContext.Provider>
   );

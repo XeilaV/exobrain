@@ -292,7 +292,7 @@ const NoteEditor = () => {
             Enlazar
           </button>
           <button
-            onClick={() => addNote(selectedNote.categoryId, selectedNote.id)}
+            onClick={() => { addNote(selectedNote.categoryId, selectedNote.id); }}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors font-body"
           >
             <Plus size={12} />
