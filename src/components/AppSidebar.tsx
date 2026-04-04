@@ -158,6 +158,18 @@ const AppSidebar = () => {
           </button>
         )}
       </div>
+
+      {user && (
+        <div className="p-3 border-t border-sidebar-border">
+          <button
+            onClick={signOut}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
+          >
+            <LogOut size={16} />
+            Cerrar sesión
+          </button>
+        </div>
+      )}
     </aside>
   );
 };
