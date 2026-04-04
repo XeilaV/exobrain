@@ -71,7 +71,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<"notes" | "graph">("notes");
+  const [activeView, setActiveView] = useState<"notes" | "graph">("graph");
   const [loading, setLoading] = useState(true);
 
   // Load data from DB
