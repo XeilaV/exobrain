@@ -176,7 +176,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (n.id !== noteId) return n;
       const newChecklist = [...n.checklist, { id: crypto.randomUUID(), text, completed: false }];
       // Save to DB
-      supabase.from("notes").update({ checklist: newChecklist, updated_at: new Date().toISOString() }).eq("id", noteId);
+      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
       return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
     }));
   }, []);
@@ -185,7 +185,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setNotes(prev => prev.map(n => {
       if (n.id !== noteId) return n;
       const newChecklist = n.checklist.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
-      supabase.from("notes").update({ checklist: newChecklist, updated_at: new Date().toISOString() }).eq("id", noteId);
+      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
       return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
     }));
   }, []);
@@ -194,7 +194,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setNotes(prev => prev.map(n => {
       if (n.id !== noteId) return n;
       const newChecklist = n.checklist.filter(i => i.id !== itemId);
-      supabase.from("notes").update({ checklist: newChecklist, updated_at: new Date().toISOString() }).eq("id", noteId);
+      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
       return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
     }));
   }, []);
