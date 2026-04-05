@@ -536,6 +536,17 @@ const GraphView = () => {
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={e => e.stopPropagation()}
           >
+            {contextMenu.nodeId.startsWith("cat-") && (
+              <button onClick={() => {
+                const catId = contextMenu.nodeId.replace("cat-", "");
+                const cat = categories.find(c => c.id === catId);
+                if (cat) setEditingCat({ id: catId, name: cat.name });
+                setContextMenu(null);
+              }}
+                className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground">
+                <Pencil size={12} />Editar nombre
+              </button>
+            )}
             {contextMenu.nodeId.startsWith("note-") && (
               <button onClick={() => handleDuplicate(contextMenu.nodeId)}
                 className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground">
