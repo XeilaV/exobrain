@@ -1,7 +1,7 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, RotateCcw, Filter, Trash2, Copy } from "lucide-react";
+import { Plus, Filter, Trash2, Copy, Pencil } from "lucide-react";
 import NotePostIt from "./NotePostIt";
 import { toast } from "sonner";
 
