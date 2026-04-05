@@ -102,7 +102,7 @@ const GraphView = () => {
           const noteKey = `note-${note.id}`;
           const autoNx = catX + armLen;
           const autoNy = noteStartY + ni * noteSpacing;
-          const savedN = !forceAll ? manualPositions.current.get(noteKey) : undefined;
+          const savedN = manualPositions.current.get(noteKey);
 
           const nx = savedN?.x ?? autoNx;
           const ny = savedN?.y ?? autoNy;
