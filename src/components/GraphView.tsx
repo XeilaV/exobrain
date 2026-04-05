@@ -648,7 +648,29 @@ const GraphView = () => {
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Edit category name inline */}
+      {editingCat && (
+        <div className="absolute top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[180px]"
+          onClick={e => e.stopPropagation()}>
+          <input value={editingCat.name} onChange={e => setEditingCat({ ...editingCat, name: e.target.value })}
+            onKeyDown={e => {
+              if (e.key === "Enter" && editingCat.name.trim()) {
+                updateCategory(editingCat.id, { name: editingCat.name.trim() });
+                setEditingCat(null);
+              }
+            }}
+            autoFocus
+            className="w-full bg-muted rounded text-xs px-2 py-1.5 text-foreground outline-none font-body" />
+          <div className="flex gap-2">
+            <button onClick={() => { if (editingCat.name.trim()) { updateCategory(editingCat.id, { name: editingCat.name.trim() }); setEditingCat(null); } }}
+              className="flex-1 bg-primary text-primary-foreground rounded text-xs py-1.5 font-medium">Guardar</button>
+            <button onClick={() => setEditingCat(null)}
+              className="flex-1 bg-muted text-foreground rounded text-xs py-1.5">Cancelar</button>
+          </div>
+        </div>
+      )}
+
+
       {categories.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center text-muted-foreground">
