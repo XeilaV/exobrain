@@ -1,7 +1,7 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, RotateCcw, Filter, Trash2, Copy } from "lucide-react";
+import { Plus, Filter, Trash2, Copy, Pencil } from "lucide-react";
 import NotePostIt from "./NotePostIt";
 import { toast } from "sonner";
 
@@ -29,7 +29,7 @@ const PARENT_R = 10;
 const GraphView = () => {
   const {
     notes, categories, setSelectedNoteId, addNote, addCategory,
-    deleteNote, deleteCategory, linkNotes, unlinkNotes,
+    deleteNote, deleteCategory, linkNotes, unlinkNotes, updateCategory,
   } = useNotes();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,6 +43,7 @@ const GraphView = () => {
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [newCatIcon, setNewCatIcon] = useState("📌");
+  const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
 
   // Context menu state (long press)
   const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
@@ -65,8 +66,7 @@ const GraphView = () => {
     filterCat ? categories.filter(c => c.id === filterCat) : categories
   , [categories, filterCat]);
 
-  // Compute layout only for nodes without saved positions
-  const computeLayout = useCallback((forceAll = false) => {
+  const computeLayout = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
     const w = el.clientWidth;
@@ -82,7 +82,7 @@ const GraphView = () => {
       const autoX = Math.min(80, w * 0.12);
       const autoY = startY + ci * catSpacing;
       const catKey = `cat-${cat.id}`;
-      const saved = !forceAll ? manualPositions.current.get(catKey) : undefined;
+      const saved = manualPositions.current.get(catKey);
 
       const catX = saved?.x ?? autoX;
       const catY = saved?.y ?? autoY;
@@ -102,7 +102,7 @@ const GraphView = () => {
           const noteKey = `note-${note.id}`;
           const autoNx = catX + armLen;
           const autoNy = noteStartY + ni * noteSpacing;
-          const savedN = !forceAll ? manualPositions.current.get(noteKey) : undefined;
+          const savedN = manualPositions.current.get(noteKey);
 
           const nx = savedN?.x ?? autoNx;
           const ny = savedN?.y ?? autoNy;
@@ -123,7 +123,7 @@ const GraphView = () => {
               const childKey = `note-${child.id}`;
               const autoCx = nx + childArm;
               const autoCy = childStartY + chi * childSpacing;
-              const savedC = !forceAll ? manualPositions.current.get(childKey) : undefined;
+              const savedC = manualPositions.current.get(childKey);
 
               newPos.push({
                 id: childKey,
@@ -384,11 +384,7 @@ const GraphView = () => {
     await addNote(catId, parentId || null);
   };
 
-  const handleReorganize = () => {
-    manualPositions.current.clear();
-    computeLayout(true);
-  };
-
+  // Removed: no auto-reorganize. Positions are always manual.
   return (
     <div
       ref={containerRef}
@@ -540,6 +536,17 @@ const GraphView = () => {
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={e => e.stopPropagation()}
           >
+            {contextMenu.nodeId.startsWith("cat-") && (
+              <button onClick={() => {
+                const catId = contextMenu.nodeId.replace("cat-", "");
+                const cat = categories.find(c => c.id === catId);
+                if (cat) setEditingCat({ id: catId, name: cat.name });
+                setContextMenu(null);
+              }}
+                className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground">
+                <Pencil size={12} />Editar nombre
+              </button>
+            )}
             {contextMenu.nodeId.startsWith("note-") && (
               <button onClick={() => handleDuplicate(contextMenu.nodeId)}
                 className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground">
@@ -599,11 +606,6 @@ const GraphView = () => {
           title="Filtrar">
           <Filter size={16} />
         </button>
-        <button onClick={handleReorganize}
-          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
-          title="Reorganizar">
-          <RotateCcw size={16} />
-        </button>
         <button onClick={() => setIsAddingCat(true)}
           className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
           title="Nuevo tema">
@@ -646,7 +648,29 @@ const GraphView = () => {
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Edit category name inline */}
+      {editingCat && (
+        <div className="absolute top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[180px]"
+          onClick={e => e.stopPropagation()}>
+          <input value={editingCat.name} onChange={e => setEditingCat({ ...editingCat, name: e.target.value })}
+            onKeyDown={e => {
+              if (e.key === "Enter" && editingCat.name.trim()) {
+                updateCategory(editingCat.id, { name: editingCat.name.trim() });
+                setEditingCat(null);
+              }
+            }}
+            autoFocus
+            className="w-full bg-muted rounded text-xs px-2 py-1.5 text-foreground outline-none font-body" />
+          <div className="flex gap-2">
+            <button onClick={() => { if (editingCat.name.trim()) { updateCategory(editingCat.id, { name: editingCat.name.trim() }); setEditingCat(null); } }}
+              className="flex-1 bg-primary text-primary-foreground rounded text-xs py-1.5 font-medium">Guardar</button>
+            <button onClick={() => setEditingCat(null)}
+              className="flex-1 bg-muted text-foreground rounded text-xs py-1.5">Cancelar</button>
+          </div>
+        </div>
+      )}
+
+
       {categories.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center text-muted-foreground">
