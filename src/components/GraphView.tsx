@@ -595,11 +595,6 @@ const GraphView = () => {
           title="Filtrar">
           <Filter size={16} />
         </button>
-        <button onClick={handleReorganize}
-          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
-          title="Reorganizar">
-          <RotateCcw size={16} />
-        </button>
         <button onClick={() => setIsAddingCat(true)}
           className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
           title="Nuevo tema">
