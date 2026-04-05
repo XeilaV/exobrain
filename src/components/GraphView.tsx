@@ -82,7 +82,7 @@ const GraphView = () => {
       const autoX = Math.min(80, w * 0.12);
       const autoY = startY + ci * catSpacing;
       const catKey = `cat-${cat.id}`;
-      const saved = !forceAll ? manualPositions.current.get(catKey) : undefined;
+      const saved = manualPositions.current.get(catKey);
 
       const catX = saved?.x ?? autoX;
       const catY = saved?.y ?? autoY;
