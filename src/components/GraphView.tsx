@@ -384,11 +384,7 @@ const GraphView = () => {
     await addNote(catId, parentId || null);
   };
 
-  const handleReorganize = () => {
-    manualPositions.current.clear();
-    computeLayout(true);
-  };
-
+  // Removed: no auto-reorganize. Positions are always manual.
   return (
     <div
       ref={containerRef}
