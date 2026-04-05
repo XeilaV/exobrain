@@ -29,7 +29,7 @@ const PARENT_R = 10;
 const GraphView = () => {
   const {
     notes, categories, setSelectedNoteId, addNote, addCategory,
-    deleteNote, deleteCategory, linkNotes, unlinkNotes,
+    deleteNote, deleteCategory, linkNotes, unlinkNotes, updateCategory,
   } = useNotes();
 
   const containerRef = useRef<HTMLDivElement>(null);
