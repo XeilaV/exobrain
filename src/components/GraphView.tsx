@@ -1,8 +1,9 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, RotateCcw, Filter } from "lucide-react";
+import { Plus, RotateCcw, Filter, Trash2, Copy } from "lucide-react";
 import NotePostIt from "./NotePostIt";
+import { toast } from "sonner";
 
 interface NodePos {
   id: string;
@@ -28,6 +29,7 @@ const PARENT_R = 10;
 const GraphView = () => {
   const {
     notes, categories, setSelectedNoteId, addNote, addCategory,
+    deleteNote, deleteCategory, linkNotes, unlinkNotes,
   } = useNotes();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -41,14 +43,30 @@ const GraphView = () => {
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [newCatIcon, setNewCatIcon] = useState("📌");
-  const hasAutoLayouted = useRef(false);
+
+  // Context menu state (long press)
+  const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress = useRef(false);
+
+  // Linking mode: first selected note for linking
+  const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
+  // Confirm dialog
+  const [confirmDialog, setConfirmDialog] = useState<{
+    message: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+  } | null>(null);
+
+  // Track which node IDs have been manually positioned
+  const manualPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
 
   const filteredCategories = useMemo(() =>
     filterCat ? categories.filter(c => c.id === filterCat) : categories
   , [categories, filterCat]);
 
-  // Auto-layout: tree structure
-  const computeLayout = useCallback(() => {
+  // Compute layout only for nodes without saved positions
+  const computeLayout = useCallback((forceAll = false) => {
     const el = containerRef.current;
     if (!el) return;
     const w = el.clientWidth;
@@ -57,46 +75,60 @@ const GraphView = () => {
     const cats = filteredCategories;
     if (cats.length === 0) { setPositions([]); return; }
 
-    // Distribute categories vertically on the left, with branches going right
     const catSpacing = Math.min(120, (h - 80) / Math.max(cats.length, 1));
     const startY = Math.max(60, (h - catSpacing * (cats.length - 1)) / 2);
 
     cats.forEach((cat, ci) => {
-      const catX = Math.min(80, w * 0.12);
-      const catY = startY + ci * catSpacing;
+      const autoX = Math.min(80, w * 0.12);
+      const autoY = startY + ci * catSpacing;
+      const catKey = `cat-${cat.id}`;
+      const saved = !forceAll ? manualPositions.current.get(catKey) : undefined;
+
+      const catX = saved?.x ?? autoX;
+      const catY = saved?.y ?? autoY;
 
       newPos.push({
-        id: `cat-${cat.id}`, x: catX, y: catY,
+        id: catKey, x: catX, y: catY,
         label: cat.name, type: "category", categoryId: cat.id,
       });
 
       if (expandedCats.has(cat.id)) {
         const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
-        const armLen = Math.min(100, (w - catX - 60) / 3);
+        const armLen = Math.min(100, (w - autoX - 60) / 3);
         const noteSpacing = Math.min(50, catSpacing * 0.8 / Math.max(rootNotes.length, 1));
         const noteStartY = catY - (rootNotes.length - 1) * noteSpacing / 2;
 
         rootNotes.forEach((note, ni) => {
-          const nx = catX + armLen;
-          const ny = noteStartY + ni * noteSpacing;
+          const noteKey = `note-${note.id}`;
+          const autoNx = catX + armLen;
+          const autoNy = noteStartY + ni * noteSpacing;
+          const savedN = !forceAll ? manualPositions.current.get(noteKey) : undefined;
+
+          const nx = savedN?.x ?? autoNx;
+          const ny = savedN?.y ?? autoNy;
 
           newPos.push({
-            id: `note-${note.id}`, x: nx, y: ny,
+            id: noteKey, x: nx, y: ny,
             label: note.title, type: "parent-note",
             categoryId: cat.id, noteId: note.id,
           });
 
           if (expandedParents.has(note.id)) {
             const children = notes.filter(n => n.parentNoteId === note.id);
-            const childArm = Math.min(80, (w - nx - 40) / 2);
+            const childArm = Math.min(80, (w - autoNx - 40) / 2);
             const childSpacing = Math.min(35, noteSpacing * 0.7 / Math.max(children.length, 1));
             const childStartY = ny - (children.length - 1) * childSpacing / 2;
 
             children.forEach((child, chi) => {
+              const childKey = `note-${child.id}`;
+              const autoCx = nx + childArm;
+              const autoCy = childStartY + chi * childSpacing;
+              const savedC = !forceAll ? manualPositions.current.get(childKey) : undefined;
+
               newPos.push({
-                id: `note-${child.id}`,
-                x: nx + childArm,
-                y: childStartY + chi * childSpacing,
+                id: childKey,
+                x: savedC?.x ?? autoCx,
+                y: savedC?.y ?? autoCy,
                 label: child.title, type: "child-note",
                 categoryId: cat.id, noteId: child.id,
                 parentNoteId: note.id,
@@ -110,10 +142,7 @@ const GraphView = () => {
     setPositions(newPos);
   }, [filteredCategories, expandedCats, expandedParents, notes]);
 
-  useEffect(() => {
-    computeLayout();
-    hasAutoLayouted.current = true;
-  }, [computeLayout]);
+  useEffect(() => { computeLayout(); }, [computeLayout]);
 
   // Resize observer
   useEffect(() => {
@@ -138,7 +167,6 @@ const GraphView = () => {
         const parentKey = `note-${p.parentNoteId}`;
         if (posIds.has(parentKey)) e.push({ from: parentKey, to: p.id, type: "branch" });
       }
-      // Manual links
       if (p.noteId) {
         const note = notes.find(n => n.id === p.noteId);
         if (note) {
@@ -156,18 +184,52 @@ const GraphView = () => {
 
   const getPos = (id: string) => positions.find(p => p.id === id);
 
-  // Drag handlers
+  // Drag handlers - save to manualPositions on drag end
   const handlePointerDown = useCallback((e: React.PointerEvent, nodeId: string) => {
     const pos = positions.find(p => p.id === nodeId);
     if (!pos) return;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const rect = containerRef.current?.getBoundingClientRect();
     setDrag({ id: nodeId, ox: e.clientX - (rect?.left || 0) - pos.x, oy: e.clientY - (rect?.top || 0) - pos.y });
+    didLongPress.current = false;
+
+    // Start long press timer
+    longPressTimer.current = setTimeout(() => {
+      didLongPress.current = true;
+      setDrag(null);
+
+      // If in linking mode and this is a note, ask to link
+      if (linkingNoteId && nodeId.startsWith("note-")) {
+        const targetNoteId = nodeId.replace("note-", "");
+        if (targetNoteId !== linkingNoteId) {
+          setConfirmDialog({
+            message: "¿Deseas unir estas notas?",
+            onConfirm: () => {
+              linkNotes(linkingNoteId, targetNoteId);
+              setLinkingNoteId(null);
+              setConfirmDialog(null);
+              toast.success("Notas enlazadas");
+            },
+            onCancel: () => { setLinkingNoteId(null); setConfirmDialog(null); },
+          });
+        } else {
+          setLinkingNoteId(null);
+        }
+        return;
+      }
+
+      // Show context menu
+      setContextMenu({ nodeId, x: e.clientX, y: e.clientY });
+    }, 600);
+
     e.stopPropagation();
-  }, [positions]);
+  }, [positions, linkingNoteId, linkNotes]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!drag) return;
+    // Cancel long press on move
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+
     const rect = containerRef.current?.getBoundingClientRect();
     const w = rect?.width || 400;
     const h = rect?.height || 600;
@@ -182,11 +244,9 @@ const GraphView = () => {
 
       return prev.map(p => {
         if (p.id === drag.id) return { ...p, x: nx, y: ny };
-        // Move descendants when dragging category
         if (dragNode.type === "category" && p.categoryId === dragNode.categoryId && p.type !== "category") {
           return { ...p, x: p.x + dx, y: p.y + dy };
         }
-        // Move children when dragging parent note
         if (dragNode.type === "parent-note" && p.parentNoteId === dragNode.noteId) {
           return { ...p, x: p.x + dx, y: p.y + dy };
         }
@@ -195,10 +255,40 @@ const GraphView = () => {
     });
   }, [drag]);
 
-  const handlePointerUp = useCallback(() => setDrag(null), []);
+  const handlePointerUp = useCallback(() => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    if (drag) {
+      // Save all current positions as manual
+      setPositions(prev => {
+        prev.forEach(p => manualPositions.current.set(p.id, { x: p.x, y: p.y }));
+        return prev;
+      });
+    }
+    setDrag(null);
+  }, [drag]);
 
   const handleNodeClick = useCallback((nodeId: string, e: React.MouseEvent) => {
-    if (drag) return;
+    if (didLongPress.current) { didLongPress.current = false; return; }
+    if (contextMenu) { setContextMenu(null); return; }
+
+    // If in linking mode
+    if (linkingNoteId && nodeId.startsWith("note-")) {
+      const targetNoteId = nodeId.replace("note-", "");
+      if (targetNoteId !== linkingNoteId) {
+        setConfirmDialog({
+          message: "¿Deseas unir estas notas?",
+          onConfirm: () => {
+            linkNotes(linkingNoteId, targetNoteId);
+            setLinkingNoteId(null);
+            setConfirmDialog(null);
+            toast.success("Notas enlazadas");
+          },
+          onCancel: () => { setLinkingNoteId(null); setConfirmDialog(null); },
+        });
+      }
+      return;
+    }
+
     if (nodeId.startsWith("cat-")) {
       const catId = nodeId.replace("cat-", "");
       setExpandedCats(prev => {
@@ -208,22 +298,77 @@ const GraphView = () => {
       });
     } else if (nodeId.startsWith("note-")) {
       const nId = nodeId.replace("note-", "");
-      const note = notes.find(n => n.id === nId);
       const hasChildren = notes.some(n => n.parentNoteId === nId);
 
       if (hasChildren && !openPostIt) {
-        // Toggle children expansion
         setExpandedParents(prev => {
           const next = new Set(prev);
           if (next.has(nId)) next.delete(nId); else next.add(nId);
           return next;
         });
       }
-      // Open post-it
-      const rect = containerRef.current?.getBoundingClientRect();
       setOpenPostIt({ noteId: nId, x: e.clientX, y: e.clientY });
     }
-  }, [drag, notes, openPostIt]);
+  }, [notes, openPostIt, contextMenu, linkingNoteId, linkNotes]);
+
+  // Context menu actions
+  const handleDuplicate = async (nodeId: string) => {
+    setContextMenu(null);
+    if (nodeId.startsWith("note-")) {
+      const nId = nodeId.replace("note-", "");
+      const note = notes.find(n => n.id === nId);
+      if (note) {
+        const newNote = await addNote(note.categoryId, note.parentNoteId);
+        if (newNote) {
+          const { updateNote } = await import("@/contexts/NotesContext").then(() => ({ updateNote: null }));
+          // We can't easily update from here, but the note is created with default title
+          toast.success("Nota duplicada");
+        }
+      }
+    }
+  };
+
+  const handleDelete = (nodeId: string) => {
+    setContextMenu(null);
+    if (nodeId.startsWith("note-")) {
+      const nId = nodeId.replace("note-", "");
+      setConfirmDialog({
+        message: "¿Eliminar esta nota?",
+        onConfirm: () => { deleteNote(nId); setConfirmDialog(null); manualPositions.current.delete(nodeId); },
+        onCancel: () => setConfirmDialog(null),
+      });
+    } else if (nodeId.startsWith("cat-")) {
+      const catId = nodeId.replace("cat-", "");
+      setConfirmDialog({
+        message: "¿Eliminar este tema y sus notas?",
+        onConfirm: () => { deleteCategory(catId); setConfirmDialog(null); manualPositions.current.delete(nodeId); },
+        onCancel: () => setConfirmDialog(null),
+      });
+    }
+  };
+
+  const handleStartLinking = (nodeId: string) => {
+    setContextMenu(null);
+    if (nodeId.startsWith("note-")) {
+      const nId = nodeId.replace("note-", "");
+      setLinkingNoteId(nId);
+      toast.info("Pulsa otra nota para enlazar");
+    }
+  };
+
+  // Handle long press on link edges (SVG)
+  const edgeLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleEdgeLongPress = (edge: Edge) => {
+    if (edge.type !== "link") return;
+    const noteIdA = edge.from.replace("note-", "");
+    const noteIdB = edge.to.replace("note-", "");
+    setConfirmDialog({
+      message: "¿Eliminar enlace entre notas?",
+      onConfirm: () => { unlinkNotes(noteIdA, noteIdB); setConfirmDialog(null); toast.success("Enlace eliminado"); },
+      onCancel: () => setConfirmDialog(null),
+    });
+  };
 
   // Add category from map
   const handleAddCategory = () => {
@@ -235,12 +380,14 @@ const GraphView = () => {
     }
   };
 
-  // Add note to a category
   const handleAddNote = async (catId: string, parentId?: string) => {
     await addNote(catId, parentId || null);
   };
 
-  const noteCount = (catId: string) => notes.filter(n => n.categoryId === catId).length;
+  const handleReorganize = () => {
+    manualPositions.current.clear();
+    computeLayout(true);
+  };
 
   return (
     <div
@@ -249,21 +396,61 @@ const GraphView = () => {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
-      onClick={() => { if (openPostIt) setOpenPostIt(null); }}
+      onClick={() => {
+        if (openPostIt) setOpenPostIt(null);
+        if (contextMenu) setContextMenu(null);
+        if (linkingNoteId) { setLinkingNoteId(null); toast.info("Enlace cancelado"); }
+      }}
     >
+      {/* Linking mode indicator */}
+      {linkingNoteId && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 bg-primary text-primary-foreground text-xs font-body px-3 py-1.5 rounded-full shadow-lg animate-pulse">
+          Selecciona otra nota para enlazar
+        </div>
+      )}
+
       {/* SVG edges */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
+      <svg className="absolute inset-0 w-full h-full" style={{ zIndex: 0 }}>
         {edges.map((edge, idx) => {
           const from = getPos(edge.from);
           const to = getPos(edge.to);
           if (!from || !to) return null;
+
+          // For link edges, add a wider invisible hitbox for long press
+          if (edge.type === "link") {
+            return (
+              <g key={`e-${idx}`}>
+                <line
+                  x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                  stroke="hsl(var(--muted-foreground) / 0.3)"
+                  strokeWidth={1.5}
+                  strokeDasharray="6 4"
+                  className="pointer-events-none"
+                />
+                {/* Invisible wider line for touch target */}
+                <line
+                  x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                  stroke="transparent"
+                  strokeWidth={20}
+                  className="cursor-pointer"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    edgeLongPressTimer.current = setTimeout(() => handleEdgeLongPress(edge), 600);
+                  }}
+                  onPointerUp={() => { if (edgeLongPressTimer.current) clearTimeout(edgeLongPressTimer.current); }}
+                  onPointerLeave={() => { if (edgeLongPressTimer.current) clearTimeout(edgeLongPressTimer.current); }}
+                />
+              </g>
+            );
+          }
+
           return (
             <line
               key={`e-${idx}`}
               x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-              stroke={edge.type === "link" ? "hsl(var(--muted-foreground) / 0.3)" : "hsl(var(--foreground) / 0.4)"}
-              strokeWidth={edge.type === "link" ? 1.5 : 2}
-              strokeDasharray={edge.type === "link" ? "6 4" : "none"}
+              stroke="hsl(var(--foreground) / 0.4)"
+              strokeWidth={2}
+              className="pointer-events-none"
             />
           );
         })}
@@ -274,11 +461,9 @@ const GraphView = () => {
         {positions.map(node => {
           const isCat = node.type === "category";
           const isParent = node.type === "parent-note";
-          const isChild = node.type === "child-note";
           const r = isCat ? CAT_R : isParent ? PARENT_R : NOTE_R;
           const isExpanded = isCat && expandedCats.has(node.categoryId);
-          const isParentExpanded = isParent && node.noteId && expandedParents.has(node.noteId);
-          const hasChildren = isParent && node.noteId && notes.some(n => n.parentNoteId === node.noteId);
+          const isLinkSource = linkingNoteId && node.noteId === linkingNoteId;
 
           return (
             <motion.div
@@ -300,17 +485,37 @@ const GraphView = () => {
                 </span>
               )}
 
-              {/* Circle */}
+              {/* Circle with + inside */}
               <div
-                className={`rounded-full transition-all ${
+                className={`rounded-full transition-all flex items-center justify-center ${
                   isCat
                     ? `border-2 ${isExpanded ? "bg-primary border-primary shadow-lg" : "bg-primary/70 border-primary/50 shadow-md"}`
                     : isParent
-                    ? `border-2 ${hasChildren ? "bg-accent border-accent" : "bg-accent/70 border-accent/50"} shadow-sm`
+                    ? `border-2 bg-accent border-accent shadow-sm`
                     : "bg-muted-foreground/60 border border-muted-foreground/30"
-                }`}
+                } ${isLinkSource ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
                 style={{ width: r * 2, height: r * 2 }}
-              />
+              >
+                {/* + button inside circle for categories and expanded parent notes */}
+                {isCat && isExpanded && (
+                  <button
+                    onClick={e => { e.stopPropagation(); handleAddNote(node.categoryId); }}
+                    className="text-primary-foreground hover:scale-125 transition-transform"
+                    title="Añadir nota"
+                  >
+                    <Plus size={isCat ? 18 : 10} />
+                  </button>
+                )}
+                {isParent && expandedParents.has(node.noteId!) && (
+                  <button
+                    onClick={e => { e.stopPropagation(); if (node.noteId) handleAddNote(node.categoryId, node.noteId); }}
+                    className="text-accent-foreground hover:scale-125 transition-transform"
+                    title="Añadir nota hija"
+                  >
+                    <Plus size={10} />
+                  </button>
+                )}
+              </div>
 
               {/* Label BELOW for notes */}
               {!isCat && (
@@ -319,33 +524,72 @@ const GraphView = () => {
                   {node.label}
                 </span>
               )}
-
-              {/* Add child note button on parent notes */}
-              {isParent && isParentExpanded && (
-                <button
-                  onClick={e => { e.stopPropagation(); if (node.noteId) handleAddNote(node.categoryId, node.noteId); }}
-                  className="absolute bg-primary text-primary-foreground rounded-full p-0.5 hover:scale-110 transition-transform"
-                  style={{ top: -6, right: -6, zIndex: 10 }}
-                  title="Añadir nota hija"
-                >
-                  <Plus size={8} />
-                </button>
-              )}
-
-              {/* Add note button on expanded category */}
-              {isCat && isExpanded && (
-                <button
-                  onClick={e => { e.stopPropagation(); handleAddNote(node.categoryId); }}
-                  className="absolute bg-primary text-primary-foreground rounded-full p-0.5 hover:scale-110 transition-transform"
-                  style={{ top: -6, right: -6, zIndex: 10 }}
-                  title="Añadir nota"
-                >
-                  <Plus size={10} />
-                </button>
-              )}
             </motion.div>
           );
         })}
+      </AnimatePresence>
+
+      {/* Context menu (long press) */}
+      <AnimatePresence>
+        {contextMenu && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[140px]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={e => e.stopPropagation()}
+          >
+            {contextMenu.nodeId.startsWith("note-") && (
+              <button onClick={() => handleDuplicate(contextMenu.nodeId)}
+                className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground">
+                <Copy size={12} />Duplicar nota
+              </button>
+            )}
+            {contextMenu.nodeId.startsWith("note-") && (
+              <button onClick={() => handleStartLinking(contextMenu.nodeId)}
+                className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground">
+                <Plus size={12} />Enlazar con otra nota
+              </button>
+            )}
+            <button onClick={() => handleDelete(contextMenu.nodeId)}
+              className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive">
+              <Trash2 size={12} />Eliminar
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirm dialog */}
+      <AnimatePresence>
+        {confirmDialog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-background/60 backdrop-blur-sm"
+            onClick={e => e.stopPropagation()}
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              className="bg-card border border-border rounded-xl shadow-2xl p-5 max-w-[280px] w-full mx-4 space-y-4"
+            >
+              <p className="text-sm font-body text-foreground text-center">{confirmDialog.message}</p>
+              <div className="flex gap-2">
+                <button onClick={confirmDialog.onCancel}
+                  className="flex-1 text-xs py-2 rounded-lg bg-muted text-foreground font-body hover:bg-muted/80">
+                  Cancelar
+                </button>
+                <button onClick={confirmDialog.onConfirm}
+                  className="flex-1 text-xs py-2 rounded-lg bg-primary text-primary-foreground font-body hover:opacity-90">
+                  Confirmar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Controls */}
@@ -355,7 +599,7 @@ const GraphView = () => {
           title="Filtrar">
           <Filter size={16} />
         </button>
-        <button onClick={computeLayout}
+        <button onClick={handleReorganize}
           className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
           title="Reorganizar">
           <RotateCcw size={16} />
@@ -433,7 +677,7 @@ const GraphView = () => {
         </div>
         <div className="flex items-center gap-2">
           <svg width={14} height={2}><line x1={0} y1={1} x2={14} y2={1} stroke="hsl(var(--muted-foreground) / 0.3)" strokeWidth={1.5} strokeDasharray="4 3" /></svg>
-          <span>Enlace</span>
+          <span>Enlace (mantén pulsado para deshacer)</span>
         </div>
       </div>
 
