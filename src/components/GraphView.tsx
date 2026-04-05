@@ -123,7 +123,7 @@ const GraphView = () => {
               const childKey = `note-${child.id}`;
               const autoCx = nx + childArm;
               const autoCy = childStartY + chi * childSpacing;
-              const savedC = !forceAll ? manualPositions.current.get(childKey) : undefined;
+              const savedC = manualPositions.current.get(childKey);
 
               newPos.push({
                 id: childKey,
