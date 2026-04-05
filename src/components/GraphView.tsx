@@ -66,8 +66,7 @@ const GraphView = () => {
     filterCat ? categories.filter(c => c.id === filterCat) : categories
   , [categories, filterCat]);
 
-  // Compute layout only for nodes without saved positions
-  const computeLayout = useCallback((forceAll = false) => {
+  const computeLayout = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
     const w = el.clientWidth;
