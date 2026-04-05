@@ -43,6 +43,7 @@ const GraphView = () => {
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [newCatIcon, setNewCatIcon] = useState("📌");
+  const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
 
   // Context menu state (long press)
   const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
