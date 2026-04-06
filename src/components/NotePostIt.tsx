@@ -166,6 +166,10 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
             <Plus size={10} />Hija
           </button>
+          <button onClick={() => { deleteNote(noteId); onClose(); toast.success("Nota eliminada"); }}
+            className="flex items-center gap-0.5 text-[10px] text-destructive hover:text-destructive/80 font-body ml-auto">
+            <Trash2 size={10} />Borrar
+          </button>
         </div>
       </div>
 
