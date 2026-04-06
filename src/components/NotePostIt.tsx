@@ -64,7 +64,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const {
     notes, selectedNote, updateNote, addChecklistItem, categories,
     getChildNotes, getLinkedNotes, getParentNote, setSelectedNoteId,
-    linkNotes, unlinkNotes, addNote, getCategoryPath,
+    linkNotes, unlinkNotes, addNote, deleteNote, getCategoryPath,
   } = useNotes();
 
   const note = useMemo(() => notes.find(n => n.id === noteId), [notes, noteId]);
