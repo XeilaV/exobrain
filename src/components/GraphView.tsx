@@ -231,9 +231,16 @@ const GraphView = () => {
   }, [positions, linkingNoteId, linkNotes]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    // Activate drag from pending on first move
+    if (pendingDrag.current && !drag) {
+      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+      const pd = pendingDrag.current;
+      pd.target.setPointerCapture(pd.pointerId);
+      setDrag({ id: pd.id, ox: pd.ox, oy: pd.oy });
+      pendingDrag.current = null;
+      return;
+    }
     if (!drag) return;
-    // Cancel long press on move
-    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
 
     const rect = containerRef.current?.getBoundingClientRect();
     const w = rect?.width || 400;
