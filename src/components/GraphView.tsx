@@ -319,16 +319,18 @@ const GraphView = () => {
       const nId = nodeId.replace("note-", "");
       const hasChildren = notes.some(n => n.parentNoteId === nId);
 
-      if (hasChildren && !openPostIt) {
+      // Always expand/collapse children in the tree
+      if (hasChildren) {
         setExpandedParents(prev => {
           const next = new Set(prev);
           if (next.has(nId)) next.delete(nId); else next.add(nId);
           return next;
         });
       }
+      // Always open the post-it to view/edit
       setOpenPostIt({ noteId: nId, x: e.clientX, y: e.clientY });
     }
-  }, [notes, openPostIt, contextMenu, linkingNoteId, linkNotes]);
+  }, [notes, contextMenu, linkingNoteId, linkNotes]);
 
   // Context menu actions
   const handleDuplicate = async (nodeId: string) => {
@@ -558,21 +560,17 @@ const GraphView = () => {
               </button>
             )}
             {contextMenu.nodeId.startsWith("note-") && (
-              <button onClick={() => handleDuplicate(contextMenu.nodeId)}
-                className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground">
-                <Copy size={12} />Duplicar nota
+              <button onClick={() => handleDelete(contextMenu.nodeId)}
+                className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive">
+                <Trash2 size={12} />Eliminar
               </button>
             )}
-            {contextMenu.nodeId.startsWith("note-") && (
-              <button onClick={() => handleStartLinking(contextMenu.nodeId)}
-                className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground">
-                <Plus size={12} />Enlazar con otra nota
+            {contextMenu.nodeId.startsWith("cat-") && (
+              <button onClick={() => handleDelete(contextMenu.nodeId)}
+                className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive">
+                <Trash2 size={12} />Eliminar tema
               </button>
             )}
-            <button onClick={() => handleDelete(contextMenu.nodeId)}
-              className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive">
-              <Trash2 size={12} />Eliminar
-            </button>
           </motion.div>
         )}
       </AnimatePresence>
