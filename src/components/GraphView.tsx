@@ -521,15 +521,6 @@ const GraphView = () => {
                     <Plus size={isCat ? 18 : 10} />
                   </button>
                 )}
-                {isParent && expandedParents.has(node.noteId!) && (
-                  <button
-                    onClick={e => { e.stopPropagation(); if (node.noteId) handleAddNote(node.categoryId, node.noteId); }}
-                    className="text-accent-foreground hover:scale-125 transition-transform"
-                    title="Añadir nota hija"
-                  >
-                    <Plus size={10} />
-                  </button>
-                )}
               </div>
 
               {/* Label BELOW for notes */}
