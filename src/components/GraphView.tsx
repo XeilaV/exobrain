@@ -230,9 +230,15 @@ const GraphView = () => {
     e.stopPropagation();
   }, [positions, linkingNoteId, linkNotes]);
 
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
+
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    // Activate drag from pending on first move
+    // Activate drag from pending on first move (with threshold)
     if (pendingDrag.current && !drag) {
+      const dx = e.clientX - (pointerStart.current?.x ?? e.clientX);
+      const dy = e.clientY - (pointerStart.current?.y ?? e.clientY);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 10) return; // ignore tiny movements, allow long press
       if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
       const pd = pendingDrag.current;
       pd.target.setPointerCapture(pd.pointerId);
