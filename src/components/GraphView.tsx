@@ -560,15 +560,9 @@ const GraphView = () => {
               </button>
             )}
             {contextMenu.nodeId.startsWith("note-") && (
-              <button onClick={() => handleDuplicate(contextMenu.nodeId)}
-                className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground">
-                <Copy size={12} />Duplicar nota
-              </button>
-            )}
-            {contextMenu.nodeId.startsWith("note-") && (
-              <button onClick={() => handleStartLinking(contextMenu.nodeId)}
-                className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground">
-                <Plus size={12} />Enlazar con otra nota
+              <button onClick={() => handleDelete(contextMenu.nodeId)}
+                className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive">
+                <Trash2 size={12} />Eliminar
               </button>
             )}
             <button onClick={() => handleDelete(contextMenu.nodeId)}
