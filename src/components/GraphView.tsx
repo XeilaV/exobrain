@@ -188,14 +188,18 @@ const GraphView = () => {
   const handlePointerDown = useCallback((e: React.PointerEvent, nodeId: string) => {
     const pos = positions.find(p => p.id === nodeId);
     if (!pos) return;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const rect = containerRef.current?.getBoundingClientRect();
-    setDrag({ id: nodeId, ox: e.clientX - (rect?.left || 0) - pos.x, oy: e.clientY - (rect?.top || 0) - pos.y });
+    const ox = e.clientX - (rect?.left || 0) - pos.x;
+    const oy = e.clientY - (rect?.top || 0) - pos.y;
     didLongPress.current = false;
+
+    // Store pending drag info — only activate on move
+    pendingDrag.current = { id: nodeId, ox, oy, pointerId: e.pointerId, target: e.target as HTMLElement };
 
     // Start long press timer
     longPressTimer.current = setTimeout(() => {
       didLongPress.current = true;
+      pendingDrag.current = null;
       setDrag(null);
 
       // If in linking mode and this is a note, ask to link
