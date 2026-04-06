@@ -193,6 +193,7 @@ const GraphView = () => {
     const ox = e.clientX - (rect?.left || 0) - pos.x;
     const oy = e.clientY - (rect?.top || 0) - pos.y;
     didLongPress.current = false;
+    pointerStart.current = { x: e.clientX, y: e.clientY };
 
     // Store pending drag info — only activate on move
     pendingDrag.current = { id: nodeId, ox, oy, pointerId: e.pointerId, target: e.target as HTMLElement };
