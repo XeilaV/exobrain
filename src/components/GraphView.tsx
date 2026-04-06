@@ -52,6 +52,7 @@ const GraphView = () => {
 
   // Linking mode: first selected note for linking
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
+  const pendingDrag = useRef<{ id: string; ox: number; oy: number; pointerId: number; target: HTMLElement } | null>(null);
   // Confirm dialog
   const [confirmDialog, setConfirmDialog] = useState<{
     message: string;
@@ -188,14 +189,18 @@ const GraphView = () => {
   const handlePointerDown = useCallback((e: React.PointerEvent, nodeId: string) => {
     const pos = positions.find(p => p.id === nodeId);
     if (!pos) return;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const rect = containerRef.current?.getBoundingClientRect();
-    setDrag({ id: nodeId, ox: e.clientX - (rect?.left || 0) - pos.x, oy: e.clientY - (rect?.top || 0) - pos.y });
+    const ox = e.clientX - (rect?.left || 0) - pos.x;
+    const oy = e.clientY - (rect?.top || 0) - pos.y;
     didLongPress.current = false;
+
+    // Store pending drag info — only activate on move
+    pendingDrag.current = { id: nodeId, ox, oy, pointerId: e.pointerId, target: e.target as HTMLElement };
 
     // Start long press timer
     longPressTimer.current = setTimeout(() => {
       didLongPress.current = true;
+      pendingDrag.current = null;
       setDrag(null);
 
       // If in linking mode and this is a note, ask to link
@@ -226,9 +231,16 @@ const GraphView = () => {
   }, [positions, linkingNoteId, linkNotes]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    // Activate drag from pending on first move
+    if (pendingDrag.current && !drag) {
+      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+      const pd = pendingDrag.current;
+      pd.target.setPointerCapture(pd.pointerId);
+      setDrag({ id: pd.id, ox: pd.ox, oy: pd.oy });
+      pendingDrag.current = null;
+      return;
+    }
     if (!drag) return;
-    // Cancel long press on move
-    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
 
     const rect = containerRef.current?.getBoundingClientRect();
     const w = rect?.width || 400;
@@ -257,8 +269,8 @@ const GraphView = () => {
 
   const handlePointerUp = useCallback(() => {
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    pendingDrag.current = null;
     if (drag) {
-      // Save all current positions as manual
       setPositions(prev => {
         prev.forEach(p => manualPositions.current.set(p.id, { x: p.x, y: p.y }));
         return prev;

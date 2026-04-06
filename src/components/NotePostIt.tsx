@@ -64,7 +64,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const {
     notes, selectedNote, updateNote, addChecklistItem, categories,
     getChildNotes, getLinkedNotes, getParentNote, setSelectedNoteId,
-    linkNotes, unlinkNotes, addNote, getCategoryPath,
+    linkNotes, unlinkNotes, addNote, deleteNote, getCategoryPath,
   } = useNotes();
 
   const note = useMemo(() => notes.find(n => n.id === noteId), [notes, noteId]);
@@ -165,6 +165,10 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
           <button onClick={() => addNote(note.categoryId, noteId)}
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
             <Plus size={10} />Hija
+          </button>
+          <button onClick={() => { deleteNote(noteId); onClose(); toast.success("Nota eliminada"); }}
+            className="flex items-center gap-0.5 text-[10px] text-destructive hover:text-destructive/80 font-body ml-auto">
+            <Trash2 size={10} />Borrar
           </button>
         </div>
       </div>
