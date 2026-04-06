@@ -193,6 +193,7 @@ const GraphView = () => {
     const ox = e.clientX - (rect?.left || 0) - pos.x;
     const oy = e.clientY - (rect?.top || 0) - pos.y;
     didLongPress.current = false;
+    pointerStart.current = { x: e.clientX, y: e.clientY };
 
     // Store pending drag info — only activate on move
     pendingDrag.current = { id: nodeId, ox, oy, pointerId: e.pointerId, target: e.target as HTMLElement };
@@ -230,9 +231,15 @@ const GraphView = () => {
     e.stopPropagation();
   }, [positions, linkingNoteId, linkNotes]);
 
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
+
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    // Activate drag from pending on first move
+    // Activate drag from pending on first move (with threshold)
     if (pendingDrag.current && !drag) {
+      const dx = e.clientX - (pointerStart.current?.x ?? e.clientX);
+      const dy = e.clientY - (pointerStart.current?.y ?? e.clientY);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 10) return; // ignore tiny movements, allow long press
       if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
       const pd = pendingDrag.current;
       pd.target.setPointerCapture(pd.pointerId);
@@ -512,15 +519,6 @@ const GraphView = () => {
                     title="Añadir nota"
                   >
                     <Plus size={isCat ? 18 : 10} />
-                  </button>
-                )}
-                {isParent && expandedParents.has(node.noteId!) && (
-                  <button
-                    onClick={e => { e.stopPropagation(); if (node.noteId) handleAddNote(node.categoryId, node.noteId); }}
-                    className="text-accent-foreground hover:scale-125 transition-transform"
-                    title="Añadir nota hija"
-                  >
-                    <Plus size={10} />
                   </button>
                 )}
               </div>
