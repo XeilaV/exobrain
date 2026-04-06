@@ -319,16 +319,18 @@ const GraphView = () => {
       const nId = nodeId.replace("note-", "");
       const hasChildren = notes.some(n => n.parentNoteId === nId);
 
-      if (hasChildren && !openPostIt) {
+      // Always expand/collapse children in the tree
+      if (hasChildren) {
         setExpandedParents(prev => {
           const next = new Set(prev);
           if (next.has(nId)) next.delete(nId); else next.add(nId);
           return next;
         });
       }
+      // Always open the post-it to view/edit
       setOpenPostIt({ noteId: nId, x: e.clientX, y: e.clientY });
     }
-  }, [notes, openPostIt, contextMenu, linkingNoteId, linkNotes]);
+  }, [notes, contextMenu, linkingNoteId, linkNotes]);
 
   // Context menu actions
   const handleDuplicate = async (nodeId: string) => {
