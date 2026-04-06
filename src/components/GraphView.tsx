@@ -269,8 +269,8 @@ const GraphView = () => {
 
   const handlePointerUp = useCallback(() => {
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    pendingDrag.current = null;
     if (drag) {
-      // Save all current positions as manual
       setPositions(prev => {
         prev.forEach(p => manualPositions.current.set(p.id, { x: p.x, y: p.y }));
         return prev;
