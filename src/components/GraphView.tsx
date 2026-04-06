@@ -565,10 +565,12 @@ const GraphView = () => {
                 <Trash2 size={12} />Eliminar
               </button>
             )}
-            <button onClick={() => handleDelete(contextMenu.nodeId)}
-              className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive">
-              <Trash2 size={12} />Eliminar
-            </button>
+            {contextMenu.nodeId.startsWith("cat-") && (
+              <button onClick={() => handleDelete(contextMenu.nodeId)}
+                className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive">
+                <Trash2 size={12} />Eliminar tema
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
