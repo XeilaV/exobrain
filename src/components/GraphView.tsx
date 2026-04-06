@@ -52,6 +52,7 @@ const GraphView = () => {
 
   // Linking mode: first selected note for linking
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
+  const pendingDrag = useRef<{ id: string; ox: number; oy: number; pointerId: number; target: HTMLElement } | null>(null);
   // Confirm dialog
   const [confirmDialog, setConfirmDialog] = useState<{
     message: string;
