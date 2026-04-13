@@ -286,11 +286,11 @@ const GraphView = () => {
     setDrag(null);
   }, [drag]);
 
-  const handleNodeClick = useCallback((nodeId: string, e: React.MouseEvent) => {
-    if (didLongPress.current) { didLongPress.current = false; return; }
-    if (contextMenu) { setContextMenu(null); return; }
+  // Single/double click disambiguation
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clickData = useRef<{ nodeId: string; e: React.MouseEvent } | null>(null);
 
-    // If in linking mode
+  const executeSingleClick = useCallback((nodeId: string, clientX: number, clientY: number) => {
     if (linkingNoteId && nodeId.startsWith("note-")) {
       const targetNoteId = nodeId.replace("note-", "");
       if (targetNoteId !== linkingNoteId) {
@@ -317,24 +317,41 @@ const GraphView = () => {
       });
     } else if (nodeId.startsWith("note-")) {
       const nId = nodeId.replace("note-", "");
-      // Single click: open post-it only
-      setOpenPostIt({ noteId: nId, x: e.clientX, y: e.clientY });
+      setOpenPostIt({ noteId: nId, x: clientX, y: clientY });
     }
-  }, [notes, contextMenu, linkingNoteId, linkNotes]);
+  }, [linkingNoteId, linkNotes]);
 
-  const handleNodeDoubleClick = useCallback((nodeId: string) => {
-    if (nodeId.startsWith("note-")) {
-      const nId = nodeId.replace("note-", "");
-      const hasChildren = notes.some(n => n.parentNoteId === nId);
-      if (hasChildren) {
-        setExpandedParents(prev => {
-          const next = new Set(prev);
-          if (next.has(nId)) next.delete(nId); else next.add(nId);
-          return next;
-        });
+  const handleNodeClick = useCallback((nodeId: string, e: React.MouseEvent) => {
+    if (didLongPress.current) { didLongPress.current = false; return; }
+    if (contextMenu) { setContextMenu(null); return; }
+
+    // If there's already a pending click timer, this is a double click
+    if (clickTimer.current) {
+      clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+      // Execute double click
+      if (nodeId.startsWith("note-")) {
+        const nId = nodeId.replace("note-", "");
+        const hasChildren = notes.some(n => n.parentNoteId === nId);
+        if (hasChildren) {
+          setExpandedParents(prev => {
+            const next = new Set(prev);
+            if (next.has(nId)) next.delete(nId); else next.add(nId);
+            return next;
+          });
+        }
       }
+      return;
     }
-  }, [notes]);
+
+    // Start single click timer
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+    clickTimer.current = setTimeout(() => {
+      clickTimer.current = null;
+      executeSingleClick(nodeId, clientX, clientY);
+    }, 250);
+  }, [notes, contextMenu, linkingNoteId, executeSingleClick]);
 
   // Context menu actions
   const handleDuplicate = async (nodeId: string) => {
@@ -497,7 +514,6 @@ const GraphView = () => {
               style={{ width: r * 2, zIndex: drag?.id === node.id ? 20 : isCat ? 5 : 2 }}
               onPointerDown={e => handlePointerDown(e, node.id)}
               onClick={e => { e.stopPropagation(); handleNodeClick(node.id, e); }}
-              onDoubleClick={e => { e.stopPropagation(); handleNodeDoubleClick(node.id); }}
             >
               {/* Label ABOVE the circle for categories */}
               {isCat && (
