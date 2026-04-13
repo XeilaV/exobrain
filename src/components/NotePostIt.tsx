@@ -73,6 +73,8 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { attachments, uploading, uploadFile, deleteAttachment } = useNoteAttachments(noteId);
 
   useEffect(() => { setSelectedNoteId(noteId); }, [noteId, setSelectedNoteId]);
 
