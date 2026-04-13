@@ -322,6 +322,20 @@ const GraphView = () => {
     }
   }, [notes, contextMenu, linkingNoteId, linkNotes]);
 
+  const handleNodeDoubleClick = useCallback((nodeId: string) => {
+    if (nodeId.startsWith("note-")) {
+      const nId = nodeId.replace("note-", "");
+      const hasChildren = notes.some(n => n.parentNoteId === nId);
+      if (hasChildren) {
+        setExpandedParents(prev => {
+          const next = new Set(prev);
+          if (next.has(nId)) next.delete(nId); else next.add(nId);
+          return next;
+        });
+      }
+    }
+  }, [notes]);
+
   // Context menu actions
   const handleDuplicate = async (nodeId: string) => {
     setContextMenu(null);
