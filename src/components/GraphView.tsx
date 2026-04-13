@@ -317,9 +317,15 @@ const GraphView = () => {
       });
     } else if (nodeId.startsWith("note-")) {
       const nId = nodeId.replace("note-", "");
-      const hasChildren = notes.some(n => n.parentNoteId === nId);
+      // Single click: open post-it only
+      setOpenPostIt({ noteId: nId, x: e.clientX, y: e.clientY });
+    }
+  }, [notes, contextMenu, linkingNoteId, linkNotes]);
 
-      // Always expand/collapse children in the tree
+  const handleNodeDoubleClick = useCallback((nodeId: string) => {
+    if (nodeId.startsWith("note-")) {
+      const nId = nodeId.replace("note-", "");
+      const hasChildren = notes.some(n => n.parentNoteId === nId);
       if (hasChildren) {
         setExpandedParents(prev => {
           const next = new Set(prev);
@@ -327,10 +333,8 @@ const GraphView = () => {
           return next;
         });
       }
-      // Always open the post-it to view/edit
-      setOpenPostIt({ noteId: nId, x: e.clientX, y: e.clientY });
     }
-  }, [notes, contextMenu, linkingNoteId, linkNotes]);
+  }, [notes]);
 
   // Context menu actions
   const handleDuplicate = async (nodeId: string) => {
@@ -493,6 +497,7 @@ const GraphView = () => {
               style={{ width: r * 2, zIndex: drag?.id === node.id ? 20 : isCat ? 5 : 2 }}
               onPointerDown={e => handlePointerDown(e, node.id)}
               onClick={e => { e.stopPropagation(); handleNodeClick(node.id, e); }}
+              onDoubleClick={e => { e.stopPropagation(); handleNodeDoubleClick(node.id); }}
             >
               {/* Label ABOVE the circle for categories */}
               {isCat && (
