@@ -497,6 +497,7 @@ const GraphView = () => {
               style={{ width: r * 2, zIndex: drag?.id === node.id ? 20 : isCat ? 5 : 2 }}
               onPointerDown={e => handlePointerDown(e, node.id)}
               onClick={e => { e.stopPropagation(); handleNodeClick(node.id, e); }}
+              onDoubleClick={e => { e.stopPropagation(); handleNodeDoubleClick(node.id); }}
             >
               {/* Label ABOVE the circle for categories */}
               {isCat && (
