@@ -169,6 +169,12 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
             <Plus size={10} />Hija
           </button>
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+            className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
+            <Paperclip size={10} />{uploading ? "Subiendo..." : "Archivo"}
+          </button>
+          <input ref={fileInputRef} type="file" className="hidden" multiple
+            onChange={e => { if (e.target.files) { Array.from(e.target.files).forEach(uploadFile); e.target.value = ""; } }} />
           <button onClick={() => { deleteNote(noteId); onClose(); toast.success("Nota eliminada"); }}
             className="flex items-center gap-0.5 text-[10px] text-destructive hover:text-destructive/80 font-body ml-auto">
             <Trash2 size={10} />Borrar
