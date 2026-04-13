@@ -317,17 +317,7 @@ const GraphView = () => {
       });
     } else if (nodeId.startsWith("note-")) {
       const nId = nodeId.replace("note-", "");
-      const hasChildren = notes.some(n => n.parentNoteId === nId);
-
-      // Always expand/collapse children in the tree
-      if (hasChildren) {
-        setExpandedParents(prev => {
-          const next = new Set(prev);
-          if (next.has(nId)) next.delete(nId); else next.add(nId);
-          return next;
-        });
-      }
-      // Always open the post-it to view/edit
+      // Single click: open post-it only
       setOpenPostIt({ noteId: nId, x: e.clientX, y: e.clientY });
     }
   }, [notes, contextMenu, linkingNoteId, linkNotes]);
