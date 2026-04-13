@@ -1,6 +1,7 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy } from "lucide-react";
+import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, Image as ImageIcon, File } from "lucide-react";
+import { useNoteAttachments } from "@/hooks/useNoteAttachments";
 import { motion, Reorder } from "framer-motion";
 import { toast } from "sonner";
 
@@ -72,6 +73,8 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { attachments, uploading, uploadFile, deleteAttachment } = useNoteAttachments(noteId);
 
   useEffect(() => { setSelectedNoteId(noteId); }, [noteId, setSelectedNoteId]);
 
@@ -166,6 +169,12 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
             <Plus size={10} />Hija
           </button>
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+            className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
+            <Paperclip size={10} />{uploading ? "Subiendo..." : "Archivo"}
+          </button>
+          <input ref={fileInputRef} type="file" className="hidden" multiple
+            onChange={e => { if (e.target.files) { Array.from(e.target.files).forEach(uploadFile); e.target.value = ""; } }} />
           <button onClick={() => { deleteNote(noteId); onClose(); toast.success("Nota eliminada"); }}
             className="flex items-center gap-0.5 text-[10px] text-destructive hover:text-destructive/80 font-body ml-auto">
             <Trash2 size={10} />Borrar
@@ -234,6 +243,46 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {attachments.length > 0 && (
+          <div className="border-t border-border pt-2">
+            <h3 className="font-display text-xs font-semibold text-foreground flex items-center gap-1.5 mb-2">
+              <Paperclip size={12} className="text-primary" />Archivos
+              <span className="text-[10px] text-muted-foreground font-body font-normal">{attachments.length}</span>
+            </h3>
+            <div className="space-y-1">
+              {attachments.map(att => {
+                const isImage = att.contentType.startsWith("image/");
+                const sizeStr = att.fileSize < 1024 ? `${att.fileSize}B`
+                  : att.fileSize < 1048576 ? `${(att.fileSize / 1024).toFixed(1)}KB`
+                  : `${(att.fileSize / 1048576).toFixed(1)}MB`;
+                return (
+                  <div key={att.id} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1">
+                    {isImage ? (
+                      <a href={att.publicUrl} target="_blank" rel="noreferrer" className="shrink-0">
+                        <img src={att.publicUrl} alt={att.fileName} className="w-8 h-8 rounded object-cover" />
+                      </a>
+                    ) : (
+                      <File size={14} className="text-muted-foreground shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-body text-foreground truncate">{att.fileName}</p>
+                      <p className="text-[9px] text-muted-foreground font-body">{sizeStr}</p>
+                    </div>
+                    <a href={att.publicUrl} target="_blank" rel="noreferrer"
+                      className="opacity-0 group-hover:opacity-60 text-muted-foreground shrink-0 p-0.5">
+                      <Download size={10} />
+                    </a>
+                    <button onClick={() => deleteAttachment(att)}
+                      className="opacity-0 group-hover:opacity-60 text-destructive shrink-0 p-0.5">
+                      <Trash2 size={10} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
