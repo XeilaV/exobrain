@@ -246,6 +246,46 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
           </div>
         )}
 
+        {attachments.length > 0 && (
+          <div className="border-t border-border pt-2">
+            <h3 className="font-display text-xs font-semibold text-foreground flex items-center gap-1.5 mb-2">
+              <Paperclip size={12} className="text-primary" />Archivos
+              <span className="text-[10px] text-muted-foreground font-body font-normal">{attachments.length}</span>
+            </h3>
+            <div className="space-y-1">
+              {attachments.map(att => {
+                const isImage = att.contentType.startsWith("image/");
+                const sizeStr = att.fileSize < 1024 ? `${att.fileSize}B`
+                  : att.fileSize < 1048576 ? `${(att.fileSize / 1024).toFixed(1)}KB`
+                  : `${(att.fileSize / 1048576).toFixed(1)}MB`;
+                return (
+                  <div key={att.id} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1">
+                    {isImage ? (
+                      <a href={att.publicUrl} target="_blank" rel="noreferrer" className="shrink-0">
+                        <img src={att.publicUrl} alt={att.fileName} className="w-8 h-8 rounded object-cover" />
+                      </a>
+                    ) : (
+                      <File size={14} className="text-muted-foreground shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-body text-foreground truncate">{att.fileName}</p>
+                      <p className="text-[9px] text-muted-foreground font-body">{sizeStr}</p>
+                    </div>
+                    <a href={att.publicUrl} target="_blank" rel="noreferrer"
+                      className="opacity-0 group-hover:opacity-60 text-muted-foreground shrink-0 p-0.5">
+                      <Download size={10} />
+                    </a>
+                    <button onClick={() => deleteAttachment(att)}
+                      className="opacity-0 group-hover:opacity-60 text-destructive shrink-0 p-0.5">
+                      <Trash2 size={10} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="border-t border-border pt-2">
           <h3 className="font-display text-xs font-semibold text-foreground flex items-center gap-1.5 mb-2">
             <CheckSquare size={12} className="text-primary" />Checklist
