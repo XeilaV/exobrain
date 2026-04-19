@@ -42,7 +42,7 @@ const RichTextEditor = ({ content, onChange, placeholder }: RichTextEditorProps)
   // Sync external content changes (e.g., switching notes)
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content || "", false);
+      editor.commands.setContent(content || "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, editor]);
