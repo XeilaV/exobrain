@@ -4,6 +4,8 @@ export interface ChecklistItem {
   completed: boolean;
 }
 
+export type NoteType = "text" | "checklist";
+
 export interface Note {
   id: string;
   title: string;
@@ -12,6 +14,7 @@ export interface Note {
   parentNoteId: string | null;
   linkedNoteIds: string[];
   checklist: ChecklistItem[];
+  noteType: NoteType;
   createdAt: string;
   updatedAt: string;
 }
