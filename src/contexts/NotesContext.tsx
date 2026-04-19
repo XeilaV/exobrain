@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
-import { Note, Category, ChecklistItem } from "@/types/notes";
+import { Note, Category, ChecklistItem, NoteType } from "@/types/notes";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -14,7 +14,7 @@ interface NotesContextType {
   setActiveView: (v: "notes" | "graph") => void;
   setSelectedCategoryId: (id: string | null) => void;
   setSelectedNoteId: (id: string | null) => void;
-  addNote: (categoryId: string, parentNoteId?: string | null) => Promise<Note | null>;
+  addNote: (categoryId: string, parentNoteId?: string | null, noteType?: NoteType) => Promise<Note | null>;
   updateNote: (id: string, updates: Partial<Note>) => void;
   deleteNote: (id: string) => void;
   addCategory: (name: string, icon: string, parentId?: string | null) => void;
@@ -53,6 +53,7 @@ const dbToNote = (row: any): Note => ({
   parentNoteId: row.parent_note_id ?? null,
   linkedNoteIds: row.linked_note_ids ?? [],
   checklist: (row.checklist as ChecklistItem[]) ?? [],
+  noteType: (row.note_type as NoteType) ?? "text",
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -93,7 +94,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Debounced save for note updates
   const updateTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const addNote = useCallback(async (categoryId: string, parentNoteId?: string | null) => {
+  const addNote = useCallback(async (categoryId: string, parentNoteId?: string | null, noteType: NoteType = "text") => {
     if (!user) return null;
     // Child notes inherit parent's category
     let catId = categoryId;
@@ -105,10 +106,11 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       user_id: user.id,
       category_id: catId,
       parent_note_id: parentNoteId ?? null,
-      title: "Nueva nota",
+      title: noteType === "checklist" ? "Nueva lista" : "Nueva nota",
       content: "",
       checklist: [],
       linked_note_ids: [],
+      note_type: noteType,
     }).select().single();
     if (error) { toast.error("Error al crear nota"); return null; }
     const note = dbToNote(data);
@@ -241,6 +243,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const note: Note = {
       id: crypto.randomUUID(), title, content, categoryId: catId,
       parentNoteId: null, linkedNoteIds: [], checklist: [],
+      noteType: "text",
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
     return note;
