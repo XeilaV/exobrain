@@ -1,9 +1,10 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, Image as ImageIcon, File } from "lucide-react";
+import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2 } from "lucide-react";
 import { useNoteAttachments } from "@/hooks/useNoteAttachments";
 import { motion, Reorder } from "framer-motion";
 import { toast } from "sonner";
+import RichTextEditor from "./RichTextEditor";
 
 interface PostItChecklistItemProps {
   item: { id: string; text: string; completed: boolean };
@@ -29,27 +30,27 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
   };
 
   return (
-    <Reorder.Item value={item} className="flex items-center gap-1.5 group bg-background/50 rounded px-1 py-0.5" id={item.id}>
-      <GripVertical size={12} className="text-muted-foreground/40 cursor-grab shrink-0 touch-none" style={{ touchAction: "none" }} />
+    <Reorder.Item value={item} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1" id={item.id}>
+      <GripVertical size={14} className="text-muted-foreground/40 cursor-grab shrink-0 touch-none" style={{ touchAction: "none" }} />
       <button onClick={() => toggleChecklistItem(noteId, item.id)} className="text-primary shrink-0">
-        {item.completed ? <CheckSquare size={14} /> : <Square size={14} />}
+        {item.completed ? <CheckSquare size={16} /> : <Square size={16} />}
       </button>
       {isEditing ? (
         <input ref={inputRef} value={editText} onChange={e => setEditText(e.target.value)}
           onBlur={saveEdit} onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); } }}
-          className="flex-1 text-xs font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring" />
+          className="flex-1 text-sm font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring" />
       ) : (
         <span
           onDoubleClick={() => { setIsEditing(true); setEditText(item.text); }}
           onPointerDown={() => { longPressRef.current = setTimeout(() => { setIsEditing(true); setEditText(item.text); }, 500); }}
           onPointerUp={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
           onPointerCancel={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
-          className={`flex-1 text-xs font-body cursor-default select-none ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
+          className={`flex-1 text-sm font-body cursor-default select-none ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
         >{item.text}</span>
       )}
       <button onClick={() => { navigator.clipboard.writeText(item.text); toast.success("Copiado"); }}
-        className="opacity-0 group-hover:opacity-50 text-muted-foreground shrink-0"><Copy size={10} /></button>
-      <Trash2 size={10} className="opacity-0 group-hover:opacity-50 text-destructive cursor-pointer shrink-0"
+        className="opacity-0 group-hover:opacity-50 text-muted-foreground shrink-0"><Copy size={12} /></button>
+      <Trash2 size={12} className="opacity-0 group-hover:opacity-50 text-destructive cursor-pointer shrink-0"
         onClick={() => deleteChecklistItem(noteId, item.id)} />
     </Reorder.Item>
   );
@@ -63,7 +64,7 @@ interface NotePostItProps {
 
 const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const {
-    notes, selectedNote, updateNote, addChecklistItem, categories,
+    notes, updateNote, addChecklistItem, categories,
     getChildNotes, getLinkedNotes, getParentNote, setSelectedNoteId,
     linkNotes, unlinkNotes, addNote, deleteNote, getCategoryPath,
   } = useNotes();
@@ -72,7 +73,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const [newItemText, setNewItemText] = useState("");
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [maximized, setMaximized] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { attachments, uploading, uploadFile, deleteAttachment } = useNoteAttachments(noteId);
 
@@ -85,6 +86,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
 
   if (!note) return null;
 
+  const isChecklistNote = note.noteType === "checklist";
   const parentNote = getParentNote(noteId);
   const childNotes = getChildNotes(noteId);
   const linkedNotes = getLinkedNotes(noteId);
@@ -105,22 +107,25 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   };
 
   const isMobile = window.innerWidth < 768;
-  const postItWidth = isMobile ? window.innerWidth - 16 : Math.min(380, window.innerWidth - 16);
-  const postItHeight = isMobile ? window.innerHeight - 80 : Math.min(500, window.innerHeight - 80);
-  let left = isMobile ? 8 : position.x - postItWidth / 2;
-  let top = isMobile ? 60 : position.y - postItHeight / 2;
+  const fullW = window.innerWidth - 16;
+  const fullH = window.innerHeight - 24;
+  const postItWidth = isMobile || maximized ? fullW : Math.min(420, window.innerWidth - 32);
+  const postItHeight = isMobile || maximized ? fullH : Math.min(620, window.innerHeight - 80);
+  let left = isMobile || maximized ? 8 : position.x - postItWidth / 2;
+  let top = isMobile || maximized ? 12 : position.y - postItHeight / 2;
   left = Math.max(8, Math.min(window.innerWidth - postItWidth - 8, left));
-  top = Math.max(50, Math.min(window.innerHeight - postItHeight - 8, top));
+  top = Math.max(12, Math.min(window.innerHeight - postItHeight - 12, top));
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.8 }}
+      initial={{ opacity: 0, scale: 0.85 }}
       animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.8 }}
+      exit={{ opacity: 0, scale: 0.85 }}
       className="fixed z-50 bg-card border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
-      style={{ left, top, width: postItWidth, maxHeight: postItHeight }}
+      style={{ left, top, width: postItWidth, height: postItHeight }}
       onClick={e => e.stopPropagation()}
     >
+      {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/50 shrink-0">
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-body flex-1 min-w-0 flex-wrap">
           {categoryPath.map((cat, i) => (
@@ -138,17 +143,27 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
               </button>
             </>
           )}
+          <span className="flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded bg-background/60">
+            {isChecklistNote ? <ListChecks size={9} /> : <Type size={9} />}
+            {isChecklistNote ? "Lista" : "Texto"}
+          </span>
         </div>
+        {!isMobile && (
+          <button onClick={() => setMaximized(m => !m)} className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0">
+            {maximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
+        )}
         <button onClick={onClose} className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0">
           <X size={16} />
         </button>
       </div>
 
+      {/* Title + actions */}
       <div className="px-3 pt-2 shrink-0">
         <input
           value={note.title}
           onChange={e => updateNote(noteId, { title: e.target.value })}
-          className="w-full font-display text-lg font-bold bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
+          className="w-full font-display text-xl font-bold bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
           placeholder="Título..."
         />
         <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -166,13 +181,17 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
             <Link2 size={10} />Enlazar
           </button>
-          <button onClick={() => addNote(note.categoryId, noteId)}
-            className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
-            <Plus size={10} />Hija
+          <button onClick={() => addNote(note.categoryId, noteId, "text")}
+            className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body" title="Añadir nota hija de texto">
+            <Type size={10} />Hija
+          </button>
+          <button onClick={() => addNote(note.categoryId, noteId, "checklist")}
+            className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body" title="Añadir lista hija">
+            <ListChecks size={10} />Lista
           </button>
           <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
-            <Paperclip size={10} />{uploading ? "Subiendo..." : "Archivo"}
+            <Paperclip size={10} />{uploading ? "..." : "Archivo"}
           </button>
           <input ref={fileInputRef} type="file" className="hidden" multiple
             onChange={e => { if (e.target.files) { Array.from(e.target.files).forEach(uploadFile); e.target.value = ""; } }} />
@@ -201,14 +220,38 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
         </div>
       )}
 
+      {/* Body — scrollable */}
       <div className="flex-1 overflow-y-auto scrollbar-thin px-3 py-2 space-y-3">
-        <textarea
-          ref={textareaRef}
-          value={note.content}
-          onChange={e => updateNote(noteId, { content: e.target.value })}
-          className="w-full min-h-[80px] bg-transparent outline-none text-foreground font-body text-xs leading-relaxed resize-none placeholder:text-muted-foreground"
-          placeholder="Escribe aquí..."
-        />
+        {isChecklistNote ? (
+          <div>
+            <h3 className="font-display text-sm font-semibold text-foreground flex items-center gap-1.5 mb-2">
+              <CheckSquare size={14} className="text-primary" />Tareas
+              {note.checklist.length > 0 && (
+                <span className="text-[10px] text-muted-foreground font-body font-normal">{completedCount}/{note.checklist.length}</span>
+              )}
+            </h3>
+            <Reorder.Group axis="y" values={note.checklist} onReorder={handleReorder} className="space-y-1">
+              {note.checklist.map(item => (
+                <PostItChecklistItem key={item.id} item={item} noteId={noteId} />
+              ))}
+            </Reorder.Group>
+            <div className="flex items-center gap-1.5 mt-2">
+              <textarea value={newItemText} onChange={e => setNewItemText(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddItem(); } }}
+                placeholder="Añadir tarea..." rows={1}
+                className="flex-1 text-sm bg-muted rounded px-2 py-1.5 outline-none text-foreground placeholder:text-muted-foreground font-body resize-none" />
+              <button onClick={handleAddItem} className="p-1.5 rounded bg-primary text-primary-foreground hover:opacity-90">
+                <Plus size={14} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <RichTextEditor
+            content={note.content}
+            onChange={(html) => updateNote(noteId, { content: html })}
+            placeholder="Escribe aquí... usa la barra para dar formato"
+          />
+        )}
 
         {(childNotes.length > 0 || linkedNotes.length > 0) && (
           <div className="border-t border-border pt-2 space-y-2">
@@ -219,7 +262,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
                   {childNotes.map(cn => (
                     <button key={cn.id} onClick={() => { setSelectedNoteId(cn.id); }}
                       className="flex items-center gap-1 text-[10px] bg-muted hover:bg-muted/80 text-foreground rounded px-2 py-1 font-body">
-                      <FileText size={8} />{cn.title}
+                      {cn.noteType === "checklist" ? <ListChecks size={8} /> : <FileText size={8} />}{cn.title}
                     </button>
                   ))}
                 </div>
@@ -286,29 +329,6 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
             </div>
           </div>
         )}
-
-        <div className="border-t border-border pt-2">
-          <h3 className="font-display text-xs font-semibold text-foreground flex items-center gap-1.5 mb-2">
-            <CheckSquare size={12} className="text-primary" />Checklist
-            {note.checklist.length > 0 && (
-              <span className="text-[10px] text-muted-foreground font-body font-normal">{completedCount}/{note.checklist.length}</span>
-            )}
-          </h3>
-          <Reorder.Group axis="y" values={note.checklist} onReorder={handleReorder} className="space-y-1">
-            {note.checklist.map(item => (
-              <PostItChecklistItem key={item.id} item={item} noteId={noteId} />
-            ))}
-          </Reorder.Group>
-          <div className="flex items-center gap-1.5 mt-2">
-            <textarea value={newItemText} onChange={e => setNewItemText(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddItem(); } }}
-              placeholder="Añadir tarea..." rows={1}
-              className="flex-1 text-xs bg-muted rounded px-2 py-1.5 outline-none text-foreground placeholder:text-muted-foreground font-body resize-none" />
-            <button onClick={handleAddItem} className="p-1.5 rounded bg-primary text-primary-foreground hover:opacity-90">
-              <Plus size={12} />
-            </button>
-          </div>
-        </div>
       </div>
 
       <div className="px-3 py-1.5 border-t border-border text-[9px] text-muted-foreground font-body shrink-0">
