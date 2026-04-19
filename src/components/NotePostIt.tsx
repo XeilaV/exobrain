@@ -104,10 +104,11 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
     }
   };
 
-  const postItWidth = Math.min(380, window.innerWidth - 16);
-  const postItHeight = Math.min(500, window.innerHeight - 80);
-  let left = position.x - postItWidth / 2;
-  let top = position.y - postItHeight / 2;
+  const isMobile = window.innerWidth < 768;
+  const postItWidth = isMobile ? window.innerWidth - 16 : Math.min(380, window.innerWidth - 16);
+  const postItHeight = isMobile ? window.innerHeight - 80 : Math.min(500, window.innerHeight - 80);
+  let left = isMobile ? 8 : position.x - postItWidth / 2;
+  let top = isMobile ? 60 : position.y - postItHeight / 2;
   left = Math.max(8, Math.min(window.innerWidth - postItWidth - 8, left));
   top = Math.max(50, Math.min(window.innerHeight - postItHeight - 8, top));
 
