@@ -1,0 +1,95 @@
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
+import { Bold, Italic, Heading1, Heading2, List, ListOrdered, Quote, Code } from "lucide-react";
+import { useEffect } from "react";
+
+interface RichTextEditorProps {
+  content: string;
+  onChange: (html: string) => void;
+  placeholder?: string;
+}
+
+const ToolbarBtn = ({ active, onClick, children, title }: {
+  active?: boolean; onClick: () => void; children: React.ReactNode; title: string;
+}) => (
+  <button
+    type="button"
+    onMouseDown={(e) => e.preventDefault()}
+    onClick={onClick}
+    title={title}
+    className={`p-1 rounded hover:bg-muted transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+  >
+    {children}
+  </button>
+);
+
+const RichTextEditor = ({ content, onChange, placeholder }: RichTextEditorProps) => {
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      Placeholder.configure({ placeholder: placeholder || "Escribe aquí..." }),
+    ],
+    content: content || "",
+    onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    editorProps: {
+      attributes: {
+        class: "prose-editor outline-none w-full text-foreground font-body text-sm leading-relaxed min-h-[120px]",
+      },
+    },
+  });
+
+  // Sync external content changes (e.g., switching notes)
+  useEffect(() => {
+    if (editor && content !== editor.getHTML()) {
+      editor.commands.setContent(content || "", false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content, editor]);
+
+  if (!editor) return null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-0.5 flex-wrap sticky top-0 bg-card/95 backdrop-blur z-10 py-1 -mx-1 px-1 border-b border-border">
+        <ToolbarBtn active={editor.isActive("heading", { level: 1 })}
+          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="Título">
+          <Heading1 size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn active={editor.isActive("heading", { level: 2 })}
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Subtítulo">
+          <Heading2 size={14} />
+        </ToolbarBtn>
+        <div className="w-px h-4 bg-border mx-1" />
+        <ToolbarBtn active={editor.isActive("bold")}
+          onClick={() => editor.chain().focus().toggleBold().run()} title="Negrita">
+          <Bold size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn active={editor.isActive("italic")}
+          onClick={() => editor.chain().focus().toggleItalic().run()} title="Cursiva">
+          <Italic size={14} />
+        </ToolbarBtn>
+        <div className="w-px h-4 bg-border mx-1" />
+        <ToolbarBtn active={editor.isActive("bulletList")}
+          onClick={() => editor.chain().focus().toggleBulletList().run()} title="Lista">
+          <List size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn active={editor.isActive("orderedList")}
+          onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Lista numerada">
+          <ListOrdered size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn active={editor.isActive("blockquote")}
+          onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Cita">
+          <Quote size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn active={editor.isActive("code")}
+          onClick={() => editor.chain().focus().toggleCode().run()} title="Código">
+          <Code size={14} />
+        </ToolbarBtn>
+      </div>
+      <EditorContent editor={editor} />
+    </div>
+  );
+};
+
+export default RichTextEditor;
