@@ -90,6 +90,7 @@ export type Database = {
           created_at: string
           id: string
           linked_note_ids: string[]
+          note_type: string
           parent_note_id: string | null
           title: string
           updated_at: string
@@ -102,6 +103,7 @@ export type Database = {
           created_at?: string
           id?: string
           linked_note_ids?: string[]
+          note_type?: string
           parent_note_id?: string | null
           title?: string
           updated_at?: string
@@ -114,6 +116,7 @@ export type Database = {
           created_at?: string
           id?: string
           linked_note_ids?: string[]
+          note_type?: string
           parent_note_id?: string | null
           title?: string
           updated_at?: string
