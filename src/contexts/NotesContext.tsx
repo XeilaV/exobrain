@@ -179,19 +179,20 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await supabase.from("notes").delete().eq("id", id);
   }, [notes]);
 
-  const addCategory = useCallback(async (name: string, icon: string, _parentId?: string | null) => {
+  const addCategory = useCallback(async (name: string, icon: string, color?: string, _parentId?: string | null) => {
     if (!user) return;
     const { data, error } = await supabase.from("categories").insert({
-      user_id: user.id, name, icon, color: "30 50% 50%",
+      user_id: user.id, name, icon, color: color ?? "14 65% 55%",
     }).select().single();
     if (error) { toast.error("Error al crear categoría"); return; }
     setCategories(prev => [...prev, dbToCategory(data)]);
   }, [user]);
 
-  const updateCategory = useCallback(async (id: string, updates: Partial<Pick<Category, "name" | "icon">>) => {
+  const updateCategory = useCallback(async (id: string, updates: Partial<Pick<Category, "name" | "icon" | "color">>) => {
     setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
     await supabase.from("categories").update(updates).eq("id", id);
   }, []);
+
 
   const deleteCategory = useCallback(async (id: string) => {
     setCategories(prev => prev.filter(c => c.id !== id));
