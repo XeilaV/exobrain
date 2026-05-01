@@ -1,494 +1,361 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Filter, Trash2, Copy, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename } from "lucide-react";
 import NotePostIt from "./NotePostIt";
+import BrainNameDialog from "./BrainNameDialog";
+import ColorPicker from "./ColorPicker";
+import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
+import { Note } from "@/types/notes";
 import { toast } from "sonner";
+
+type NodeType = "root" | "category" | "note";
 
 interface NodePos {
   id: string;
   x: number;
   y: number;
+  type: NodeType;
   label: string;
-  type: "category" | "parent-note" | "child-note";
-  categoryId: string;
-  parentNoteId?: string | null;
+  color: string;          // hsl string
+  categoryId?: string;
   noteId?: string;
+  parentNoteId?: string | null;
+  noteType?: "text" | "checklist";
+  hasChildren?: boolean;
+  isCollapsed?: boolean;
+  depth: number;
 }
 
-interface Edge {
-  from: string;
-  to: string;
-  type: "branch" | "link";
-}
+interface Edge { from: string; to: string }
 
-const CAT_R = 24;
-const NOTE_R = 8;
-const PARENT_R = 10;
+const ROOT_R = 30;
+const CAT_R = 22;
+const NOTE_R = 12;
+const LEVEL_GAP = 90;     // vertical gap between levels
+const SIBLING_GAP = 70;   // horizontal gap between siblings (min)
 
 const GraphView = () => {
   const {
-    notes, categories, setSelectedNoteId, addNote, addCategory,
-    deleteNote, deleteCategory, linkNotes, unlinkNotes, updateCategory,
+    notes, categories, addNote, addCategory, deleteNote, deleteCategory,
+    updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed,
+    setSelectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
   } = useNotes();
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const [positions, setPositions] = useState<NodePos[]>([]);
-  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
-  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
-  const [drag, setDrag] = useState<{ id: string; ox: number; oy: number } | null>(null);
+  const [size, setSize] = useState({ w: 1200, h: 800 });
   const [openPostIt, setOpenPostIt] = useState<{ noteId: string; x: number; y: number } | null>(null);
-  const [filterCat, setFilterCat] = useState<string | null>(null);
-  const [showFilter, setShowFilter] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
+  const [colorPickerCat, setColorPickerCat] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [newCatIcon, setNewCatIcon] = useState("📌");
-  const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
+  const [newCatColor, setNewCatColor] = useState(DEFAULT_CATEGORY_COLOR);
+  const [showBrainDialog, setShowBrainDialog] = useState(false);
+  const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
-  // Context menu state (long press)
-  const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
-
-  // Linking mode: first selected note for linking
-  const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
-  const pendingDrag = useRef<{ id: string; ox: number; oy: number; pointerId: number; target: HTMLElement } | null>(null);
-  // Confirm dialog
-  const [confirmDialog, setConfirmDialog] = useState<{
-    message: string;
-    onConfirm: () => void;
-    onCancel: () => void;
-  } | null>(null);
-
-  // Track which node IDs have been manually positioned
-  const manualPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
-
-  const filteredCategories = useMemo(() =>
-    filterCat ? categories.filter(c => c.id === filterCat) : categories
-  , [categories, filterCat]);
-
-  const computeLayout = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const w = el.clientWidth;
-    const h = el.clientHeight;
-    const newPos: NodePos[] = [];
-    const cats = filteredCategories;
-    if (cats.length === 0) { setPositions([]); return; }
-
-    const catSpacing = Math.min(120, (h - 80) / Math.max(cats.length, 1));
-    const startY = Math.max(60, (h - catSpacing * (cats.length - 1)) / 2);
-
-    cats.forEach((cat, ci) => {
-      const autoX = Math.min(80, w * 0.12);
-      const autoY = startY + ci * catSpacing;
-      const catKey = `cat-${cat.id}`;
-      const saved = manualPositions.current.get(catKey);
-
-      const catX = saved?.x ?? autoX;
-      const catY = saved?.y ?? autoY;
-
-      newPos.push({
-        id: catKey, x: catX, y: catY,
-        label: cat.name, type: "category", categoryId: cat.id,
-      });
-
-      if (expandedCats.has(cat.id)) {
-        const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
-        const armLen = Math.min(100, (w - autoX - 60) / 3);
-        const noteSpacing = Math.min(50, catSpacing * 0.8 / Math.max(rootNotes.length, 1));
-        const noteStartY = catY - (rootNotes.length - 1) * noteSpacing / 2;
-
-        rootNotes.forEach((note, ni) => {
-          const noteKey = `note-${note.id}`;
-          const autoNx = catX + armLen;
-          const autoNy = noteStartY + ni * noteSpacing;
-          const savedN = manualPositions.current.get(noteKey);
-
-          const nx = savedN?.x ?? autoNx;
-          const ny = savedN?.y ?? autoNy;
-
-          newPos.push({
-            id: noteKey, x: nx, y: ny,
-            label: note.title, type: "parent-note",
-            categoryId: cat.id, noteId: note.id,
-          });
-
-          if (expandedParents.has(note.id)) {
-            const children = notes.filter(n => n.parentNoteId === note.id);
-            const childArm = Math.min(80, (w - autoNx - 40) / 2);
-            const childSpacing = Math.min(35, noteSpacing * 0.7 / Math.max(children.length, 1));
-            const childStartY = ny - (children.length - 1) * childSpacing / 2;
-
-            children.forEach((child, chi) => {
-              const childKey = `note-${child.id}`;
-              const autoCx = nx + childArm;
-              const autoCy = childStartY + chi * childSpacing;
-              const savedC = manualPositions.current.get(childKey);
-
-              newPos.push({
-                id: childKey,
-                x: savedC?.x ?? autoCx,
-                y: savedC?.y ?? autoCy,
-                label: child.title, type: "child-note",
-                categoryId: cat.id, noteId: child.id,
-                parentNoteId: note.id,
-              });
-            });
-          }
-        });
-      }
-    });
-
-    setPositions(newPos);
-  }, [filteredCategories, expandedCats, expandedParents, notes]);
-
-  useEffect(() => { computeLayout(); }, [computeLayout]);
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Resize observer
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => computeLayout());
+    const update = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [computeLayout]);
+  }, []);
 
-  // Edges
-  const edges = useMemo<Edge[]>(() => {
-    const posIds = new Set(positions.map(p => p.id));
-    const e: Edge[] = [];
+  // First-time onboarding modal
+  useEffect(() => {
+    if (!loading && !onboarded) setShowBrainDialog(true);
+  }, [loading, onboarded]);
 
-    positions.forEach(p => {
-      if (p.type === "parent-note") {
-        const catKey = `cat-${p.categoryId}`;
-        if (posIds.has(catKey)) e.push({ from: catKey, to: p.id, type: "branch" });
+  // Build hierarchical tree positions
+  const { positions, edges } = useMemo(() => {
+    const pos: NodePos[] = [];
+    const eds: Edge[] = [];
+    const W = size.w;
+    const H = size.h;
+
+    if (categories.length === 0) return { positions: pos, edges: eds };
+
+    // Recursive note tree builder. Returns subtree width.
+    const buildNoteSubtree = (
+      note: Note, color: string, depth: number, currentX: number, y: number,
+    ): { width: number; centerX: number } => {
+      const children = notes.filter(n => n.parentNoteId === note.id);
+      const expanded = !note.isCollapsed && children.length > 0;
+
+      if (!expanded) {
+        const w = SIBLING_GAP;
+        pos.push({
+          id: `note-${note.id}`,
+          x: currentX + w / 2, y,
+          type: "note", label: note.title, color,
+          categoryId: note.categoryId, noteId: note.id,
+          parentNoteId: note.parentNoteId,
+          noteType: note.noteType,
+          hasChildren: children.length > 0,
+          isCollapsed: true,
+          depth,
+        });
+        return { width: w, centerX: currentX + w / 2 };
       }
-      if (p.type === "child-note" && p.parentNoteId) {
-        const parentKey = `note-${p.parentNoteId}`;
-        if (posIds.has(parentKey)) e.push({ from: parentKey, to: p.id, type: "branch" });
-      }
-      if (p.noteId) {
-        const note = notes.find(n => n.id === p.noteId);
-        if (note) {
-          note.linkedNoteIds.forEach(lid => {
-            const targetKey = `note-${lid}`;
-            if (posIds.has(targetKey) && p.noteId! < lid) {
-              e.push({ from: p.id, to: targetKey, type: "link" });
-            }
-          });
-        }
-      }
+
+      // Build children first
+      let childX = currentX;
+      const childCenters: number[] = [];
+      const childY = y + LEVEL_GAP;
+      children.forEach(child => {
+        const r = buildNoteSubtree(child, color, depth + 1, childX, childY);
+        childCenters.push(r.centerX);
+        childX += r.width;
+      });
+      const totalW = Math.max(SIBLING_GAP, childX - currentX);
+      const myCenter = childCenters.length
+        ? (childCenters[0] + childCenters[childCenters.length - 1]) / 2
+        : currentX + totalW / 2;
+
+      pos.push({
+        id: `note-${note.id}`,
+        x: myCenter, y,
+        type: "note", label: note.title, color,
+        categoryId: note.categoryId, noteId: note.id,
+        parentNoteId: note.parentNoteId,
+        noteType: note.noteType,
+        hasChildren: true,
+        isCollapsed: false,
+        depth,
+      });
+      // Add edges to children
+      children.forEach(child => eds.push({ from: `note-${note.id}`, to: `note-${child.id}` }));
+      return { width: totalW, centerX: myCenter };
+    };
+
+    // Layout: root at top center, categories spread under it, then notes
+    const rootY = 70;
+    const catY = rootY + LEVEL_GAP + 20;
+    const noteStartY = catY + LEVEL_GAP;
+
+    // Build each category subtree to compute total widths
+    let catCursorX = 0;
+    const catCenters: number[] = [];
+    const catWidths: number[] = [];
+    const catSnapshots: { catIndex: number; startX: number; width: number; centerX: number }[] = [];
+
+    categories.forEach((cat, ci) => {
+      const startIdx = pos.length;
+      const startEdges = eds.length;
+      const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
+
+      let noteCursorX = catCursorX;
+      const noteCenters: number[] = [];
+      rootNotes.forEach(rn => {
+        const r = buildNoteSubtree(rn, cat.color, 0, noteCursorX, noteStartY);
+        noteCenters.push(r.centerX);
+        noteCursorX += r.width;
+      });
+
+      const subtreeWidth = Math.max(SIBLING_GAP * 1.5, noteCursorX - catCursorX);
+      const catCenter = noteCenters.length
+        ? (noteCenters[0] + noteCenters[noteCenters.length - 1]) / 2
+        : catCursorX + subtreeWidth / 2;
+
+      pos.push({
+        id: `cat-${cat.id}`,
+        x: catCenter, y: catY,
+        type: "category", label: cat.name, color: cat.color,
+        categoryId: cat.id, depth: 0,
+      });
+      // edges category -> root notes
+      rootNotes.forEach(rn => eds.push({ from: `cat-${cat.id}`, to: `note-${rn.id}` }));
+
+      catCenters.push(catCenter);
+      catWidths.push(subtreeWidth);
+      catSnapshots.push({ catIndex: ci, startX: catCursorX, width: subtreeWidth, centerX: catCenter });
+      catCursorX += subtreeWidth + 20;
     });
-    return e;
-  }, [positions, notes]);
+
+    const totalW = catCursorX - 20;
+
+    // Center horizontally: shift everything so the tree centers in container
+    const offsetX = (W - totalW) / 2;
+    pos.forEach(p => { p.x += offsetX; });
+
+    // Root node centered
+    const rootCenterX = catCenters.length
+      ? (catCenters[0] + catCenters[catCenters.length - 1]) / 2 + offsetX
+      : W / 2;
+
+    pos.push({
+      id: "root",
+      x: rootCenterX, y: rootY,
+      type: "root", label: brainName || "ExoBrain",
+      color: "30 8% 25%", depth: -1,
+    });
+    categories.forEach(cat => eds.push({ from: "root", to: `cat-${cat.id}` }));
+
+    return { positions: pos, edges: eds };
+  }, [notes, categories, brainName, size.w, size.h]);
 
   const getPos = (id: string) => positions.find(p => p.id === id);
 
-  // Drag handlers - save to manualPositions on drag end
-  const handlePointerDown = useCallback((e: React.PointerEvent, nodeId: string) => {
-    const pos = positions.find(p => p.id === nodeId);
-    if (!pos) return;
-    const rect = containerRef.current?.getBoundingClientRect();
-    const ox = e.clientX - (rect?.left || 0) - pos.x;
-    const oy = e.clientY - (rect?.top || 0) - pos.y;
+  // Long-press handlers
+  const startLongPress = useCallback((nodeId: string, clientX: number, clientY: number) => {
     didLongPress.current = false;
-    pointerStart.current = { x: e.clientX, y: e.clientY };
-
-    // Store pending drag info — only activate on move
-    pendingDrag.current = { id: nodeId, ox, oy, pointerId: e.pointerId, target: e.target as HTMLElement };
-
-    // Start long press timer
     longPressTimer.current = setTimeout(() => {
       didLongPress.current = true;
-      pendingDrag.current = null;
-      setDrag(null);
-
-      // If in linking mode and this is a note, ask to link
+      // If linking and this is a note
       if (linkingNoteId && nodeId.startsWith("note-")) {
-        const targetNoteId = nodeId.replace("note-", "");
-        if (targetNoteId !== linkingNoteId) {
+        const targetId = nodeId.replace("note-", "");
+        if (targetId !== linkingNoteId) {
           setConfirmDialog({
-            message: "¿Deseas unir estas notas?",
+            message: "¿Enlazar estas dos notas?",
             onConfirm: () => {
-              linkNotes(linkingNoteId, targetNoteId);
+              linkNotes(linkingNoteId, targetId);
               setLinkingNoteId(null);
               setConfirmDialog(null);
               toast.success("Notas enlazadas");
             },
-            onCancel: () => { setLinkingNoteId(null); setConfirmDialog(null); },
           });
-        } else {
-          setLinkingNoteId(null);
         }
         return;
       }
-
-      // Show context menu
-      setContextMenu({ nodeId, x: e.clientX, y: e.clientY });
-    }, 600);
-
-    e.stopPropagation();
-  }, [positions, linkingNoteId, linkNotes]);
-
-  const pointerStart = useRef<{ x: number; y: number } | null>(null);
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    // Activate drag from pending on first move (with threshold)
-    if (pendingDrag.current && !drag) {
-      const dx = e.clientX - (pointerStart.current?.x ?? e.clientX);
-      const dy = e.clientY - (pointerStart.current?.y ?? e.clientY);
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 10) return; // ignore tiny movements, allow long press
-      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-      const pd = pendingDrag.current;
-      pd.target.setPointerCapture(pd.pointerId);
-      setDrag({ id: pd.id, ox: pd.ox, oy: pd.oy });
-      pendingDrag.current = null;
-      return;
-    }
-    if (!drag) return;
-
-    const rect = containerRef.current?.getBoundingClientRect();
-    const w = rect?.width || 400;
-    const h = rect?.height || 600;
-    const nx = Math.max(30, Math.min(w - 30, e.clientX - (rect?.left || 0) - drag.ox));
-    const ny = Math.max(30, Math.min(h - 30, e.clientY - (rect?.top || 0) - drag.oy));
-
-    setPositions(prev => {
-      const dragNode = prev.find(p => p.id === drag.id);
-      if (!dragNode) return prev;
-      const dx = nx - dragNode.x;
-      const dy = ny - dragNode.y;
-
-      return prev.map(p => {
-        if (p.id === drag.id) return { ...p, x: nx, y: ny };
-        if (dragNode.type === "category" && p.categoryId === dragNode.categoryId && p.type !== "category") {
-          return { ...p, x: p.x + dx, y: p.y + dy };
-        }
-        if (dragNode.type === "parent-note" && p.parentNoteId === dragNode.noteId) {
-          return { ...p, x: p.x + dx, y: p.y + dy };
-        }
-        return p;
-      });
-    });
-  }, [drag]);
-
-  const handlePointerUp = useCallback(() => {
-    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-    pendingDrag.current = null;
-    if (drag) {
-      setPositions(prev => {
-        prev.forEach(p => manualPositions.current.set(p.id, { x: p.x, y: p.y }));
-        return prev;
-      });
-    }
-    setDrag(null);
-  }, [drag]);
-
-  // Single/double click disambiguation
-  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clickData = useRef<{ nodeId: string; e: React.MouseEvent } | null>(null);
-
-  const executeSingleClick = useCallback((nodeId: string, clientX: number, clientY: number) => {
-    if (linkingNoteId && nodeId.startsWith("note-")) {
-      const targetNoteId = nodeId.replace("note-", "");
-      if (targetNoteId !== linkingNoteId) {
-        setConfirmDialog({
-          message: "¿Deseas unir estas notas?",
-          onConfirm: () => {
-            linkNotes(linkingNoteId, targetNoteId);
-            setLinkingNoteId(null);
-            setConfirmDialog(null);
-            toast.success("Notas enlazadas");
-          },
-          onCancel: () => { setLinkingNoteId(null); setConfirmDialog(null); },
-        });
-      }
-      return;
-    }
-
-    if (nodeId.startsWith("cat-")) {
-      const catId = nodeId.replace("cat-", "");
-      setExpandedCats(prev => {
-        const next = new Set(prev);
-        if (next.has(catId)) next.delete(catId); else next.add(catId);
-        return next;
-      });
-    } else if (nodeId.startsWith("note-")) {
-      const nId = nodeId.replace("note-", "");
-      setOpenPostIt({ noteId: nId, x: clientX, y: clientY });
-    }
+      setContextMenu({ nodeId, x: clientX, y: clientY });
+    }, 550);
   }, [linkingNoteId, linkNotes]);
 
-  const handleNodeClick = useCallback((nodeId: string, e: React.MouseEvent) => {
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+  }, []);
+
+  // Click handling with double-click detection
+  const handleNodeClick = useCallback((nodeId: string, clientX: number, clientY: number) => {
     if (didLongPress.current) { didLongPress.current = false; return; }
     if (contextMenu) { setContextMenu(null); return; }
 
-    // If there's already a pending click timer, this is a double click
     if (clickTimer.current) {
       clearTimeout(clickTimer.current);
       clickTimer.current = null;
-      // Execute double click
+      // Double click
       if (nodeId.startsWith("note-")) {
         const nId = nodeId.replace("note-", "");
         const hasChildren = notes.some(n => n.parentNoteId === nId);
-        if (hasChildren) {
-          setExpandedParents(prev => {
-            const next = new Set(prev);
-            if (next.has(nId)) next.delete(nId); else next.add(nId);
-            return next;
-          });
-        }
+        if (hasChildren) toggleNoteCollapsed(nId);
+      } else if (nodeId === "root") {
+        setShowBrainDialog(true);
       }
       return;
     }
-
-    // Start single click timer
-    const clientX = e.clientX;
-    const clientY = e.clientY;
     clickTimer.current = setTimeout(() => {
       clickTimer.current = null;
-      executeSingleClick(nodeId, clientX, clientY);
-    }, 250);
-  }, [notes, contextMenu, linkingNoteId, executeSingleClick]);
-
-  // Context menu actions
-  const handleDuplicate = async (nodeId: string) => {
-    setContextMenu(null);
-    if (nodeId.startsWith("note-")) {
-      const nId = nodeId.replace("note-", "");
-      const note = notes.find(n => n.id === nId);
-      if (note) {
-        const newNote = await addNote(note.categoryId, note.parentNoteId);
-        if (newNote) {
-          const { updateNote } = await import("@/contexts/NotesContext").then(() => ({ updateNote: null }));
-          // We can't easily update from here, but the note is created with default title
-          toast.success("Nota duplicada");
+      if (nodeId.startsWith("note-")) {
+        const nId = nodeId.replace("note-", "");
+        // If linking via single click on second note
+        if (linkingNoteId && linkingNoteId !== nId) {
+          setConfirmDialog({
+            message: "¿Enlazar estas dos notas?",
+            onConfirm: () => {
+              linkNotes(linkingNoteId, nId);
+              setLinkingNoteId(null);
+              setConfirmDialog(null);
+              toast.success("Notas enlazadas");
+            },
+          });
+          return;
         }
+        setOpenPostIt({ noteId: nId, x: clientX, y: clientY });
+      } else if (nodeId === "root") {
+        // single click on root opens rename
+        setShowBrainDialog(true);
       }
-    }
-  };
+      // categories: single click does nothing (use long-press menu)
+    }, 240);
+  }, [contextMenu, notes, toggleNoteCollapsed, linkingNoteId, linkNotes]);
 
-  const handleDelete = (nodeId: string) => {
-    setContextMenu(null);
-    if (nodeId.startsWith("note-")) {
-      const nId = nodeId.replace("note-", "");
-      setConfirmDialog({
-        message: "¿Eliminar esta nota?",
-        onConfirm: () => { deleteNote(nId); setConfirmDialog(null); manualPositions.current.delete(nodeId); },
-        onCancel: () => setConfirmDialog(null),
-      });
-    } else if (nodeId.startsWith("cat-")) {
-      const catId = nodeId.replace("cat-", "");
-      setConfirmDialog({
-        message: "¿Eliminar este tema y sus notas?",
-        onConfirm: () => { deleteCategory(catId); setConfirmDialog(null); manualPositions.current.delete(nodeId); },
-        onCancel: () => setConfirmDialog(null),
-      });
-    }
-  };
-
-  const handleStartLinking = (nodeId: string) => {
-    setContextMenu(null);
-    if (nodeId.startsWith("note-")) {
-      const nId = nodeId.replace("note-", "");
-      setLinkingNoteId(nId);
-      toast.info("Pulsa otra nota para enlazar");
-    }
-  };
-
-  // Handle long press on link edges (SVG)
-  const edgeLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleEdgeLongPress = (edge: Edge) => {
-    if (edge.type !== "link") return;
-    const noteIdA = edge.from.replace("note-", "");
-    const noteIdB = edge.to.replace("note-", "");
-    setConfirmDialog({
-      message: "¿Eliminar enlace entre notas?",
-      onConfirm: () => { unlinkNotes(noteIdA, noteIdB); setConfirmDialog(null); toast.success("Enlace eliminado"); },
-      onCancel: () => setConfirmDialog(null),
-    });
-  };
-
-  // Add category from map
   const handleAddCategory = () => {
     if (newCatName.trim()) {
-      addCategory(newCatName.trim(), newCatIcon, null);
-      setNewCatName("");
-      setNewCatIcon("📌");
+      addCategory(newCatName.trim(), newCatIcon, newCatColor, null);
+      setNewCatName(""); setNewCatIcon("📌"); setNewCatColor(DEFAULT_CATEGORY_COLOR);
       setIsAddingCat(false);
     }
   };
 
-  const handleAddNote = async (catId: string, parentId?: string) => {
-    await addNote(catId, parentId || null);
+  // Helper: bezier path between two nodes
+  const pathBetween = (x1: number, y1: number, x2: number, y2: number) => {
+    const midY = (y1 + y2) / 2;
+    return `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
   };
 
-  // Removed: no auto-reorganize. Positions are always manual.
+  // Link edges (horizontal between notes)
+  const linkEdges = useMemo(() => {
+    const out: { from: string; to: string }[] = [];
+    const ids = new Set(positions.map(p => p.id));
+    notes.forEach(n => {
+      const fromKey = `note-${n.id}`;
+      if (!ids.has(fromKey)) return;
+      n.linkedNoteIds.forEach(lid => {
+        const toKey = `note-${lid}`;
+        if (ids.has(toKey) && n.id < lid) out.push({ from: fromKey, to: toKey });
+      });
+    });
+    return out;
+  }, [notes, positions]);
+
   return (
     <div
       ref={containerRef}
-      className="flex-1 h-full w-full bg-background overflow-hidden relative select-none touch-none"
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
+      className="flex-1 h-full w-full bg-background overflow-auto relative select-none"
       onClick={() => {
         if (openPostIt) setOpenPostIt(null);
         if (contextMenu) setContextMenu(null);
+        if (colorPickerCat) setColorPickerCat(null);
         if (linkingNoteId) { setLinkingNoteId(null); toast.info("Enlace cancelado"); }
       }}
     >
-      {/* Linking mode indicator */}
+      {/* Linking indicator */}
       {linkingNoteId && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 bg-primary text-primary-foreground text-xs font-body px-3 py-1.5 rounded-full shadow-lg animate-pulse">
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-40 bg-primary text-primary-foreground text-xs font-body px-3 py-1.5 rounded-full shadow-lg animate-pulse">
           Selecciona otra nota para enlazar
         </div>
       )}
 
-      {/* SVG edges */}
-      <svg className="absolute inset-0 w-full h-full" style={{ zIndex: 0 }}>
+      {/* SVG branches */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
         {edges.map((edge, idx) => {
           const from = getPos(edge.from);
           const to = getPos(edge.to);
           if (!from || !to) return null;
-
-          // For link edges, add a wider invisible hitbox for long press
-          if (edge.type === "link") {
-            return (
-              <g key={`e-${idx}`}>
-                <line
-                  x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                  stroke="hsl(var(--muted-foreground) / 0.3)"
-                  strokeWidth={1.5}
-                  strokeDasharray="6 4"
-                  className="pointer-events-none"
-                />
-                {/* Invisible wider line for touch target */}
-                <line
-                  x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                  stroke="transparent"
-                  strokeWidth={20}
-                  className="cursor-pointer"
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    edgeLongPressTimer.current = setTimeout(() => handleEdgeLongPress(edge), 600);
-                  }}
-                  onPointerUp={() => { if (edgeLongPressTimer.current) clearTimeout(edgeLongPressTimer.current); }}
-                  onPointerLeave={() => { if (edgeLongPressTimer.current) clearTimeout(edgeLongPressTimer.current); }}
-                />
-              </g>
-            );
-          }
-
+          // Use child color for the branch
+          const stroke = `hsl(${to.color})`;
+          return (
+            <path
+              key={`be-${idx}`}
+              d={pathBetween(from.x, from.y, to.x, to.y)}
+              stroke={stroke}
+              strokeWidth={2}
+              strokeOpacity={0.5}
+              fill="none"
+            />
+          );
+        })}
+        {linkEdges.map((edge, idx) => {
+          const from = getPos(edge.from);
+          const to = getPos(edge.to);
+          if (!from || !to) return null;
           return (
             <line
-              key={`e-${idx}`}
+              key={`le-${idx}`}
               x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-              stroke="hsl(var(--foreground) / 0.4)"
-              strokeWidth={2}
-              className="pointer-events-none"
+              stroke="hsl(var(--muted-foreground) / 0.4)"
+              strokeWidth={1.5}
+              strokeDasharray="5 4"
             />
           );
         })}
@@ -497,59 +364,72 @@ const GraphView = () => {
       {/* Nodes */}
       <AnimatePresence>
         {positions.map(node => {
+          const isRoot = node.type === "root";
           const isCat = node.type === "category";
-          const isParent = node.type === "parent-note";
-          const r = isCat ? CAT_R : isParent ? PARENT_R : NOTE_R;
-          const isExpanded = isCat && expandedCats.has(node.categoryId);
+          const r = isRoot ? ROOT_R : isCat ? CAT_R : NOTE_R;
           const isLinkSource = linkingNoteId && node.noteId === linkingNoteId;
+          const showCollapsedDot = node.type === "note" && node.hasChildren && node.isCollapsed;
+          const cat = isCat ? categories.find(c => c.id === node.categoryId) : null;
 
           return (
             <motion.div
               key={node.id}
-              initial={{ opacity: 0, scale: 0.3 }}
+              initial={{ opacity: 0, scale: 0.5 }}
               animate={{ opacity: 1, scale: 1, left: node.x - r, top: node.y - r }}
               exit={{ opacity: 0, scale: 0 }}
-              transition={{ type: "spring", stiffness: 400, damping: 30 }}
-              className="absolute flex flex-col items-center cursor-pointer"
-              style={{ width: r * 2, zIndex: drag?.id === node.id ? 20 : isCat ? 5 : 2 }}
-              onPointerDown={e => handlePointerDown(e, node.id)}
-              onClick={e => { e.stopPropagation(); handleNodeClick(node.id, e); }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className="absolute flex flex-col items-center cursor-pointer touch-none"
+              style={{ width: r * 2, zIndex: isRoot ? 6 : isCat ? 4 : 2 }}
+              onPointerDown={e => {
+                e.stopPropagation();
+                startLongPress(node.id, e.clientX, e.clientY);
+              }}
+              onPointerUp={cancelLongPress}
+              onPointerLeave={cancelLongPress}
+              onClick={e => { e.stopPropagation(); handleNodeClick(node.id, e.clientX, e.clientY); }}
             >
-              {/* Label ABOVE the circle for categories */}
-              {isCat && (
-                <span className="absolute font-display text-xs font-semibold text-foreground whitespace-nowrap"
-                  style={{ bottom: r * 2 + 4, left: '50%', transform: 'translateX(-50%)' }}>
-                  {node.label}
+              {/* Label above for root + category */}
+              {(isRoot || isCat) && (
+                <span
+                  className={`absolute whitespace-nowrap ${isRoot ? "font-display text-base font-bold" : "font-display text-xs font-semibold"} text-foreground`}
+                  style={{ bottom: r * 2 + 6, left: '50%', transform: 'translateX(-50%)' }}
+                >
+                  {isCat && cat ? `${cat.icon} ` : ""}{node.label}
                 </span>
               )}
 
-              {/* Circle with + inside */}
+              {/* Circle */}
               <div
-                className={`rounded-full transition-all flex items-center justify-center ${
-                  isCat
-                    ? `border-2 ${isExpanded ? "bg-primary border-primary shadow-lg" : "bg-primary/70 border-primary/50 shadow-md"}`
-                    : isParent
-                    ? `border-2 bg-accent border-accent shadow-sm`
-                    : "bg-muted-foreground/60 border border-muted-foreground/30"
-                } ${isLinkSource ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
-                style={{ width: r * 2, height: r * 2 }}
+                className={`rounded-full flex items-center justify-center shadow-md border-2 transition-all ${
+                  isLinkSource ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
+                }`}
+                style={{
+                  width: r * 2,
+                  height: r * 2,
+                  backgroundColor: isRoot ? `hsl(var(--card))` : `hsl(${node.color})`,
+                  borderColor: isRoot ? `hsl(var(--foreground))` : `hsl(${node.color})`,
+                }}
               >
-                {/* + button inside circle for categories and expanded parent notes */}
-                {isCat && isExpanded && (
-                  <button
-                    onClick={e => { e.stopPropagation(); handleAddNote(node.categoryId); }}
-                    className="text-primary-foreground hover:scale-125 transition-transform"
-                    title="Añadir nota"
-                  >
-                    <Plus size={isCat ? 18 : 10} />
-                  </button>
+                {isRoot && <span className="text-2xl">🌳</span>}
+                {showCollapsedDot && (
+                  <span
+                    className="rounded-full"
+                    style={{ width: 6, height: 6, backgroundColor: "hsl(var(--background))" }}
+                  />
+                )}
+                {node.type === "note" && !showCollapsedDot && (
+                  <span className="text-[10px]" style={{ color: "hsl(var(--background))" }}>
+                    {node.noteType === "checklist" ? "☑" : ""}
+                  </span>
                 )}
               </div>
 
-              {/* Label BELOW for notes */}
-              {!isCat && (
-                <span className="absolute font-body text-[9px] text-foreground whitespace-nowrap max-w-[80px] truncate text-center"
-                  style={{ top: r * 2 + 2, left: '50%', transform: 'translateX(-50%)' }}>
+              {/* Label below for notes */}
+              {node.type === "note" && (
+                <span
+                  className="absolute font-body text-[10px] text-foreground/80 whitespace-nowrap max-w-[100px] truncate text-center"
+                  style={{ top: r * 2 + 4, left: '50%', transform: 'translateX(-50%)' }}
+                >
                   {node.label}
                 </span>
               )}
@@ -558,43 +438,131 @@ const GraphView = () => {
         })}
       </AnimatePresence>
 
-      {/* Context menu (long press) */}
+      {/* Context menu */}
       <AnimatePresence>
         {contextMenu && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
+            initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[140px]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[170px]"
+            style={{ left: Math.min(contextMenu.x, size.w - 180), top: Math.min(contextMenu.y, size.h - 200) }}
             onClick={e => e.stopPropagation()}
           >
-            {contextMenu.nodeId.startsWith("cat-") && (
-              <button onClick={() => {
-                const catId = contextMenu.nodeId.replace("cat-", "");
-                const cat = categories.find(c => c.id === catId);
-                if (cat) setEditingCat({ id: catId, name: cat.name });
-                setContextMenu(null);
-              }}
-                className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground">
-                <Pencil size={12} />Editar nombre
+            {contextMenu.nodeId === "root" && (
+              <button
+                onClick={() => { setShowBrainDialog(true); setContextMenu(null); }}
+                className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+              >
+                <Rename size={12} />Renombrar cerebro
               </button>
             )}
-            {contextMenu.nodeId.startsWith("note-") && (
-              <button onClick={() => handleDelete(contextMenu.nodeId)}
-                className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive">
-                <Trash2 size={12} />Eliminar
-              </button>
-            )}
-            {contextMenu.nodeId.startsWith("cat-") && (
-              <button onClick={() => handleDelete(contextMenu.nodeId)}
-                className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive">
-                <Trash2 size={12} />Eliminar tema
-              </button>
-            )}
+
+            {contextMenu.nodeId.startsWith("cat-") && (() => {
+              const catId = contextMenu.nodeId.replace("cat-", "");
+              return (
+                <>
+                  <button
+                    onClick={async () => { await addNote(catId, null, "text"); setContextMenu(null); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <FileText size={12} />Añadir nota
+                  </button>
+                  <button
+                    onClick={async () => { await addNote(catId, null, "checklist"); setContextMenu(null); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <ListChecks size={12} />Añadir lista
+                  </button>
+                  <button
+                    onClick={() => {
+                      const cat = categories.find(c => c.id === catId);
+                      if (cat) setEditingCat({ id: catId, name: cat.name });
+                      setContextMenu(null);
+                    }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <Pencil size={12} />Renombrar tema
+                  </button>
+                  <button
+                    onClick={() => { setColorPickerCat({ id: catId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <Palette size={12} />Cambiar color
+                  </button>
+                  <button
+                    onClick={() => {
+                      setConfirmDialog({
+                        message: "¿Eliminar este tema y sus notas?",
+                        onConfirm: () => { deleteCategory(catId); setConfirmDialog(null); },
+                      });
+                      setContextMenu(null);
+                    }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
+                  >
+                    <Trash2 size={12} />Eliminar tema
+                  </button>
+                </>
+              );
+            })()}
+
+            {contextMenu.nodeId.startsWith("note-") && (() => {
+              const nId = contextMenu.nodeId.replace("note-", "");
+              const note = notes.find(n => n.id === nId);
+              if (!note) return null;
+              return (
+                <>
+                  <button
+                    onClick={async () => { await addNote(note.categoryId, nId, "text"); setContextMenu(null); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <FileText size={12} />Añadir hija (texto)
+                  </button>
+                  <button
+                    onClick={async () => { await addNote(note.categoryId, nId, "checklist"); setContextMenu(null); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <ListChecks size={12} />Añadir hija (lista)
+                  </button>
+                  <button
+                    onClick={() => { setLinkingNoteId(nId); setContextMenu(null); toast.info("Pulsa otra nota para enlazar"); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    🔗 Enlazar con otra nota
+                  </button>
+                  <button
+                    onClick={() => {
+                      setConfirmDialog({
+                        message: "¿Eliminar esta nota?",
+                        onConfirm: () => { deleteNote(nId); setConfirmDialog(null); },
+                      });
+                      setContextMenu(null);
+                    }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
+                  >
+                    <Trash2 size={12} />Eliminar
+                  </button>
+                </>
+              );
+            })()}
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Color picker (long-press category) */}
+      {colorPickerCat && (
+        <div
+          className="fixed z-50 bg-card border border-border rounded-lg shadow-xl p-3"
+          style={{ left: Math.min(colorPickerCat.x, size.w - 180), top: Math.min(colorPickerCat.y, size.h - 140) }}
+          onClick={e => e.stopPropagation()}
+        >
+          <p className="text-xs font-body text-muted-foreground mb-2">Elige un color</p>
+          <ColorPicker
+            value={categories.find(c => c.id === colorPickerCat.id)?.color || ""}
+            onChange={(color) => { updateCategory(colorPickerCat.id, { color }); setColorPickerCat(null); }}
+          />
+        </div>
+      )}
 
       {/* Confirm dialog */}
       <AnimatePresence>
@@ -607,14 +575,12 @@ const GraphView = () => {
             onClick={e => e.stopPropagation()}
           >
             <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
+              initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
               className="bg-card border border-border rounded-xl shadow-2xl p-5 max-w-[280px] w-full mx-4 space-y-4"
             >
               <p className="text-sm font-body text-foreground text-center">{confirmDialog.message}</p>
               <div className="flex gap-2">
-                <button onClick={confirmDialog.onCancel}
+                <button onClick={() => setConfirmDialog(null)}
                   className="flex-1 text-xs py-2 rounded-lg bg-muted text-foreground font-body hover:bg-muted/80">
                   Cancelar
                 </button>
@@ -628,47 +594,38 @@ const GraphView = () => {
         )}
       </AnimatePresence>
 
-      {/* Controls */}
-      <div className="absolute top-3 right-3 flex gap-2 z-30">
-        <button onClick={() => setShowFilter(!showFilter)}
-          className={`p-2 rounded-lg border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all ${filterCat ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
-          title="Filtrar">
-          <Filter size={16} />
-        </button>
-        <button onClick={() => setIsAddingCat(true)}
+      {/* Top-right controls */}
+      <div className="fixed top-3 right-3 z-30">
+        <button
+          onClick={(e) => { e.stopPropagation(); setIsAddingCat(true); }}
           className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
-          title="Nuevo tema">
+          title="Nuevo tema"
+        >
           <Plus size={16} />
         </button>
       </div>
 
-      {/* Filter dropdown */}
-      {showFilter && (
-        <div className="absolute top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-2 min-w-[140px]">
-          <button onClick={() => { setFilterCat(null); setShowFilter(false); }}
-            className={`w-full text-left text-xs px-2 py-1.5 rounded font-body transition-colors ${!filterCat ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"}`}>
-            Todos los temas
-          </button>
-          {categories.map(c => (
-            <button key={c.id} onClick={() => { setFilterCat(c.id); setShowFilter(false); }}
-              className={`w-full text-left text-xs px-2 py-1.5 rounded font-body transition-colors ${filterCat === c.id ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"}`}>
-              {c.icon} {c.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Add category inline */}
+      {/* Add category panel */}
       {isAddingCat && (
-        <div className="absolute top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[180px]"
-          onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-3 min-w-[220px]"
+          onClick={e => e.stopPropagation()}
+        >
           <div className="flex gap-2">
-            <input value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)}
-              className="w-10 text-center bg-muted rounded text-sm p-1" maxLength={2} />
-            <input value={newCatName} onChange={e => setNewCatName(e.target.value)}
+            <input
+              value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)}
+              className="w-10 text-center bg-muted rounded text-sm p-1" maxLength={2}
+            />
+            <input
+              value={newCatName} onChange={e => setNewCatName(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleAddCategory()}
               placeholder="Nombre del tema..." autoFocus
-              className="flex-1 bg-muted rounded text-xs px-2 py-1 text-foreground outline-none font-body" />
+              className="flex-1 bg-muted rounded text-xs px-2 py-1 text-foreground outline-none font-body"
+            />
+          </div>
+          <div>
+            <p className="text-[10px] font-body text-muted-foreground mb-1">Color</p>
+            <ColorPicker value={newCatColor} onChange={setNewCatColor} />
           </div>
           <div className="flex gap-2">
             <button onClick={handleAddCategory} className="flex-1 bg-primary text-primary-foreground rounded text-xs py-1.5 font-medium">Añadir</button>
@@ -677,11 +634,15 @@ const GraphView = () => {
         </div>
       )}
 
-      {/* Edit category name inline */}
+      {/* Edit category name */}
       {editingCat && (
-        <div className="absolute top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[180px]"
-          onClick={e => e.stopPropagation()}>
-          <input value={editingCat.name} onChange={e => setEditingCat({ ...editingCat, name: e.target.value })}
+        <div
+          className="fixed top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[200px]"
+          onClick={e => e.stopPropagation()}
+        >
+          <input
+            value={editingCat.name}
+            onChange={e => setEditingCat({ ...editingCat, name: e.target.value })}
             onKeyDown={e => {
               if (e.key === "Enter" && editingCat.name.trim()) {
                 updateCategory(editingCat.id, { name: editingCat.name.trim() });
@@ -689,52 +650,52 @@ const GraphView = () => {
               }
             }}
             autoFocus
-            className="w-full bg-muted rounded text-xs px-2 py-1.5 text-foreground outline-none font-body" />
+            className="w-full bg-muted rounded text-xs px-2 py-1.5 text-foreground outline-none font-body"
+          />
           <div className="flex gap-2">
-            <button onClick={() => { if (editingCat.name.trim()) { updateCategory(editingCat.id, { name: editingCat.name.trim() }); setEditingCat(null); } }}
-              className="flex-1 bg-primary text-primary-foreground rounded text-xs py-1.5 font-medium">Guardar</button>
-            <button onClick={() => setEditingCat(null)}
-              className="flex-1 bg-muted text-foreground rounded text-xs py-1.5">Cancelar</button>
+            <button
+              onClick={() => {
+                if (editingCat.name.trim()) {
+                  updateCategory(editingCat.id, { name: editingCat.name.trim() });
+                  setEditingCat(null);
+                }
+              }}
+              className="flex-1 bg-primary text-primary-foreground rounded text-xs py-1.5 font-medium"
+            >
+              Guardar
+            </button>
+            <button onClick={() => setEditingCat(null)} className="flex-1 bg-muted text-foreground rounded text-xs py-1.5">Cancelar</button>
           </div>
         </div>
       )}
 
-
-      {categories.length === 0 && (
+      {/* Empty state */}
+      {categories.length === 0 && !loading && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center text-muted-foreground">
-            <p className="text-4xl mb-3">🌳</p>
-            <p className="font-display text-lg">Empieza tu árbol</p>
-            <p className="text-sm mt-1 font-body">Pulsa + para crear un tema</p>
+            <p className="text-5xl mb-3">🌳</p>
+            <p className="font-display text-xl">Empieza tu árbol</p>
+            <p className="text-sm mt-1 font-body">Pulsa + para crear el primer tema</p>
           </div>
         </div>
       )}
 
-      {/* Legend */}
-      <div className="absolute bottom-3 left-3 bg-card/80 backdrop-blur-sm border border-border rounded-lg p-2 text-[9px] font-body text-muted-foreground space-y-1 z-10">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-primary border-2 border-primary" />
-          <span>Tema (tap expandir)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-accent border-2 border-accent" />
-          <span>Nota madre</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-muted-foreground/60" />
-          <span>Nota hija</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <svg width={14} height={2}><line x1={0} y1={1} x2={14} y2={1} stroke="hsl(var(--foreground) / 0.4)" strokeWidth={2} /></svg>
-          <span>Rama</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <svg width={14} height={2}><line x1={0} y1={1} x2={14} y2={1} stroke="hsl(var(--muted-foreground) / 0.3)" strokeWidth={1.5} strokeDasharray="4 3" /></svg>
-          <span>Enlace (mantén pulsado para deshacer)</span>
-        </div>
-      </div>
+      {/* Brain name dialog */}
+      <BrainNameDialog
+        open={showBrainDialog}
+        initialName={brainName}
+        isFirstTime={!onboarded}
+        onSave={(name) => {
+          setBrainName(name);
+          if (!onboarded) setOnboarded(true);
+        }}
+        onClose={() => {
+          setShowBrainDialog(false);
+          if (!onboarded) setOnboarded(true);
+        }}
+      />
 
-      {/* Post-it note overlay */}
+      {/* Post-it overlay */}
       <AnimatePresence>
         {openPostIt && (
           <NotePostIt

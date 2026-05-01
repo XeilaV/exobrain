@@ -15,6 +15,7 @@ export interface Note {
   linkedNoteIds: string[];
   checklist: ChecklistItem[];
   noteType: NoteType;
+  isCollapsed: boolean;
   createdAt: string;
   updatedAt: string;
 }
