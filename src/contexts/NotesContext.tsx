@@ -17,12 +17,13 @@ interface NotesContextType {
   addNote: (categoryId: string, parentNoteId?: string | null, noteType?: NoteType) => Promise<Note | null>;
   updateNote: (id: string, updates: Partial<Note>) => void;
   deleteNote: (id: string) => void;
-  addCategory: (name: string, icon: string, parentId?: string | null) => void;
-  updateCategory: (id: string, updates: Partial<Pick<Category, "name" | "icon">>) => void;
+  addCategory: (name: string, icon: string, color?: string, parentId?: string | null) => void;
+  updateCategory: (id: string, updates: Partial<Pick<Category, "name" | "icon" | "color">>) => void;
   deleteCategory: (id: string) => void;
   addChecklistItem: (noteId: string, text: string) => void;
   toggleChecklistItem: (noteId: string, itemId: string) => void;
   deleteChecklistItem: (noteId: string, itemId: string) => void;
+  toggleNoteCollapsed: (noteId: string) => void;
   linkNotes: (noteIdA: string, noteIdB: string) => void;
   unlinkNotes: (noteIdA: string, noteIdB: string) => void;
   filteredNotes: Note[];
@@ -34,6 +35,10 @@ interface NotesContextType {
   getSubcategories: (categoryId: string) => Category[];
   getRootCategories: () => Category[];
   getCategoryPath: (categoryId: string) => Category[];
+  brainName: string;
+  setBrainName: (name: string) => void;
+  onboarded: boolean;
+  setOnboarded: (v: boolean) => void;
 }
 
 const NotesContext = createContext<NotesContextType | null>(null);
@@ -54,6 +59,7 @@ const dbToNote = (row: any): Note => ({
   linkedNoteIds: row.linked_note_ids ?? [],
   checklist: (row.checklist as ChecklistItem[]) ?? [],
   noteType: (row.note_type as NoteType) ?? "text",
+  isCollapsed: row.is_collapsed ?? true,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
