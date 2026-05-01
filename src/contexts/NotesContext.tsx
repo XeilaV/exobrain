@@ -80,22 +80,42 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<"notes" | "graph">("graph");
   const [loading, setLoading] = useState(true);
+  const [brainName, setBrainNameState] = useState<string>("ExoBrain");
+  const [onboarded, setOnboardedState] = useState<boolean>(true);
 
   // Load data from DB
   useEffect(() => {
     if (!user) { setNotes([]); setCategories([]); setLoading(false); return; }
     setLoading(true);
     const load = async () => {
-      const [catsRes, notesRes] = await Promise.all([
+      const [catsRes, notesRes, profileRes] = await Promise.all([
         supabase.from("categories").select("*").order("created_at"),
         supabase.from("notes").select("*").order("created_at", { ascending: false }),
+        supabase.from("profiles").select("brain_name, onboarded").eq("id", user.id).maybeSingle(),
       ]);
       if (catsRes.data) setCategories(catsRes.data.map(dbToCategory));
       if (notesRes.data) setNotes(notesRes.data.map(dbToNote));
+      if (profileRes.data) {
+        setBrainNameState(profileRes.data.brain_name || "ExoBrain");
+        setOnboardedState(profileRes.data.onboarded ?? false);
+      }
       setLoading(false);
     };
     load();
   }, [user]);
+
+  const setBrainName = useCallback(async (name: string) => {
+    if (!user) return;
+    setBrainNameState(name);
+    await supabase.from("profiles").update({ brain_name: name }).eq("id", user.id);
+  }, [user]);
+
+  const setOnboarded = useCallback(async (v: boolean) => {
+    if (!user) return;
+    setOnboardedState(v);
+    await supabase.from("profiles").update({ onboarded: v }).eq("id", user.id);
+  }, [user]);
+
 
   // Debounced save for note updates
   const updateTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
