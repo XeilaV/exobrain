@@ -417,11 +417,24 @@ const GraphView = () => {
               initial={{ opacity: 0, scale: 0.5 }}
               animate={{ opacity: 1, scale: 1, left: node.x - r, top: node.y - r }}
               exit={{ opacity: 0, scale: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="absolute flex flex-col items-center cursor-pointer touch-none"
+              transition={
+                dragState.current?.nodeId === node.id
+                  ? { duration: 0 }
+                  : { type: "spring", stiffness: 300, damping: 25 }
+              }
+              className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing touch-none"
               style={{ width: r * 2, zIndex: isRoot ? 6 : isCat ? 4 : 2 }}
               onPointerDown={e => {
                 e.stopPropagation();
+                didDrag.current = false;
+                const cur = offsets[node.id] || { dx: 0, dy: 0 };
+                dragState.current = {
+                  nodeId: node.id,
+                  startX: e.clientX,
+                  startY: e.clientY,
+                  baseDx: cur.dx,
+                  baseDy: cur.dy,
+                };
                 startLongPress(node.id, e.clientX, e.clientY);
               }}
               onPointerUp={cancelLongPress}
