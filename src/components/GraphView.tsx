@@ -443,7 +443,9 @@ const GraphView = () => {
           const isCat = node.type === "category";
           const r = isRoot ? ROOT_R : isCat ? CAT_R : NOTE_R;
           const isLinkSource = linkingNoteId && node.noteId === linkingNoteId;
-          const showCollapsedDot = node.type === "note" && node.hasChildren && node.isCollapsed;
+          const showCollapsedDot =
+            (node.type === "note" || node.type === "category") &&
+            node.hasChildren && node.isCollapsed;
           const cat = isCat ? categories.find(c => c.id === node.categoryId) : null;
 
           return (
