@@ -352,7 +352,7 @@ const GraphView = () => {
       }
       // categories: single click does nothing (use long-press menu)
     }, 240);
-  }, [contextMenu, notes, toggleNoteCollapsed, linkingNoteId, linkNotes]);
+  }, [contextMenu, notes, toggleNoteCollapsed, toggleCategoryCollapsed, linkingNoteId, linkNotes]);
 
   const handleAddCategory = () => {
     if (newCatName.trim()) {
