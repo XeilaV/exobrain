@@ -24,6 +24,7 @@ interface NotesContextType {
   toggleChecklistItem: (noteId: string, itemId: string) => void;
   deleteChecklistItem: (noteId: string, itemId: string) => void;
   toggleNoteCollapsed: (noteId: string) => void;
+  toggleCategoryCollapsed: (categoryId: string) => void;
   linkNotes: (noteIdA: string, noteIdB: string) => void;
   unlinkNotes: (noteIdA: string, noteIdB: string) => void;
   filteredNotes: Note[];
@@ -70,6 +71,7 @@ const dbToCategory = (row: any): Category => ({
   icon: row.icon,
   color: row.color,
   parentId: null,
+  isCollapsed: row.is_collapsed ?? true,
 });
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -237,6 +239,15 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }));
   }, []);
 
+  const toggleCategoryCollapsed = useCallback((categoryId: string) => {
+    setCategories(prev => prev.map(c => {
+      if (c.id !== categoryId) return c;
+      const next = !c.isCollapsed;
+      supabase.from("categories").update({ is_collapsed: next }).eq("id", categoryId);
+      return { ...c, isCollapsed: next };
+    }));
+  }, []);
+
 
   const linkNotes = useCallback((noteIdA: string, noteIdB: string) => {
     if (noteIdA === noteIdB) return;
@@ -317,7 +328,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setActiveView, setSelectedCategoryId, setSelectedNoteId,
       addNote, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
       addChecklistItem, toggleChecklistItem, deleteChecklistItem,
-      toggleNoteCollapsed,
+      toggleNoteCollapsed, toggleCategoryCollapsed,
       linkNotes, unlinkNotes,
       filteredNotes, selectedNote, createNoteFromChat,
       getChildNotes, getLinkedNotes, getParentNote,

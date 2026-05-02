@@ -1,0 +1,1 @@
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS is_collapsed boolean NOT NULL DEFAULT true;

@@ -26,6 +26,7 @@ export interface Category {
   icon: string;
   color: string;
   parentId: string | null;
+  isCollapsed: boolean;
 }
 
 export interface ChatMessage {
