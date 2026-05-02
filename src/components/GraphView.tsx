@@ -247,8 +247,36 @@ const GraphView = () => {
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   }, []);
 
+  // Drag pointer handlers (window-level)
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const ds = dragState.current;
+      if (!ds) return;
+      const dx = e.clientX - ds.startX;
+      const dy = e.clientY - ds.startY;
+      if (!didDrag.current && Math.hypot(dx, dy) > 5) {
+        didDrag.current = true;
+        cancelLongPress();
+      }
+      if (didDrag.current) {
+        setOffsets(prev => ({
+          ...prev,
+          [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
+        }));
+      }
+    };
+    const onUp = () => { dragState.current = null; };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [cancelLongPress]);
+
   // Click handling with double-click detection
   const handleNodeClick = useCallback((nodeId: string, clientX: number, clientY: number) => {
+    if (didDrag.current) { didDrag.current = false; return; }
     if (didLongPress.current) { didLongPress.current = false; return; }
     if (contextMenu) { setContextMenu(null); return; }
 
