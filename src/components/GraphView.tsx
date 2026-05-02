@@ -90,17 +90,17 @@ const GraphView = () => {
     if (!loading && !onboarded) setShowBrainDialog(true);
   }, [loading, onboarded]);
 
-  // Build hierarchical tree positions
-  const { positions, edges } = useMemo(() => {
+  // Build hierarchical tree positions + parent map (for drag propagation)
+  const { positions, edges, parentMap } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
+    const parent: Record<string, string> = {}; // childId -> parentId
     const W = size.w;
     const H = size.h;
 
-    if (categories.length === 0) return { positions: pos, edges: eds };
+    if (categories.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
-    // Recursive note tree builder. Returns subtree width.
-    // y grows DOWNWARD in screen but tree grows UPWARD: pass negative LEVEL_GAP for children.
+    // Recursive note tree builder. Tree grows UPWARD (smaller y).
     const buildNoteSubtree = (
       note: Note, color: string, depth: number, currentX: number, y: number,
     ): { width: number; centerX: number } => {
@@ -123,7 +123,6 @@ const GraphView = () => {
         return { width: w, centerX: currentX + w / 2 };
       }
 
-      // Build children first (children grow upward → smaller y)
       let childX = currentX;
       const childCenters: number[] = [];
       const childY = y - LEVEL_GAP;
@@ -131,6 +130,7 @@ const GraphView = () => {
         const r = buildNoteSubtree(child, color, depth + 1, childX, childY);
         childCenters.push(r.centerX);
         childX += r.width;
+        parent[`note-${child.id}`] = `note-${note.id}`;
       });
       const totalW = Math.max(SIBLING_GAP, childX - currentX);
       const myCenter = childCenters.length
@@ -152,7 +152,7 @@ const GraphView = () => {
       return { width: totalW, centerX: myCenter };
     };
 
-    // Layout INVERTED: root at bottom, categories above it, notes higher.
+    // Layout INVERTED: root at bottom.
     const rootY = H - 80;
     const catY = rootY - LEVEL_GAP - 20;
     const noteStartY = catY - LEVEL_GAP;
@@ -162,38 +162,55 @@ const GraphView = () => {
 
     visibleCategories.forEach((cat) => {
       const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
+      const catExpanded = !cat.isCollapsed && rootNotes.length > 0;
 
-      let noteCursorX = catCursorX;
-      const noteCenters: number[] = [];
-      rootNotes.forEach(rn => {
-        const r = buildNoteSubtree(rn, cat.color, 0, noteCursorX, noteStartY);
-        noteCenters.push(r.centerX);
-        noteCursorX += r.width;
-      });
+      let subtreeWidth: number;
+      let catCenter: number;
 
-      const subtreeWidth = Math.max(SIBLING_GAP * 1.5, noteCursorX - catCursorX);
-      const catCenter = noteCenters.length
-        ? (noteCenters[0] + noteCenters[noteCenters.length - 1]) / 2
-        : catCursorX + subtreeWidth / 2;
+      if (catExpanded) {
+        let noteCursorX = catCursorX;
+        const noteCenters: number[] = [];
+        rootNotes.forEach(rn => {
+          const r = buildNoteSubtree(rn, cat.color, 0, noteCursorX, noteStartY);
+          noteCenters.push(r.centerX);
+          noteCursorX += r.width;
+          parent[`note-${rn.id}`] = `cat-${cat.id}`;
+        });
+        subtreeWidth = Math.max(SIBLING_GAP * 1.5, noteCursorX - catCursorX);
+        catCenter = noteCenters.length
+          ? (noteCenters[0] + noteCenters[noteCenters.length - 1]) / 2
+          : catCursorX + subtreeWidth / 2;
+        rootNotes.forEach(rn => eds.push({ from: `cat-${cat.id}`, to: `note-${rn.id}` }));
+      } else {
+        subtreeWidth = SIBLING_GAP * 1.5;
+        catCenter = catCursorX + subtreeWidth / 2;
+      }
 
       pos.push({
         id: `cat-${cat.id}`,
         x: catCenter, y: catY,
         type: "category", label: cat.name, color: cat.color,
         categoryId: cat.id, depth: 0,
+        hasChildren: rootNotes.length > 0,
+        isCollapsed: cat.isCollapsed,
       });
-      rootNotes.forEach(rn => eds.push({ from: `cat-${cat.id}`, to: `note-${rn.id}` }));
+      parent[`cat-${cat.id}`] = "root";
 
       catCenters.push(catCenter);
       catCursorX += subtreeWidth + 20;
     });
 
     const totalW = catCursorX - 20;
-    const offsetX = (W - totalW) / 2;
-    pos.forEach(p => { p.x += offsetX; });
+    // Fit horizontally: scale x coordinates so the tree fits the viewport with margin.
+    const margin = 40;
+    const available = Math.max(200, W - margin * 2);
+    const scale = totalW > available ? available / totalW : 1;
+    const scaledTotalW = totalW * scale;
+    const offsetX = (W - scaledTotalW) / 2;
+    pos.forEach(p => { p.x = p.x * scale + offsetX; });
 
     const rootCenterX = catCenters.length
-      ? (catCenters[0] + catCenters[catCenters.length - 1]) / 2 + offsetX
+      ? ((catCenters[0] + catCenters[catCenters.length - 1]) / 2) * scale + offsetX
       : W / 2;
 
     pos.push({
@@ -204,17 +221,31 @@ const GraphView = () => {
     });
     visibleCategories.forEach(cat => eds.push({ from: "root", to: `cat-${cat.id}` }));
 
-    return { positions: pos, edges: eds };
+    return { positions: pos, edges: eds, parentMap: parent };
   }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
 
-  // Apply drag offsets
-  const positionsWithOffsets = useMemo(
-    () => positions.map(p => {
-      const o = offsets[p.id];
-      return o ? { ...p, x: p.x + o.dx, y: p.y + o.dy } : p;
-    }),
-    [positions, offsets],
-  );
+  // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
+  // node moves its whole subtree along with it.
+  const positionsWithOffsets = useMemo(() => {
+    const accumulated: Record<string, { dx: number; dy: number }> = {};
+    const compute = (id: string): { dx: number; dy: number } => {
+      if (accumulated[id]) return accumulated[id];
+      const own = offsets[id] || { dx: 0, dy: 0 };
+      const parentId = parentMap[id];
+      if (!parentId) {
+        accumulated[id] = own;
+        return own;
+      }
+      const par = compute(parentId);
+      const total = { dx: own.dx + par.dx, dy: own.dy + par.dy };
+      accumulated[id] = total;
+      return total;
+    };
+    return positions.map(p => {
+      const off = compute(p.id);
+      return off.dx || off.dy ? { ...p, x: p.x + off.dx, y: p.y + off.dy } : p;
+    });
+  }, [positions, offsets, parentMap]);
 
   const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
 
