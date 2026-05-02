@@ -386,7 +386,7 @@ const GraphView = () => {
   return (
     <div
       ref={containerRef}
-      className="flex-1 h-full w-full bg-background overflow-auto relative select-none"
+      className="flex-1 h-full w-full bg-background overflow-hidden relative select-none"
       onClick={() => {
         if (openPostIt) setOpenPostIt(null);
         if (contextMenu) setContextMenu(null);
