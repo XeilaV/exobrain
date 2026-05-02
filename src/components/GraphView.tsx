@@ -319,6 +319,10 @@ const GraphView = () => {
         const nId = nodeId.replace("note-", "");
         const hasChildren = notes.some(n => n.parentNoteId === nId);
         if (hasChildren) toggleNoteCollapsed(nId);
+      } else if (nodeId.startsWith("cat-")) {
+        const cId = nodeId.replace("cat-", "");
+        const hasChildren = notes.some(n => n.categoryId === cId && !n.parentNoteId);
+        if (hasChildren) toggleCategoryCollapsed(cId);
       } else if (nodeId === "root") {
         setShowBrainDialog(true);
       }
