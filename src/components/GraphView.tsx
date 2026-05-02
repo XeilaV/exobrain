@@ -38,7 +38,7 @@ const SIBLING_GAP = 70;   // horizontal gap between siblings (min)
 const GraphView = () => {
   const {
     notes, categories, addNote, addCategory, deleteNote, deleteCategory,
-    updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed,
+    updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
     setSelectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
   } = useNotes();
 
