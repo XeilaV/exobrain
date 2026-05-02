@@ -70,6 +70,7 @@ const dbToCategory = (row: any): Category => ({
   icon: row.icon,
   color: row.color,
   parentId: null,
+  isCollapsed: row.is_collapsed ?? true,
 });
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
