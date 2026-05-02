@@ -239,6 +239,15 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }));
   }, []);
 
+  const toggleCategoryCollapsed = useCallback((categoryId: string) => {
+    setCategories(prev => prev.map(c => {
+      if (c.id !== categoryId) return c;
+      const next = !c.isCollapsed;
+      supabase.from("categories").update({ is_collapsed: next }).eq("id", categoryId);
+      return { ...c, isCollapsed: next };
+    }));
+  }, []);
+
 
   const linkNotes = useCallback((noteIdA: string, noteIdB: string) => {
     if (noteIdA === noteIdB) return;
