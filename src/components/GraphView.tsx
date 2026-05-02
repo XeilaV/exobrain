@@ -58,7 +58,21 @@ const GraphView = () => {
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
+  const didDrag = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Drag offsets per node id (session-local)
+  const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
+  const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(null);
+
+  // Hidden category filter
+  const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+
+  const visibleCategories = useMemo(
+    () => categories.filter(c => !hiddenCategoryIds.has(c.id)),
+    [categories, hiddenCategoryIds],
+  );
 
   // Resize observer
   useEffect(() => {
@@ -86,6 +100,7 @@ const GraphView = () => {
     if (categories.length === 0) return { positions: pos, edges: eds };
 
     // Recursive note tree builder. Returns subtree width.
+    // y grows DOWNWARD in screen but tree grows UPWARD: pass negative LEVEL_GAP for children.
     const buildNoteSubtree = (
       note: Note, color: string, depth: number, currentX: number, y: number,
     ): { width: number; centerX: number } => {
@@ -108,10 +123,10 @@ const GraphView = () => {
         return { width: w, centerX: currentX + w / 2 };
       }
 
-      // Build children first
+      // Build children first (children grow upward → smaller y)
       let childX = currentX;
       const childCenters: number[] = [];
-      const childY = y + LEVEL_GAP;
+      const childY = y - LEVEL_GAP;
       children.forEach(child => {
         const r = buildNoteSubtree(child, color, depth + 1, childX, childY);
         childCenters.push(r.centerX);
@@ -133,25 +148,19 @@ const GraphView = () => {
         isCollapsed: false,
         depth,
       });
-      // Add edges to children
       children.forEach(child => eds.push({ from: `note-${note.id}`, to: `note-${child.id}` }));
       return { width: totalW, centerX: myCenter };
     };
 
-    // Layout: root at top center, categories spread under it, then notes
-    const rootY = 70;
-    const catY = rootY + LEVEL_GAP + 20;
-    const noteStartY = catY + LEVEL_GAP;
+    // Layout INVERTED: root at bottom, categories above it, notes higher.
+    const rootY = H - 80;
+    const catY = rootY - LEVEL_GAP - 20;
+    const noteStartY = catY - LEVEL_GAP;
 
-    // Build each category subtree to compute total widths
     let catCursorX = 0;
     const catCenters: number[] = [];
-    const catWidths: number[] = [];
-    const catSnapshots: { catIndex: number; startX: number; width: number; centerX: number }[] = [];
 
-    categories.forEach((cat, ci) => {
-      const startIdx = pos.length;
-      const startEdges = eds.length;
+    visibleCategories.forEach((cat) => {
       const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
 
       let noteCursorX = catCursorX;
@@ -173,22 +182,16 @@ const GraphView = () => {
         type: "category", label: cat.name, color: cat.color,
         categoryId: cat.id, depth: 0,
       });
-      // edges category -> root notes
       rootNotes.forEach(rn => eds.push({ from: `cat-${cat.id}`, to: `note-${rn.id}` }));
 
       catCenters.push(catCenter);
-      catWidths.push(subtreeWidth);
-      catSnapshots.push({ catIndex: ci, startX: catCursorX, width: subtreeWidth, centerX: catCenter });
       catCursorX += subtreeWidth + 20;
     });
 
     const totalW = catCursorX - 20;
-
-    // Center horizontally: shift everything so the tree centers in container
     const offsetX = (W - totalW) / 2;
     pos.forEach(p => { p.x += offsetX; });
 
-    // Root node centered
     const rootCenterX = catCenters.length
       ? (catCenters[0] + catCenters[catCenters.length - 1]) / 2 + offsetX
       : W / 2;
@@ -199,12 +202,21 @@ const GraphView = () => {
       type: "root", label: brainName || "ExoBrain",
       color: "30 8% 25%", depth: -1,
     });
-    categories.forEach(cat => eds.push({ from: "root", to: `cat-${cat.id}` }));
+    visibleCategories.forEach(cat => eds.push({ from: "root", to: `cat-${cat.id}` }));
 
     return { positions: pos, edges: eds };
-  }, [notes, categories, brainName, size.w, size.h]);
+  }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
 
-  const getPos = (id: string) => positions.find(p => p.id === id);
+  // Apply drag offsets
+  const positionsWithOffsets = useMemo(
+    () => positions.map(p => {
+      const o = offsets[p.id];
+      return o ? { ...p, x: p.x + o.dx, y: p.y + o.dy } : p;
+    }),
+    [positions, offsets],
+  );
+
+  const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
 
   // Long-press handlers
   const startLongPress = useCallback((nodeId: string, clientX: number, clientY: number) => {
@@ -235,8 +247,36 @@ const GraphView = () => {
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   }, []);
 
+  // Drag pointer handlers (window-level)
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const ds = dragState.current;
+      if (!ds) return;
+      const dx = e.clientX - ds.startX;
+      const dy = e.clientY - ds.startY;
+      if (!didDrag.current && Math.hypot(dx, dy) > 5) {
+        didDrag.current = true;
+        cancelLongPress();
+      }
+      if (didDrag.current) {
+        setOffsets(prev => ({
+          ...prev,
+          [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
+        }));
+      }
+    };
+    const onUp = () => { dragState.current = null; };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [cancelLongPress]);
+
   // Click handling with double-click detection
   const handleNodeClick = useCallback((nodeId: string, clientX: number, clientY: number) => {
+    if (didDrag.current) { didDrag.current = false; return; }
     if (didLongPress.current) { didLongPress.current = false; return; }
     if (contextMenu) { setContextMenu(null); return; }
 
@@ -363,7 +403,7 @@ const GraphView = () => {
 
       {/* Nodes */}
       <AnimatePresence>
-        {positions.map(node => {
+        {positionsWithOffsets.map(node => {
           const isRoot = node.type === "root";
           const isCat = node.type === "category";
           const r = isRoot ? ROOT_R : isCat ? CAT_R : NOTE_R;
@@ -377,22 +417,35 @@ const GraphView = () => {
               initial={{ opacity: 0, scale: 0.5 }}
               animate={{ opacity: 1, scale: 1, left: node.x - r, top: node.y - r }}
               exit={{ opacity: 0, scale: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="absolute flex flex-col items-center cursor-pointer touch-none"
+              transition={
+                dragState.current?.nodeId === node.id
+                  ? { duration: 0 }
+                  : { type: "spring", stiffness: 300, damping: 25 }
+              }
+              className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing touch-none"
               style={{ width: r * 2, zIndex: isRoot ? 6 : isCat ? 4 : 2 }}
               onPointerDown={e => {
                 e.stopPropagation();
+                didDrag.current = false;
+                const cur = offsets[node.id] || { dx: 0, dy: 0 };
+                dragState.current = {
+                  nodeId: node.id,
+                  startX: e.clientX,
+                  startY: e.clientY,
+                  baseDx: cur.dx,
+                  baseDy: cur.dy,
+                };
                 startLongPress(node.id, e.clientX, e.clientY);
               }}
               onPointerUp={cancelLongPress}
               onPointerLeave={cancelLongPress}
               onClick={e => { e.stopPropagation(); handleNodeClick(node.id, e.clientX, e.clientY); }}
             >
-              {/* Label above for root + category */}
+              {/* Label below circle for root + category (tree is inverted) */}
               {(isRoot || isCat) && (
                 <span
                   className={`absolute whitespace-nowrap ${isRoot ? "font-display text-base font-bold" : "font-display text-xs font-semibold"} text-foreground`}
-                  style={{ bottom: r * 2 + 6, left: '50%', transform: 'translateX(-50%)' }}
+                  style={{ top: r * 2 + 6, left: '50%', transform: 'translateX(-50%)' }}
                 >
                   {isCat && cat ? `${cat.icon} ` : ""}{node.label}
                 </span>
@@ -424,11 +477,11 @@ const GraphView = () => {
                 )}
               </div>
 
-              {/* Label below for notes */}
+              {/* Label above circle for notes (children grow upward) */}
               {node.type === "note" && (
                 <span
                   className="absolute font-body text-[10px] text-foreground/80 whitespace-nowrap max-w-[100px] truncate text-center"
-                  style={{ top: r * 2 + 4, left: '50%', transform: 'translateX(-50%)' }}
+                  style={{ bottom: r * 2 + 4, left: '50%', transform: 'translateX(-50%)' }}
                 >
                   {node.label}
                 </span>
@@ -595,15 +648,74 @@ const GraphView = () => {
       </AnimatePresence>
 
       {/* Top-right controls */}
-      <div className="fixed top-3 right-3 z-30">
+      <div className="fixed top-3 right-3 z-30 flex gap-2">
         <button
-          onClick={(e) => { e.stopPropagation(); setIsAddingCat(true); }}
+          onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); setIsAddingCat(false); }}
+          className={`p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all ${
+            hiddenCategoryIds.size > 0 ? "text-primary" : "text-muted-foreground"
+          }`}
+          title="Filtrar temas"
+        >
+          {/* eye icon via emoji to avoid extra import */}
+          <span className="text-sm leading-none">{hiddenCategoryIds.size > 0 ? "🙈" : "👁"}</span>
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); setIsAddingCat(true); setShowFilterPanel(false); }}
           className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
           title="Nuevo tema"
         >
           <Plus size={16} />
         </button>
       </div>
+
+      {/* Filter panel */}
+      {showFilterPanel && (
+        <div
+          className="fixed top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[220px] max-h-[60vh] overflow-y-auto"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-display font-semibold text-foreground">Mostrar temas</p>
+            {hiddenCategoryIds.size > 0 && (
+              <button
+                onClick={() => setHiddenCategoryIds(new Set())}
+                className="text-[10px] font-body text-primary hover:underline"
+              >
+                Mostrar todos
+              </button>
+            )}
+          </div>
+          {categories.length === 0 && (
+            <p className="text-[11px] font-body text-muted-foreground">No hay temas aún.</p>
+          )}
+          {categories.map(cat => {
+            const hidden = hiddenCategoryIds.has(cat.id);
+            return (
+              <button
+                key={cat.id}
+                onClick={() => {
+                  setHiddenCategoryIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(cat.id)) next.delete(cat.id);
+                    else next.add(cat.id);
+                    return next;
+                  });
+                }}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-body text-left transition-colors ${
+                  hidden ? "opacity-40 hover:opacity-70" : "hover:bg-muted"
+                }`}
+              >
+                <span
+                  className="w-3 h-3 rounded-full border"
+                  style={{ backgroundColor: `hsl(${cat.color})`, borderColor: `hsl(${cat.color})` }}
+                />
+                <span className="flex-1 truncate text-foreground">{cat.icon} {cat.name}</span>
+                <span className="text-[10px] text-muted-foreground">{hidden ? "oculto" : "visible"}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Add category panel */}
       {isAddingCat && (
