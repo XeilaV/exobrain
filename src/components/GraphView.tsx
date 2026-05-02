@@ -100,6 +100,7 @@ const GraphView = () => {
     if (categories.length === 0) return { positions: pos, edges: eds };
 
     // Recursive note tree builder. Returns subtree width.
+    // y grows DOWNWARD in screen but tree grows UPWARD: pass negative LEVEL_GAP for children.
     const buildNoteSubtree = (
       note: Note, color: string, depth: number, currentX: number, y: number,
     ): { width: number; centerX: number } => {
@@ -122,10 +123,10 @@ const GraphView = () => {
         return { width: w, centerX: currentX + w / 2 };
       }
 
-      // Build children first
+      // Build children first (children grow upward → smaller y)
       let childX = currentX;
       const childCenters: number[] = [];
-      const childY = y + LEVEL_GAP;
+      const childY = y - LEVEL_GAP;
       children.forEach(child => {
         const r = buildNoteSubtree(child, color, depth + 1, childX, childY);
         childCenters.push(r.centerX);
@@ -147,25 +148,19 @@ const GraphView = () => {
         isCollapsed: false,
         depth,
       });
-      // Add edges to children
       children.forEach(child => eds.push({ from: `note-${note.id}`, to: `note-${child.id}` }));
       return { width: totalW, centerX: myCenter };
     };
 
-    // Layout: root at top center, categories spread under it, then notes
-    const rootY = 70;
-    const catY = rootY + LEVEL_GAP + 20;
-    const noteStartY = catY + LEVEL_GAP;
+    // Layout INVERTED: root at bottom, categories above it, notes higher.
+    const rootY = H - 80;
+    const catY = rootY - LEVEL_GAP - 20;
+    const noteStartY = catY - LEVEL_GAP;
 
-    // Build each category subtree to compute total widths
     let catCursorX = 0;
     const catCenters: number[] = [];
-    const catWidths: number[] = [];
-    const catSnapshots: { catIndex: number; startX: number; width: number; centerX: number }[] = [];
 
-    categories.forEach((cat, ci) => {
-      const startIdx = pos.length;
-      const startEdges = eds.length;
+    visibleCategories.forEach((cat) => {
       const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
 
       let noteCursorX = catCursorX;
@@ -187,22 +182,16 @@ const GraphView = () => {
         type: "category", label: cat.name, color: cat.color,
         categoryId: cat.id, depth: 0,
       });
-      // edges category -> root notes
       rootNotes.forEach(rn => eds.push({ from: `cat-${cat.id}`, to: `note-${rn.id}` }));
 
       catCenters.push(catCenter);
-      catWidths.push(subtreeWidth);
-      catSnapshots.push({ catIndex: ci, startX: catCursorX, width: subtreeWidth, centerX: catCenter });
       catCursorX += subtreeWidth + 20;
     });
 
     const totalW = catCursorX - 20;
-
-    // Center horizontally: shift everything so the tree centers in container
     const offsetX = (W - totalW) / 2;
     pos.forEach(p => { p.x += offsetX; });
 
-    // Root node centered
     const rootCenterX = catCenters.length
       ? (catCenters[0] + catCenters[catCenters.length - 1]) / 2 + offsetX
       : W / 2;
@@ -213,12 +202,21 @@ const GraphView = () => {
       type: "root", label: brainName || "ExoBrain",
       color: "30 8% 25%", depth: -1,
     });
-    categories.forEach(cat => eds.push({ from: "root", to: `cat-${cat.id}` }));
+    visibleCategories.forEach(cat => eds.push({ from: "root", to: `cat-${cat.id}` }));
 
     return { positions: pos, edges: eds };
-  }, [notes, categories, brainName, size.w, size.h]);
+  }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
 
-  const getPos = (id: string) => positions.find(p => p.id === id);
+  // Apply drag offsets
+  const positionsWithOffsets = useMemo(
+    () => positions.map(p => {
+      const o = offsets[p.id];
+      return o ? { ...p, x: p.x + o.dx, y: p.y + o.dy } : p;
+    }),
+    [positions, offsets],
+  );
+
+  const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
 
   // Long-press handlers
   const startLongPress = useCallback((nodeId: string, clientX: number, clientY: number) => {
