@@ -403,7 +403,7 @@ const GraphView = () => {
 
       {/* Nodes */}
       <AnimatePresence>
-        {positions.map(node => {
+        {positionsWithOffsets.map(node => {
           const isRoot = node.type === "root";
           const isCat = node.type === "category";
           const r = isRoot ? ROOT_R : isCat ? CAT_R : NOTE_R;
