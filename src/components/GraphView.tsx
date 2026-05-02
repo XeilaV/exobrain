@@ -58,7 +58,21 @@ const GraphView = () => {
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
+  const didDrag = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Drag offsets per node id (session-local)
+  const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
+  const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(null);
+
+  // Hidden category filter
+  const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+
+  const visibleCategories = useMemo(
+    () => categories.filter(c => !hiddenCategoryIds.has(c.id)),
+    [categories, hiddenCategoryIds],
+  );
 
   // Resize observer
   useEffect(() => {
