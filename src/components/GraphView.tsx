@@ -441,11 +441,11 @@ const GraphView = () => {
               onPointerLeave={cancelLongPress}
               onClick={e => { e.stopPropagation(); handleNodeClick(node.id, e.clientX, e.clientY); }}
             >
-              {/* Label above for root + category */}
+              {/* Label below circle for root + category (tree is inverted) */}
               {(isRoot || isCat) && (
                 <span
                   className={`absolute whitespace-nowrap ${isRoot ? "font-display text-base font-bold" : "font-display text-xs font-semibold"} text-foreground`}
-                  style={{ bottom: r * 2 + 6, left: '50%', transform: 'translateX(-50%)' }}
+                  style={{ top: r * 2 + 6, left: '50%', transform: 'translateX(-50%)' }}
                 >
                   {isCat && cat ? `${cat.icon} ` : ""}{node.label}
                 </span>
