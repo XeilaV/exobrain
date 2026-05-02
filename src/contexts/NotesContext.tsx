@@ -24,6 +24,7 @@ interface NotesContextType {
   toggleChecklistItem: (noteId: string, itemId: string) => void;
   deleteChecklistItem: (noteId: string, itemId: string) => void;
   toggleNoteCollapsed: (noteId: string) => void;
+  toggleCategoryCollapsed: (categoryId: string) => void;
   linkNotes: (noteIdA: string, noteIdB: string) => void;
   unlinkNotes: (noteIdA: string, noteIdB: string) => void;
   filteredNotes: Note[];
