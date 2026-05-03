@@ -41,6 +41,7 @@ const GraphView = () => {
     notes, categories, addNote, addCategory, deleteNote, deleteCategory,
     updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
     setSelectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
+    setNoteOffset, setCategoryOffset,
   } = useNotes();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,8 +63,15 @@ const GraphView = () => {
   const didDrag = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Drag offsets per node id (session-local)
-  const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
+  // Drag offsets per node id — derived from persisted notes/categories
+  const offsets = useMemo(() => {
+    const o: Record<string, { dx: number; dy: number }> = {};
+    notes.forEach(n => { if (n.posDx || n.posDy) o[`note-${n.id}`] = { dx: n.posDx, dy: n.posDy }; });
+    categories.forEach(c => { if (c.posDx || c.posDy) o[`cat-${c.id}`] = { dx: c.posDx, dy: c.posDy }; });
+    return o;
+  }, [notes, categories]);
+  const [dragOverride, setDragOverride] = useState<Record<string, { dx: number; dy: number }>>({});
+  const effectiveOffsets = useMemo(() => ({ ...offsets, ...dragOverride }), [offsets, dragOverride]);
   const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(null);
 
   // Hidden category filter
@@ -254,7 +262,7 @@ const GraphView = () => {
     const accumulated: Record<string, { dx: number; dy: number }> = {};
     const compute = (id: string): { dx: number; dy: number } => {
       if (accumulated[id]) return accumulated[id];
-      const own = offsets[id] || { dx: 0, dy: 0 };
+      const own = effectiveOffsets[id] || { dx: 0, dy: 0 };
       const parentId = parentMap[id];
       if (!parentId) {
         accumulated[id] = own;
@@ -268,7 +276,6 @@ const GraphView = () => {
     return positions.map(p => {
       const off = compute(p.id);
       const r = p.type === "root" ? ROOT_R : p.id === "hub" ? 6 : p.type === "category" ? CAT_R : NOTE_R;
-      // Clamp so the node circle never leaves the viewport.
       const minX = r + EDGE_MARGIN;
       const maxX = size.w - r - EDGE_MARGIN;
       const minY = r + EDGE_MARGIN;
@@ -277,7 +284,7 @@ const GraphView = () => {
       const ny = Math.min(maxY, Math.max(minY, p.y + off.dy));
       return nx !== p.x || ny !== p.y ? { ...p, x: nx, y: ny } : p;
     });
-  }, [positions, offsets, parentMap, size.w, size.h]);
+  }, [positions, effectiveOffsets, parentMap, size.w, size.h]);
 
 
   const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
@@ -323,20 +330,33 @@ const GraphView = () => {
         cancelLongPress();
       }
       if (didDrag.current) {
-        setOffsets(prev => ({
+        setDragOverride(prev => ({
           ...prev,
           [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
         }));
       }
     };
-    const onUp = () => { dragState.current = null; };
+    const onUp = () => {
+      const ds = dragState.current;
+      if (ds && didDrag.current) {
+        const finalOff = (dragOverride[ds.nodeId]) || { dx: ds.baseDx, dy: ds.baseDy };
+        if (ds.nodeId.startsWith("note-")) {
+          setNoteOffset(ds.nodeId.replace("note-", ""), finalOff.dx, finalOff.dy);
+        } else if (ds.nodeId.startsWith("cat-")) {
+          setCategoryOffset(ds.nodeId.replace("cat-", ""), finalOff.dx, finalOff.dy);
+        }
+        // clear override so persisted value takes over
+        setDragOverride(prev => { const n = { ...prev }; delete n[ds.nodeId]; return n; });
+      }
+      dragState.current = null;
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [cancelLongPress]);
+  }, [cancelLongPress, dragOverride, setNoteOffset, setCategoryOffset]);
 
   // Click handling with double-click detection
   const handleNodeClick = useCallback((nodeId: string, clientX: number, clientY: number) => {
@@ -498,7 +518,7 @@ const GraphView = () => {
               onPointerDown={e => {
                 e.stopPropagation();
                 didDrag.current = false;
-                const cur = offsets[node.id] || { dx: 0, dy: 0 };
+                const cur = effectiveOffsets[node.id] || { dx: 0, dy: 0 };
                 dragState.current = {
                   nodeId: node.id,
                   startX: e.clientX,
@@ -886,6 +906,7 @@ const GraphView = () => {
             noteId={openPostIt.noteId}
             position={{ x: openPostIt.x, y: openPostIt.y }}
             onClose={() => { setOpenPostIt(null); setSelectedNoteId(null); }}
+            onOpenNote={(nid) => setOpenPostIt({ noteId: nid, x: size.w / 2, y: size.h / 2 })}
           />
         )}
       </AnimatePresence>

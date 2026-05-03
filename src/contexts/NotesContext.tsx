@@ -27,6 +27,8 @@ interface NotesContextType {
   toggleCategoryCollapsed: (categoryId: string) => void;
   linkNotes: (noteIdA: string, noteIdB: string) => void;
   unlinkNotes: (noteIdA: string, noteIdB: string) => void;
+  setNoteOffset: (noteId: string, dx: number, dy: number) => void;
+  setCategoryOffset: (categoryId: string, dx: number, dy: number) => void;
   filteredNotes: Note[];
   selectedNote: Note | undefined;
   createNoteFromChat: (title: string, content: string, categoryId?: string) => Note;
@@ -61,6 +63,8 @@ const dbToNote = (row: any): Note => ({
   checklist: (row.checklist as ChecklistItem[]) ?? [],
   noteType: (row.note_type as NoteType) ?? "text",
   isCollapsed: row.is_collapsed ?? true,
+  posDx: Number(row.pos_dx ?? 0),
+  posDy: Number(row.pos_dy ?? 0),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -72,6 +76,8 @@ const dbToCategory = (row: any): Category => ({
   color: row.color,
   parentId: null,
   isCollapsed: row.is_collapsed ?? true,
+  posDx: Number(row.pos_dx ?? 0),
+  posDy: Number(row.pos_dy ?? 0),
 });
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -203,31 +209,35 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const addChecklistItem = useCallback((noteId: string, text: string) => {
+    let newChecklist: ChecklistItem[] = [];
     setNotes(prev => prev.map(n => {
       if (n.id !== noteId) return n;
-      const newChecklist = [...n.checklist, { id: crypto.randomUUID(), text, completed: false }];
-      // Save to DB
-      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
+      newChecklist = [...n.checklist, { id: crypto.randomUUID(), text, completed: false }];
       return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
     }));
+    supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId).then(({ error }) => {
+      if (error) toast.error("Error al guardar tarea");
+    });
   }, []);
 
   const toggleChecklistItem = useCallback((noteId: string, itemId: string) => {
+    let newChecklist: ChecklistItem[] = [];
     setNotes(prev => prev.map(n => {
       if (n.id !== noteId) return n;
-      const newChecklist = n.checklist.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
-      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
+      newChecklist = n.checklist.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
       return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
     }));
+    supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
   }, []);
 
   const deleteChecklistItem = useCallback((noteId: string, itemId: string) => {
+    let newChecklist: ChecklistItem[] = [];
     setNotes(prev => prev.map(n => {
       if (n.id !== noteId) return n;
-      const newChecklist = n.checklist.filter(i => i.id !== itemId);
-      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
+      newChecklist = n.checklist.filter(i => i.id !== itemId);
       return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
     }));
+    supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
   }, []);
 
   const toggleNoteCollapsed = useCallback((noteId: string) => {
@@ -248,6 +258,21 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }));
   }, []);
 
+  const offsetTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const setNoteOffset = useCallback((noteId: string, dx: number, dy: number) => {
+    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, posDx: dx, posDy: dy } : n));
+    clearTimeout(offsetTimers.current[`n-${noteId}`]);
+    offsetTimers.current[`n-${noteId}`] = setTimeout(() => {
+      supabase.from("notes").update({ pos_dx: dx, pos_dy: dy }).eq("id", noteId);
+    }, 400);
+  }, []);
+  const setCategoryOffset = useCallback((categoryId: string, dx: number, dy: number) => {
+    setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, posDx: dx, posDy: dy } : c));
+    clearTimeout(offsetTimers.current[`c-${categoryId}`]);
+    offsetTimers.current[`c-${categoryId}`] = setTimeout(() => {
+      supabase.from("categories").update({ pos_dx: dx, pos_dy: dy }).eq("id", categoryId);
+    }, 400);
+  }, []);
 
   const linkNotes = useCallback((noteIdA: string, noteIdB: string) => {
     if (noteIdA === noteIdB) return;
@@ -291,7 +316,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const note: Note = {
       id: crypto.randomUUID(), title, content, categoryId: catId,
       parentNoteId: null, linkedNoteIds: [], checklist: [],
-      noteType: "text", isCollapsed: true,
+      noteType: "text", isCollapsed: true, posDx: 0, posDy: 0,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
     return note;
@@ -329,7 +354,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addNote, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
       addChecklistItem, toggleChecklistItem, deleteChecklistItem,
       toggleNoteCollapsed, toggleCategoryCollapsed,
-      linkNotes, unlinkNotes,
+      linkNotes, unlinkNotes, setNoteOffset, setCategoryOffset,
       filteredNotes, selectedNote, createNoteFromChat,
       getChildNotes, getLinkedNotes, getParentNote,
       getSubcategories, getRootCategories, getCategoryPath,

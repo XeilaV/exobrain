@@ -1,0 +1,2 @@
+ALTER TABLE public.categories ADD COLUMN pos_dx numeric NOT NULL DEFAULT 0, ADD COLUMN pos_dy numeric NOT NULL DEFAULT 0;
+ALTER TABLE public.notes ADD COLUMN pos_dx numeric NOT NULL DEFAULT 0, ADD COLUMN pos_dy numeric NOT NULL DEFAULT 0;

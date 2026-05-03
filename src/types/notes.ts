@@ -16,6 +16,8 @@ export interface Note {
   checklist: ChecklistItem[];
   noteType: NoteType;
   isCollapsed: boolean;
+  posDx: number;
+  posDy: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -27,6 +29,8 @@ export interface Category {
   color: string;
   parentId: string | null;
   isCollapsed: boolean;
+  posDx: number;
+  posDy: number;
 }
 
 export interface ChatMessage {
