@@ -32,8 +32,9 @@ interface Edge { from: string; to: string }
 const ROOT_R = 30;
 const CAT_R = 22;
 const NOTE_R = 12;
-const LEVEL_GAP = 90;     // vertical gap between levels
-const SIBLING_GAP = 70;   // horizontal gap between siblings (min)
+const LEVEL_GAP = 80;     // vertical gap between levels
+const SIBLING_GAP = 60;   // horizontal gap between siblings (min)
+const EDGE_MARGIN = 24;   // min distance from viewport edges
 
 const GraphView = () => {
   const {
@@ -266,9 +267,18 @@ const GraphView = () => {
     };
     return positions.map(p => {
       const off = compute(p.id);
-      return off.dx || off.dy ? { ...p, x: p.x + off.dx, y: p.y + off.dy } : p;
+      const r = p.type === "root" ? ROOT_R : p.id === "hub" ? 6 : p.type === "category" ? CAT_R : NOTE_R;
+      // Clamp so the node circle never leaves the viewport.
+      const minX = r + EDGE_MARGIN;
+      const maxX = size.w - r - EDGE_MARGIN;
+      const minY = r + EDGE_MARGIN;
+      const maxY = size.h - r - EDGE_MARGIN;
+      const nx = Math.min(maxX, Math.max(minX, p.x + off.dx));
+      const ny = Math.min(maxY, Math.max(minY, p.y + off.dy));
+      return nx !== p.x || ny !== p.y ? { ...p, x: nx, y: ny } : p;
     });
-  }, [positions, offsets, parentMap]);
+  }, [positions, offsets, parentMap, size.w, size.h]);
+
 
   const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
 
@@ -541,8 +551,8 @@ const GraphView = () => {
               {/* Label above circle for notes (children grow upward) */}
               {node.type === "note" && (
                 <span
-                  className="absolute font-body text-[10px] text-foreground/80 whitespace-nowrap max-w-[100px] truncate text-center"
-                  style={{ bottom: r * 2 + 4, left: '50%', transform: 'translateX(-50%)' }}
+                  className="absolute font-body text-[9px] leading-tight text-foreground/80 whitespace-nowrap overflow-hidden text-ellipsis text-center pointer-events-none block"
+                  style={{ bottom: r * 2 + 3, left: '50%', transform: 'translateX(-50%)', width: 54 }}
                 >
                   {node.label}
                 </span>
