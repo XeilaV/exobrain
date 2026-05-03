@@ -262,7 +262,7 @@ const GraphView = () => {
     const accumulated: Record<string, { dx: number; dy: number }> = {};
     const compute = (id: string): { dx: number; dy: number } => {
       if (accumulated[id]) return accumulated[id];
-      const own = offsets[id] || { dx: 0, dy: 0 };
+      const own = effectiveOffsets[id] || { dx: 0, dy: 0 };
       const parentId = parentMap[id];
       if (!parentId) {
         accumulated[id] = own;
@@ -276,7 +276,6 @@ const GraphView = () => {
     return positions.map(p => {
       const off = compute(p.id);
       const r = p.type === "root" ? ROOT_R : p.id === "hub" ? 6 : p.type === "category" ? CAT_R : NOTE_R;
-      // Clamp so the node circle never leaves the viewport.
       const minX = r + EDGE_MARGIN;
       const maxX = size.w - r - EDGE_MARGIN;
       const minY = r + EDGE_MARGIN;
@@ -285,7 +284,7 @@ const GraphView = () => {
       const ny = Math.min(maxY, Math.max(minY, p.y + off.dy));
       return nx !== p.x || ny !== p.y ? { ...p, x: nx, y: ny } : p;
     });
-  }, [positions, offsets, parentMap, size.w, size.h]);
+  }, [positions, effectiveOffsets, parentMap, size.w, size.h]);
 
 
   const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
