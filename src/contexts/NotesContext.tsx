@@ -295,7 +295,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const note: Note = {
       id: crypto.randomUUID(), title, content, categoryId: catId,
       parentNoteId: null, linkedNoteIds: [], checklist: [],
-      noteType: "text", isCollapsed: true,
+      noteType: "text", isCollapsed: true, posDx: 0, posDy: 0,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
     return note;
