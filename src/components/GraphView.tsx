@@ -195,7 +195,7 @@ const GraphView = () => {
         hasChildren: rootNotes.length > 0,
         isCollapsed: cat.isCollapsed,
       });
-      parent[`cat-${cat.id}`] = "root";
+      parent[`cat-${cat.id}`] = "hub";
 
       catCenters.push(catCenter);
       catCursorX += subtreeWidth + 20;
@@ -210,9 +210,31 @@ const GraphView = () => {
     const offsetX = (W - scaledTotalW) / 2;
     pos.forEach(p => { p.x = p.x * scale + offsetX; });
 
+    // Fit vertically: compress upward levels so nothing overflows the top.
+    const topMargin = 30;
+    const minY = pos.length ? Math.min(...pos.map(p => p.y)) : hubY;
+    if (minY < topMargin) {
+      // anchor: hubY stays constant; scale distances above hub.
+      const range = hubY - minY;
+      const maxRange = hubY - topMargin;
+      const yScale = maxRange / range;
+      pos.forEach(p => {
+        if (p.y < hubY) p.y = hubY - (hubY - p.y) * yScale;
+      });
+    }
+
     const rootCenterX = catCenters.length
       ? ((catCenters[0] + catCenters[catCenters.length - 1]) / 2) * scale + offsetX
       : W / 2;
+
+    // Hub node: the "centro" where branches diverge.
+    pos.push({
+      id: "hub",
+      x: rootCenterX, y: hubY,
+      type: "category", label: "", color: "30 8% 30%", depth: -1,
+    });
+    parent["hub"] = "root";
+    visibleCategories.forEach(cat => eds.push({ from: "hub", to: `cat-${cat.id}` }));
 
     pos.push({
       id: "root",
@@ -220,7 +242,7 @@ const GraphView = () => {
       type: "root", label: brainName || "ExoBrain",
       color: "30 8% 25%", depth: -1,
     });
-    visibleCategories.forEach(cat => eds.push({ from: "root", to: `cat-${cat.id}` }));
+    eds.push({ from: "root", to: "hub" });
 
     return { positions: pos, edges: eds, parentMap: parent };
   }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
