@@ -551,7 +551,7 @@ const GraphView = () => {
               {/* Label above circle for notes (children grow upward) */}
               {node.type === "note" && (
                 <span
-                  className="absolute font-body text-[10px] text-foreground/80 whitespace-nowrap max-w-[100px] truncate text-center"
+                  className="absolute font-body text-[10px] text-foreground/80 whitespace-nowrap max-w-[60px] truncate text-center pointer-events-none"
                   style={{ bottom: r * 2 + 4, left: '50%', transform: 'translateX(-50%)' }}
                 >
                   {node.label}
