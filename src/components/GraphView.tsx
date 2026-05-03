@@ -63,8 +63,15 @@ const GraphView = () => {
   const didDrag = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Drag offsets per node id (session-local)
-  const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
+  // Drag offsets per node id — derived from persisted notes/categories
+  const offsets = useMemo(() => {
+    const o: Record<string, { dx: number; dy: number }> = {};
+    notes.forEach(n => { if (n.posDx || n.posDy) o[`note-${n.id}`] = { dx: n.posDx, dy: n.posDy }; });
+    categories.forEach(c => { if (c.posDx || c.posDy) o[`cat-${c.id}`] = { dx: c.posDx, dy: c.posDy }; });
+    return o;
+  }, [notes, categories]);
+  const [dragOverride, setDragOverride] = useState<Record<string, { dx: number; dy: number }>>({});
+  const effectiveOffsets = useMemo(() => ({ ...offsets, ...dragOverride }), [offsets, dragOverride]);
   const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(null);
 
   // Hidden category filter
