@@ -32,8 +32,9 @@ interface Edge { from: string; to: string }
 const ROOT_R = 30;
 const CAT_R = 22;
 const NOTE_R = 12;
-const LEVEL_GAP = 90;     // vertical gap between levels
-const SIBLING_GAP = 70;   // horizontal gap between siblings (min)
+const LEVEL_GAP = 80;     // vertical gap between levels
+const SIBLING_GAP = 60;   // horizontal gap between siblings (min)
+const EDGE_MARGIN = 24;   // min distance from viewport edges
 
 const GraphView = () => {
   const {
