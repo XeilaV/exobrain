@@ -518,7 +518,7 @@ const GraphView = () => {
               onPointerDown={e => {
                 e.stopPropagation();
                 didDrag.current = false;
-                const cur = offsets[node.id] || { dx: 0, dy: 0 };
+                const cur = effectiveOffsets[node.id] || { dx: 0, dy: 0 };
                 dragState.current = {
                   nodeId: node.id,
                   startX: e.clientX,
