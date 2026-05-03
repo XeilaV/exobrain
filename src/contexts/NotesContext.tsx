@@ -254,6 +254,21 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }));
   }, []);
 
+  const offsetTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const setNoteOffset = useCallback((noteId: string, dx: number, dy: number) => {
+    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, posDx: dx, posDy: dy } : n));
+    clearTimeout(offsetTimers.current[`n-${noteId}`]);
+    offsetTimers.current[`n-${noteId}`] = setTimeout(() => {
+      supabase.from("notes").update({ pos_dx: dx, pos_dy: dy }).eq("id", noteId);
+    }, 400);
+  }, []);
+  const setCategoryOffset = useCallback((categoryId: string, dx: number, dy: number) => {
+    setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, posDx: dx, posDy: dy } : c));
+    clearTimeout(offsetTimers.current[`c-${categoryId}`]);
+    offsetTimers.current[`c-${categoryId}`] = setTimeout(() => {
+      supabase.from("categories").update({ pos_dx: dx, pos_dy: dy }).eq("id", categoryId);
+    }, 400);
+  }, []);
 
   const linkNotes = useCallback((noteIdA: string, noteIdB: string) => {
     if (noteIdA === noteIdB) return;
