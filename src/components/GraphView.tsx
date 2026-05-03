@@ -152,9 +152,10 @@ const GraphView = () => {
       return { width: totalW, centerX: myCenter };
     };
 
-    // Layout INVERTED: root at bottom.
-    const rootY = H - 80;
-    const catY = rootY - LEVEL_GAP - 20;
+    // Layout INVERTED: root at bottom, hub above as the "trunk top".
+    const rootY = H - 70;
+    const hubY = rootY - 80;          // trunk length
+    const catY = hubY - LEVEL_GAP;
     const noteStartY = catY - LEVEL_GAP;
 
     let catCursorX = 0;
