@@ -63,7 +63,7 @@ interface NotePostItProps {
   onOpenNote?: (noteId: string) => void;
 }
 
-const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
+const NotePostIt = ({ noteId, position, onClose, onOpenNote }: NotePostItProps) => {
   const {
     notes, updateNote, addChecklistItem, categories,
     getChildNotes, getLinkedNotes, getParentNote, setSelectedNoteId,
