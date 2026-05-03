@@ -267,9 +267,18 @@ const GraphView = () => {
     };
     return positions.map(p => {
       const off = compute(p.id);
-      return off.dx || off.dy ? { ...p, x: p.x + off.dx, y: p.y + off.dy } : p;
+      const r = p.type === "root" ? ROOT_R : p.id === "hub" ? 6 : p.type === "category" ? CAT_R : NOTE_R;
+      // Clamp so the node circle never leaves the viewport.
+      const minX = r + EDGE_MARGIN;
+      const maxX = size.w - r - EDGE_MARGIN;
+      const minY = r + EDGE_MARGIN;
+      const maxY = size.h - r - EDGE_MARGIN;
+      const nx = Math.min(maxX, Math.max(minX, p.x + off.dx));
+      const ny = Math.min(maxY, Math.max(minY, p.y + off.dy));
+      return nx !== p.x || ny !== p.y ? { ...p, x: nx, y: ny } : p;
     });
-  }, [positions, offsets, parentMap]);
+  }, [positions, offsets, parentMap, size.w, size.h]);
+
 
   const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
 
