@@ -261,7 +261,7 @@ const NotePostIt = ({ noteId, position, onClose, onOpenNote }: NotePostItProps) 
                 <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-1 font-body">Hijas</p>
                 <div className="flex flex-wrap gap-1">
                   {childNotes.map(cn => (
-                    <button key={cn.id} onClick={() => { setSelectedNoteId(cn.id); }}
+                    <button key={cn.id} onClick={() => { onOpenNote ? onOpenNote(cn.id) : setSelectedNoteId(cn.id); }}
                       className="flex items-center gap-1 text-[10px] bg-muted hover:bg-muted/80 text-foreground rounded px-2 py-1 font-body">
                       {cn.noteType === "checklist" ? <ListChecks size={8} /> : <FileText size={8} />}{cn.title}
                     </button>
@@ -275,7 +275,7 @@ const NotePostIt = ({ noteId, position, onClose, onOpenNote }: NotePostItProps) 
                 <div className="flex flex-wrap gap-1">
                   {linkedNotes.map(ln => (
                     <div key={ln.id} className="flex items-center gap-0.5">
-                      <button onClick={() => setSelectedNoteId(ln.id)}
+                      <button onClick={() => { onOpenNote ? onOpenNote(ln.id) : setSelectedNoteId(ln.id); }}
                         className="flex items-center gap-1 text-[10px] bg-primary/10 text-foreground rounded-l px-2 py-1 font-body">
                         <Link2 size={8} className="text-primary" />{ln.title}
                       </button>
