@@ -906,6 +906,7 @@ const GraphView = () => {
             noteId={openPostIt.noteId}
             position={{ x: openPostIt.x, y: openPostIt.y }}
             onClose={() => { setOpenPostIt(null); setSelectedNoteId(null); }}
+            onOpenNote={(nid) => setOpenPostIt({ noteId: nid, x: size.w / 2, y: size.h / 2 })}
           />
         )}
       </AnimatePresence>
