@@ -15,10 +15,21 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
   const { toggleChecklistItem, deleteChecklistItem, updateNote, selectedNote } = useNotes();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { if (isEditing) inputRef.current?.focus(); }, [isEditing]);
+  const autoResize = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  };
+
+  useEffect(() => {
+    if (isEditing) {
+      inputRef.current?.focus();
+      autoResize(inputRef.current);
+    }
+  }, [isEditing]);
 
   const saveEdit = () => {
     if (!selectedNote) return;
@@ -30,27 +41,30 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
   };
 
   return (
-    <Reorder.Item value={item} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1" id={item.id}>
-      <GripVertical size={14} className="text-muted-foreground/40 cursor-grab shrink-0 touch-none" style={{ touchAction: "none" }} />
-      <button onClick={() => toggleChecklistItem(noteId, item.id)} className="text-primary shrink-0">
+    <Reorder.Item value={item} className="flex items-start gap-1.5 group bg-background/50 rounded px-1.5 py-1" id={item.id}>
+      <GripVertical size={14} className="text-muted-foreground/40 cursor-grab shrink-0 touch-none mt-0.5" style={{ touchAction: "none" }} />
+      <button onClick={() => toggleChecklistItem(noteId, item.id)} className="text-primary shrink-0 mt-0.5">
         {item.completed ? <CheckSquare size={16} /> : <Square size={16} />}
       </button>
       {isEditing ? (
-        <input ref={inputRef} value={editText} onChange={e => setEditText(e.target.value)}
-          onBlur={saveEdit} onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); } }}
-          className="flex-1 text-sm font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring" />
+        <textarea ref={inputRef} value={editText}
+          onChange={e => { setEditText(e.target.value); autoResize(e.currentTarget); }}
+          onBlur={saveEdit}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); } }}
+          rows={1}
+          className="flex-1 text-sm font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring resize-none overflow-hidden" />
       ) : (
         <span
           onDoubleClick={() => { setIsEditing(true); setEditText(item.text); }}
           onPointerDown={() => { longPressRef.current = setTimeout(() => { setIsEditing(true); setEditText(item.text); }, 500); }}
           onPointerUp={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
           onPointerCancel={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
-          className={`flex-1 text-sm font-body cursor-default select-none ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
+          className={`flex-1 text-sm font-body cursor-default select-none whitespace-pre-wrap break-words ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
         >{item.text}</span>
       )}
       <button onClick={() => { navigator.clipboard.writeText(item.text); toast.success("Copiado"); }}
-        className="opacity-0 group-hover:opacity-50 text-muted-foreground shrink-0"><Copy size={12} /></button>
-      <Trash2 size={12} className="opacity-0 group-hover:opacity-50 text-destructive cursor-pointer shrink-0"
+        className="opacity-0 group-hover:opacity-50 text-muted-foreground shrink-0 mt-0.5"><Copy size={12} /></button>
+      <Trash2 size={12} className="opacity-0 group-hover:opacity-50 text-destructive cursor-pointer shrink-0 mt-1"
         onClick={() => deleteChecklistItem(noteId, item.id)} />
     </Reorder.Item>
   );
