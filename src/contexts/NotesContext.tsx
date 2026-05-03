@@ -209,31 +209,35 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const addChecklistItem = useCallback((noteId: string, text: string) => {
+    let newChecklist: ChecklistItem[] = [];
     setNotes(prev => prev.map(n => {
       if (n.id !== noteId) return n;
-      const newChecklist = [...n.checklist, { id: crypto.randomUUID(), text, completed: false }];
-      // Save to DB
-      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
+      newChecklist = [...n.checklist, { id: crypto.randomUUID(), text, completed: false }];
       return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
     }));
+    supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId).then(({ error }) => {
+      if (error) toast.error("Error al guardar tarea");
+    });
   }, []);
 
   const toggleChecklistItem = useCallback((noteId: string, itemId: string) => {
+    let newChecklist: ChecklistItem[] = [];
     setNotes(prev => prev.map(n => {
       if (n.id !== noteId) return n;
-      const newChecklist = n.checklist.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
-      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
+      newChecklist = n.checklist.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
       return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
     }));
+    supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
   }, []);
 
   const deleteChecklistItem = useCallback((noteId: string, itemId: string) => {
+    let newChecklist: ChecklistItem[] = [];
     setNotes(prev => prev.map(n => {
       if (n.id !== noteId) return n;
-      const newChecklist = n.checklist.filter(i => i.id !== itemId);
-      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
+      newChecklist = n.checklist.filter(i => i.id !== itemId);
       return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
     }));
+    supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
   }, []);
 
   const toggleNoteCollapsed = useCallback((noteId: string) => {
