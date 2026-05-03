@@ -330,20 +330,33 @@ const GraphView = () => {
         cancelLongPress();
       }
       if (didDrag.current) {
-        setOffsets(prev => ({
+        setDragOverride(prev => ({
           ...prev,
           [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
         }));
       }
     };
-    const onUp = () => { dragState.current = null; };
+    const onUp = () => {
+      const ds = dragState.current;
+      if (ds && didDrag.current) {
+        const finalOff = (dragOverride[ds.nodeId]) || { dx: ds.baseDx, dy: ds.baseDy };
+        if (ds.nodeId.startsWith("note-")) {
+          setNoteOffset(ds.nodeId.replace("note-", ""), finalOff.dx, finalOff.dy);
+        } else if (ds.nodeId.startsWith("cat-")) {
+          setCategoryOffset(ds.nodeId.replace("cat-", ""), finalOff.dx, finalOff.dy);
+        }
+        // clear override so persisted value takes over
+        setDragOverride(prev => { const n = { ...prev }; delete n[ds.nodeId]; return n; });
+      }
+      dragState.current = null;
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [cancelLongPress]);
+  }, [cancelLongPress, dragOverride, setNoteOffset, setCategoryOffset]);
 
   // Click handling with double-click detection
   const handleNodeClick = useCallback((nodeId: string, clientX: number, clientY: number) => {
