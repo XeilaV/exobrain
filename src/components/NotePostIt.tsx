@@ -60,6 +60,7 @@ interface NotePostItProps {
   noteId: string;
   position: { x: number; y: number };
   onClose: () => void;
+  onOpenNote?: (noteId: string) => void;
 }
 
 const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
