@@ -257,35 +257,40 @@ const GraphView = () => {
     return { positions: pos, edges: eds, parentMap: parent };
   }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
 
-  // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
-  // node moves its whole subtree along with it.
+  // Apply persisted absolute positions + live drag delta (propagates to descendants).
   const positionsWithOffsets = useMemo(() => {
-    const accumulated: Record<string, { dx: number; dy: number }> = {};
-    const compute = (id: string): { dx: number; dy: number } => {
-      if (accumulated[id]) return accumulated[id];
-      const own = effectiveOffsets[id] || { dx: 0, dy: 0 };
-      const parentId = parentMap[id];
-      if (!parentId) {
-        accumulated[id] = own;
-        return own;
+    // First pass: resolve base position per node (persisted absolute or auto layout).
+    const base: Record<string, { x: number; y: number }> = {};
+    positions.forEach(p => {
+      const pp = persistedPos[p.id];
+      base[p.id] = pp ? { x: pp.x, y: pp.y } : { x: p.x, y: p.y };
+    });
+
+    // Second pass: if dragging, add delta to dragged node and all its descendants.
+    const deltaFor = (id: string): { dx: number; dy: number } => {
+      if (!dragDelta) return { dx: 0, dy: 0 };
+      // walk up the parent chain; if dragged node is an ancestor (or self), apply delta
+      let cur: string | undefined = id;
+      while (cur) {
+        if (cur === dragDelta.nodeId) return { dx: dragDelta.dx, dy: dragDelta.dy };
+        cur = parentMap[cur];
       }
-      const par = compute(parentId);
-      const total = { dx: own.dx + par.dx, dy: own.dy + par.dy };
-      accumulated[id] = total;
-      return total;
+      return { dx: 0, dy: 0 };
     };
+
     return positions.map(p => {
-      const off = compute(p.id);
+      const b = base[p.id];
+      const d = deltaFor(p.id);
       const r = p.type === "root" ? ROOT_R : p.id === "hub" ? 6 : p.type === "category" ? CAT_R : NOTE_R;
       const minX = r + EDGE_MARGIN;
       const maxX = size.w - r - EDGE_MARGIN;
       const minY = r + EDGE_MARGIN;
       const maxY = size.h - r - EDGE_MARGIN;
-      const nx = Math.min(maxX, Math.max(minX, p.x + off.dx));
-      const ny = Math.min(maxY, Math.max(minY, p.y + off.dy));
+      const nx = Math.min(maxX, Math.max(minX, b.x + d.dx));
+      const ny = Math.min(maxY, Math.max(minY, b.y + d.dy));
       return nx !== p.x || ny !== p.y ? { ...p, x: nx, y: ny } : p;
     });
-  }, [positions, effectiveOffsets, parentMap, size.w, size.h]);
+  }, [positions, persistedPos, dragDelta, parentMap, size.w, size.h]);
 
 
   const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
@@ -331,23 +336,22 @@ const GraphView = () => {
         cancelLongPress();
       }
       if (didDrag.current) {
-        setDragOverride(prev => ({
-          ...prev,
-          [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
-        }));
+        setDragDelta({ nodeId: ds.nodeId, dx, dy });
       }
     };
     const onUp = () => {
       const ds = dragState.current;
       if (ds && didDrag.current) {
-        const finalOff = (dragOverride[ds.nodeId]) || { dx: ds.baseDx, dy: ds.baseDy };
-        if (ds.nodeId.startsWith("note-")) {
-          setNoteOffset(ds.nodeId.replace("note-", ""), finalOff.dx, finalOff.dy);
-        } else if (ds.nodeId.startsWith("cat-")) {
-          setCategoryOffset(ds.nodeId.replace("cat-", ""), finalOff.dx, finalOff.dy);
+        // Compute final absolute position of the dragged node from current rendered positions.
+        const finalNode = positionsWithOffsets.find(p => p.id === ds.nodeId);
+        if (finalNode) {
+          if (ds.nodeId.startsWith("note-")) {
+            setNotePosition(ds.nodeId.replace("note-", ""), finalNode.x, finalNode.y);
+          } else if (ds.nodeId.startsWith("cat-")) {
+            setCategoryPosition(ds.nodeId.replace("cat-", ""), finalNode.x, finalNode.y);
+          }
         }
-        // clear override so persisted value takes over
-        setDragOverride(prev => { const n = { ...prev }; delete n[ds.nodeId]; return n; });
+        setDragDelta(null);
       }
       dragState.current = null;
     };
@@ -357,7 +361,8 @@ const GraphView = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [cancelLongPress, dragOverride, setNoteOffset, setCategoryOffset]);
+  }, [cancelLongPress, positionsWithOffsets, setNotePosition, setCategoryPosition]);
+
 
   // Click handling with double-click detection
   const handleNodeClick = useCallback((nodeId: string, clientX: number, clientY: number) => {
