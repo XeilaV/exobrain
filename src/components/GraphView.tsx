@@ -524,14 +524,12 @@ const GraphView = () => {
               onPointerDown={e => {
                 e.stopPropagation();
                 didDrag.current = false;
-                const cur = effectiveOffsets[node.id] || { dx: 0, dy: 0 };
                 dragState.current = {
                   nodeId: node.id,
                   startX: e.clientX,
                   startY: e.clientY,
-                  baseDx: cur.dx,
-                  baseDy: cur.dy,
                 };
+              }}
                 startLongPress(node.id, e.clientX, e.clientY);
               }}
               onPointerUp={cancelLongPress}
