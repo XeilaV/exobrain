@@ -63,8 +63,8 @@ const dbToNote = (row: any): Note => ({
   checklist: (row.checklist as ChecklistItem[]) ?? [],
   noteType: (row.note_type as NoteType) ?? "text",
   isCollapsed: row.is_collapsed ?? true,
-  posDx: Number(row.pos_dx ?? 0),
-  posDy: Number(row.pos_dy ?? 0),
+  posX: row.pos_dx == null ? null : Number(row.pos_dx),
+  posY: row.pos_dy == null ? null : Number(row.pos_dy),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
