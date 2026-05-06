@@ -41,7 +41,7 @@ const GraphView = () => {
     notes, categories, addNote, addCategory, deleteNote, deleteCategory,
     updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
     setSelectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
-    setNoteOffset, setCategoryOffset,
+    setNotePosition, setCategoryPosition,
   } = useNotes();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -63,16 +63,17 @@ const GraphView = () => {
   const didDrag = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Drag offsets per node id — derived from persisted notes/categories
-  const offsets = useMemo(() => {
-    const o: Record<string, { dx: number; dy: number }> = {};
-    notes.forEach(n => { if (n.posDx || n.posDy) o[`note-${n.id}`] = { dx: n.posDx, dy: n.posDy }; });
-    categories.forEach(c => { if (c.posDx || c.posDy) o[`cat-${c.id}`] = { dx: c.posDx, dy: c.posDy }; });
-    return o;
+  // Absolute persisted positions per node id (null if user never moved it)
+  const persistedPos = useMemo(() => {
+    const p: Record<string, { x: number; y: number }> = {};
+    notes.forEach(n => { if (n.posX != null && n.posY != null) p[`note-${n.id}`] = { x: n.posX, y: n.posY }; });
+    categories.forEach(c => { if (c.posX != null && c.posY != null) p[`cat-${c.id}`] = { x: c.posX, y: c.posY }; });
+    return p;
   }, [notes, categories]);
-  const [dragOverride, setDragOverride] = useState<Record<string, { dx: number; dy: number }>>({});
-  const effectiveOffsets = useMemo(() => ({ ...offsets, ...dragOverride }), [offsets, dragOverride]);
-  const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(null);
+  // Live drag delta (only while user is actively dragging)
+  const [dragDelta, setDragDelta] = useState<{ nodeId: string; dx: number; dy: number } | null>(null);
+  const dragState = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
+
 
   // Hidden category filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
@@ -256,35 +257,40 @@ const GraphView = () => {
     return { positions: pos, edges: eds, parentMap: parent };
   }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
 
-  // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
-  // node moves its whole subtree along with it.
+  // Apply persisted absolute positions + live drag delta (propagates to descendants).
   const positionsWithOffsets = useMemo(() => {
-    const accumulated: Record<string, { dx: number; dy: number }> = {};
-    const compute = (id: string): { dx: number; dy: number } => {
-      if (accumulated[id]) return accumulated[id];
-      const own = effectiveOffsets[id] || { dx: 0, dy: 0 };
-      const parentId = parentMap[id];
-      if (!parentId) {
-        accumulated[id] = own;
-        return own;
+    // First pass: resolve base position per node (persisted absolute or auto layout).
+    const base: Record<string, { x: number; y: number }> = {};
+    positions.forEach(p => {
+      const pp = persistedPos[p.id];
+      base[p.id] = pp ? { x: pp.x, y: pp.y } : { x: p.x, y: p.y };
+    });
+
+    // Second pass: if dragging, add delta to dragged node and all its descendants.
+    const deltaFor = (id: string): { dx: number; dy: number } => {
+      if (!dragDelta) return { dx: 0, dy: 0 };
+      // walk up the parent chain; if dragged node is an ancestor (or self), apply delta
+      let cur: string | undefined = id;
+      while (cur) {
+        if (cur === dragDelta.nodeId) return { dx: dragDelta.dx, dy: dragDelta.dy };
+        cur = parentMap[cur];
       }
-      const par = compute(parentId);
-      const total = { dx: own.dx + par.dx, dy: own.dy + par.dy };
-      accumulated[id] = total;
-      return total;
+      return { dx: 0, dy: 0 };
     };
+
     return positions.map(p => {
-      const off = compute(p.id);
+      const b = base[p.id];
+      const d = deltaFor(p.id);
       const r = p.type === "root" ? ROOT_R : p.id === "hub" ? 6 : p.type === "category" ? CAT_R : NOTE_R;
       const minX = r + EDGE_MARGIN;
       const maxX = size.w - r - EDGE_MARGIN;
       const minY = r + EDGE_MARGIN;
       const maxY = size.h - r - EDGE_MARGIN;
-      const nx = Math.min(maxX, Math.max(minX, p.x + off.dx));
-      const ny = Math.min(maxY, Math.max(minY, p.y + off.dy));
+      const nx = Math.min(maxX, Math.max(minX, b.x + d.dx));
+      const ny = Math.min(maxY, Math.max(minY, b.y + d.dy));
       return nx !== p.x || ny !== p.y ? { ...p, x: nx, y: ny } : p;
     });
-  }, [positions, effectiveOffsets, parentMap, size.w, size.h]);
+  }, [positions, persistedPos, dragDelta, parentMap, size.w, size.h]);
 
 
   const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
@@ -330,23 +336,22 @@ const GraphView = () => {
         cancelLongPress();
       }
       if (didDrag.current) {
-        setDragOverride(prev => ({
-          ...prev,
-          [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
-        }));
+        setDragDelta({ nodeId: ds.nodeId, dx, dy });
       }
     };
     const onUp = () => {
       const ds = dragState.current;
       if (ds && didDrag.current) {
-        const finalOff = (dragOverride[ds.nodeId]) || { dx: ds.baseDx, dy: ds.baseDy };
-        if (ds.nodeId.startsWith("note-")) {
-          setNoteOffset(ds.nodeId.replace("note-", ""), finalOff.dx, finalOff.dy);
-        } else if (ds.nodeId.startsWith("cat-")) {
-          setCategoryOffset(ds.nodeId.replace("cat-", ""), finalOff.dx, finalOff.dy);
+        // Compute final absolute position of the dragged node from current rendered positions.
+        const finalNode = positionsWithOffsets.find(p => p.id === ds.nodeId);
+        if (finalNode) {
+          if (ds.nodeId.startsWith("note-")) {
+            setNotePosition(ds.nodeId.replace("note-", ""), finalNode.x, finalNode.y);
+          } else if (ds.nodeId.startsWith("cat-")) {
+            setCategoryPosition(ds.nodeId.replace("cat-", ""), finalNode.x, finalNode.y);
+          }
         }
-        // clear override so persisted value takes over
-        setDragOverride(prev => { const n = { ...prev }; delete n[ds.nodeId]; return n; });
+        setDragDelta(null);
       }
       dragState.current = null;
     };
@@ -356,7 +361,8 @@ const GraphView = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [cancelLongPress, dragOverride, setNoteOffset, setCategoryOffset]);
+  }, [cancelLongPress, positionsWithOffsets, setNotePosition, setCategoryPosition]);
+
 
   // Click handling with double-click detection
   const handleNodeClick = useCallback((nodeId: string, clientX: number, clientY: number) => {
@@ -518,13 +524,10 @@ const GraphView = () => {
               onPointerDown={e => {
                 e.stopPropagation();
                 didDrag.current = false;
-                const cur = effectiveOffsets[node.id] || { dx: 0, dy: 0 };
                 dragState.current = {
                   nodeId: node.id,
                   startX: e.clientX,
                   startY: e.clientY,
-                  baseDx: cur.dx,
-                  baseDy: cur.dy,
                 };
                 startLongPress(node.id, e.clientX, e.clientY);
               }}

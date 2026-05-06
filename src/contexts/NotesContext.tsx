@@ -27,8 +27,8 @@ interface NotesContextType {
   toggleCategoryCollapsed: (categoryId: string) => void;
   linkNotes: (noteIdA: string, noteIdB: string) => void;
   unlinkNotes: (noteIdA: string, noteIdB: string) => void;
-  setNoteOffset: (noteId: string, dx: number, dy: number) => void;
-  setCategoryOffset: (categoryId: string, dx: number, dy: number) => void;
+  setNotePosition: (noteId: string, x: number | null, y: number | null) => void;
+  setCategoryPosition: (categoryId: string, x: number | null, y: number | null) => void;
   filteredNotes: Note[];
   selectedNote: Note | undefined;
   createNoteFromChat: (title: string, content: string, categoryId?: string) => Note;
@@ -63,8 +63,8 @@ const dbToNote = (row: any): Note => ({
   checklist: (row.checklist as ChecklistItem[]) ?? [],
   noteType: (row.note_type as NoteType) ?? "text",
   isCollapsed: row.is_collapsed ?? true,
-  posDx: Number(row.pos_dx ?? 0),
-  posDy: Number(row.pos_dy ?? 0),
+  posX: row.pos_dx == null ? null : Number(row.pos_dx),
+  posY: row.pos_dy == null ? null : Number(row.pos_dy),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -76,8 +76,8 @@ const dbToCategory = (row: any): Category => ({
   color: row.color,
   parentId: null,
   isCollapsed: row.is_collapsed ?? true,
-  posDx: Number(row.pos_dx ?? 0),
-  posDy: Number(row.pos_dy ?? 0),
+  posX: row.pos_dx == null ? null : Number(row.pos_dx),
+  posY: row.pos_dy == null ? null : Number(row.pos_dy),
 });
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -259,19 +259,19 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const offsetTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const setNoteOffset = useCallback((noteId: string, dx: number, dy: number) => {
-    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, posDx: dx, posDy: dy } : n));
+  const setNotePosition = useCallback((noteId: string, x: number | null, y: number | null) => {
+    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, posX: x, posY: y } : n));
     clearTimeout(offsetTimers.current[`n-${noteId}`]);
     offsetTimers.current[`n-${noteId}`] = setTimeout(() => {
-      supabase.from("notes").update({ pos_dx: dx, pos_dy: dy }).eq("id", noteId);
-    }, 400);
+      supabase.from("notes").update({ pos_dx: x as any, pos_dy: y as any }).eq("id", noteId);
+    }, 300);
   }, []);
-  const setCategoryOffset = useCallback((categoryId: string, dx: number, dy: number) => {
-    setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, posDx: dx, posDy: dy } : c));
+  const setCategoryPosition = useCallback((categoryId: string, x: number | null, y: number | null) => {
+    setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, posX: x, posY: y } : c));
     clearTimeout(offsetTimers.current[`c-${categoryId}`]);
     offsetTimers.current[`c-${categoryId}`] = setTimeout(() => {
-      supabase.from("categories").update({ pos_dx: dx, pos_dy: dy }).eq("id", categoryId);
-    }, 400);
+      supabase.from("categories").update({ pos_dx: x as any, pos_dy: y as any }).eq("id", categoryId);
+    }, 300);
   }, []);
 
   const linkNotes = useCallback((noteIdA: string, noteIdB: string) => {
@@ -316,7 +316,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const note: Note = {
       id: crypto.randomUUID(), title, content, categoryId: catId,
       parentNoteId: null, linkedNoteIds: [], checklist: [],
-      noteType: "text", isCollapsed: true, posDx: 0, posDy: 0,
+      noteType: "text", isCollapsed: true, posX: null, posY: null,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
     return note;
@@ -354,7 +354,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addNote, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
       addChecklistItem, toggleChecklistItem, deleteChecklistItem,
       toggleNoteCollapsed, toggleCategoryCollapsed,
-      linkNotes, unlinkNotes, setNoteOffset, setCategoryOffset,
+      linkNotes, unlinkNotes, setNotePosition, setCategoryPosition,
       filteredNotes, selectedNote, createNoteFromChat,
       getChildNotes, getLinkedNotes, getParentNote,
       getSubcategories, getRootCategories, getCategoryPath,

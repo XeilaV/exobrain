@@ -22,8 +22,8 @@ export type Database = {
           id: string
           is_collapsed: boolean
           name: string
-          pos_dx: number
-          pos_dy: number
+          pos_dx: number | null
+          pos_dy: number | null
           user_id: string
         }
         Insert: {
@@ -33,8 +33,8 @@ export type Database = {
           id?: string
           is_collapsed?: boolean
           name: string
-          pos_dx?: number
-          pos_dy?: number
+          pos_dx?: number | null
+          pos_dy?: number | null
           user_id: string
         }
         Update: {
@@ -44,8 +44,8 @@ export type Database = {
           id?: string
           is_collapsed?: boolean
           name?: string
-          pos_dx?: number
-          pos_dy?: number
+          pos_dx?: number | null
+          pos_dy?: number | null
           user_id?: string
         }
         Relationships: []
@@ -102,8 +102,8 @@ export type Database = {
           linked_note_ids: string[]
           note_type: string
           parent_note_id: string | null
-          pos_dx: number
-          pos_dy: number
+          pos_dx: number | null
+          pos_dy: number | null
           title: string
           updated_at: string
           user_id: string
@@ -118,8 +118,8 @@ export type Database = {
           linked_note_ids?: string[]
           note_type?: string
           parent_note_id?: string | null
-          pos_dx?: number
-          pos_dy?: number
+          pos_dx?: number | null
+          pos_dy?: number | null
           title?: string
           updated_at?: string
           user_id: string
@@ -134,8 +134,8 @@ export type Database = {
           linked_note_ids?: string[]
           note_type?: string
           parent_note_id?: string | null
-          pos_dx?: number
-          pos_dy?: number
+          pos_dx?: number | null
+          pos_dy?: number | null
           title?: string
           updated_at?: string
           user_id?: string
