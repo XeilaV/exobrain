@@ -41,7 +41,7 @@ const GraphView = () => {
     notes, categories, addNote, addCategory, deleteNote, deleteCategory,
     updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
     setSelectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
-    setNoteOffset, setCategoryOffset,
+    setNotePosition, setCategoryPosition,
   } = useNotes();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -63,16 +63,17 @@ const GraphView = () => {
   const didDrag = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Drag offsets per node id — derived from persisted notes/categories
-  const offsets = useMemo(() => {
-    const o: Record<string, { dx: number; dy: number }> = {};
-    notes.forEach(n => { if (n.posDx || n.posDy) o[`note-${n.id}`] = { dx: n.posDx, dy: n.posDy }; });
-    categories.forEach(c => { if (c.posDx || c.posDy) o[`cat-${c.id}`] = { dx: c.posDx, dy: c.posDy }; });
-    return o;
+  // Absolute persisted positions per node id (null if user never moved it)
+  const persistedPos = useMemo(() => {
+    const p: Record<string, { x: number; y: number }> = {};
+    notes.forEach(n => { if (n.posX != null && n.posY != null) p[`note-${n.id}`] = { x: n.posX, y: n.posY }; });
+    categories.forEach(c => { if (c.posX != null && c.posY != null) p[`cat-${c.id}`] = { x: c.posX, y: c.posY }; });
+    return p;
   }, [notes, categories]);
-  const [dragOverride, setDragOverride] = useState<Record<string, { dx: number; dy: number }>>({});
-  const effectiveOffsets = useMemo(() => ({ ...offsets, ...dragOverride }), [offsets, dragOverride]);
-  const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(null);
+  // Live drag delta (only while user is actively dragging)
+  const [dragDelta, setDragDelta] = useState<{ nodeId: string; dx: number; dy: number } | null>(null);
+  const dragState = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
+
 
   // Hidden category filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
