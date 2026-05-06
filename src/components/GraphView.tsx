@@ -529,7 +529,6 @@ const GraphView = () => {
                   startX: e.clientX,
                   startY: e.clientY,
                 };
-              }}
                 startLongPress(node.id, e.clientX, e.clientY);
               }}
               onPointerUp={cancelLongPress}
