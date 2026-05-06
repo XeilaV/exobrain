@@ -27,8 +27,8 @@ interface NotesContextType {
   toggleCategoryCollapsed: (categoryId: string) => void;
   linkNotes: (noteIdA: string, noteIdB: string) => void;
   unlinkNotes: (noteIdA: string, noteIdB: string) => void;
-  setNoteOffset: (noteId: string, dx: number, dy: number) => void;
-  setCategoryOffset: (categoryId: string, dx: number, dy: number) => void;
+  setNotePosition: (noteId: string, x: number | null, y: number | null) => void;
+  setCategoryPosition: (categoryId: string, x: number | null, y: number | null) => void;
   filteredNotes: Note[];
   selectedNote: Note | undefined;
   createNoteFromChat: (title: string, content: string, categoryId?: string) => Note;
