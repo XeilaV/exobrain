@@ -76,8 +76,8 @@ const dbToCategory = (row: any): Category => ({
   color: row.color,
   parentId: null,
   isCollapsed: row.is_collapsed ?? true,
-  posDx: Number(row.pos_dx ?? 0),
-  posDy: Number(row.pos_dy ?? 0),
+  posX: row.pos_dx == null ? null : Number(row.pos_dx),
+  posY: row.pos_dy == null ? null : Number(row.pos_dy),
 });
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
