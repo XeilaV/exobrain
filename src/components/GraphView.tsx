@@ -342,15 +342,24 @@ const GraphView = () => {
     const onUp = () => {
       const ds = dragState.current;
       if (ds && didDrag.current) {
-        // Compute final absolute position of the dragged node from current rendered positions.
-        const finalNode = positionsWithOffsets.find(p => p.id === ds.nodeId);
-        if (finalNode) {
-          if (ds.nodeId.startsWith("note-")) {
-            setNotePosition(ds.nodeId.replace("note-", ""), finalNode.x, finalNode.y);
-          } else if (ds.nodeId.startsWith("cat-")) {
-            setCategoryPosition(ds.nodeId.replace("cat-", ""), finalNode.x, finalNode.y);
+        // Persist the dragged node AND every descendant, so the whole moved
+        // subtree keeps its exact on-screen position after reload.
+        const isDescendantOf = (id: string, ancestor: string): boolean => {
+          let cur: string | undefined = id;
+          while (cur) {
+            if (cur === ancestor) return true;
+            cur = parentMap[cur];
           }
-        }
+          return false;
+        };
+        positionsWithOffsets.forEach(p => {
+          if (!isDescendantOf(p.id, ds.nodeId)) return;
+          if (p.id.startsWith("note-")) {
+            setNotePosition(p.id.replace("note-", ""), p.x, p.y);
+          } else if (p.id.startsWith("cat-")) {
+            setCategoryPosition(p.id.replace("cat-", ""), p.x, p.y);
+          }
+        });
         setDragDelta(null);
       }
       dragState.current = null;
