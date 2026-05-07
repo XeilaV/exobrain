@@ -326,14 +326,19 @@ const GraphView = () => {
 
   // Refs so window listeners (mounted ONCE) always read fresh values
   // without re-subscribing on every drag tick.
-  const positionsRef = useRef(positionsWithOffsets);
+  const positionsRef = useRef(positions);
+  const persistedPosRef = useRef(persistedPos);
   const parentMapRef = useRef(parentMap);
   const setNotePosRef = useRef(setNotePosition);
   const setCatPosRef = useRef(setCategoryPosition);
-  useEffect(() => { positionsRef.current = positionsWithOffsets; }, [positionsWithOffsets]);
+  const sizeRef = useRef(size);
+  const lastDeltaRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  useEffect(() => { positionsRef.current = positions; }, [positions]);
+  useEffect(() => { persistedPosRef.current = persistedPos; }, [persistedPos]);
   useEffect(() => { parentMapRef.current = parentMap; }, [parentMap]);
   useEffect(() => { setNotePosRef.current = setNotePosition; }, [setNotePosition]);
   useEffect(() => { setCatPosRef.current = setCategoryPosition; }, [setCategoryPosition]);
+  useEffect(() => { sizeRef.current = size; }, [size]);
 
   // Drag pointer handlers (window-level) — mounted ONCE so they survive every
   // drag tick. Previously they were torn down on every pointermove (because
