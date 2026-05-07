@@ -370,7 +370,7 @@ const GraphView = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [cancelLongPress, positionsWithOffsets, setNotePosition, setCategoryPosition]);
+  }, [cancelLongPress, positionsWithOffsets, parentMap, setNotePosition, setCategoryPosition]);
 
 
   // Click handling with double-click detection
