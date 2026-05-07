@@ -324,7 +324,21 @@ const GraphView = () => {
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   }, []);
 
-  // Drag pointer handlers (window-level)
+  // Refs so window listeners (mounted ONCE) always read fresh values
+  // without re-subscribing on every drag tick.
+  const positionsRef = useRef(positionsWithOffsets);
+  const parentMapRef = useRef(parentMap);
+  const setNotePosRef = useRef(setNotePosition);
+  const setCatPosRef = useRef(setCategoryPosition);
+  useEffect(() => { positionsRef.current = positionsWithOffsets; }, [positionsWithOffsets]);
+  useEffect(() => { parentMapRef.current = parentMap; }, [parentMap]);
+  useEffect(() => { setNotePosRef.current = setNotePosition; }, [setNotePosition]);
+  useEffect(() => { setCatPosRef.current = setCategoryPosition; }, [setCategoryPosition]);
+
+  // Drag pointer handlers (window-level) — mounted ONCE so they survive every
+  // drag tick. Previously they were torn down on every pointermove (because
+  // positionsWithOffsets was a dependency), which caused pointerup to be lost
+  // and positions to never reach the database.
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       const ds = dragState.current;
@@ -333,7 +347,7 @@ const GraphView = () => {
       const dy = e.clientY - ds.startY;
       if (!didDrag.current && Math.hypot(dx, dy) > 5) {
         didDrag.current = true;
-        cancelLongPress();
+        if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
       }
       if (didDrag.current) {
         setDragDelta({ nodeId: ds.nodeId, dx, dy });
@@ -342,22 +356,21 @@ const GraphView = () => {
     const onUp = () => {
       const ds = dragState.current;
       if (ds && didDrag.current) {
-        // Persist the dragged node AND every descendant, so the whole moved
-        // subtree keeps its exact on-screen position after reload.
+        const pmap = parentMapRef.current;
         const isDescendantOf = (id: string, ancestor: string): boolean => {
           let cur: string | undefined = id;
           while (cur) {
             if (cur === ancestor) return true;
-            cur = parentMap[cur];
+            cur = pmap[cur];
           }
           return false;
         };
-        positionsWithOffsets.forEach(p => {
+        positionsRef.current.forEach(p => {
           if (!isDescendantOf(p.id, ds.nodeId)) return;
           if (p.id.startsWith("note-")) {
-            setNotePosition(p.id.replace("note-", ""), p.x, p.y);
+            setNotePosRef.current(p.id.replace("note-", ""), p.x, p.y);
           } else if (p.id.startsWith("cat-")) {
-            setCategoryPosition(p.id.replace("cat-", ""), p.x, p.y);
+            setCatPosRef.current(p.id.replace("cat-", ""), p.x, p.y);
           }
         });
         setDragDelta(null);
@@ -366,11 +379,17 @@ const GraphView = () => {
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchend", onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchend", onUp);
     };
-  }, [cancelLongPress, positionsWithOffsets, parentMap, setNotePosition, setCategoryPosition]);
+  }, []);
 
 
   // Click handling with double-click detection
