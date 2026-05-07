@@ -326,14 +326,19 @@ const GraphView = () => {
 
   // Refs so window listeners (mounted ONCE) always read fresh values
   // without re-subscribing on every drag tick.
-  const positionsRef = useRef(positionsWithOffsets);
+  const positionsRef = useRef(positions);
+  const persistedPosRef = useRef(persistedPos);
   const parentMapRef = useRef(parentMap);
   const setNotePosRef = useRef(setNotePosition);
   const setCatPosRef = useRef(setCategoryPosition);
-  useEffect(() => { positionsRef.current = positionsWithOffsets; }, [positionsWithOffsets]);
+  const sizeRef = useRef(size);
+  const lastDeltaRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  useEffect(() => { positionsRef.current = positions; }, [positions]);
+  useEffect(() => { persistedPosRef.current = persistedPos; }, [persistedPos]);
   useEffect(() => { parentMapRef.current = parentMap; }, [parentMap]);
   useEffect(() => { setNotePosRef.current = setNotePosition; }, [setNotePosition]);
   useEffect(() => { setCatPosRef.current = setCategoryPosition; }, [setCategoryPosition]);
+  useEffect(() => { sizeRef.current = size; }, [size]);
 
   // Drag pointer handlers (window-level) — mounted ONCE so they survive every
   // drag tick. Previously they were torn down on every pointermove (because
@@ -350,6 +355,7 @@ const GraphView = () => {
         if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
       }
       if (didDrag.current) {
+        lastDeltaRef.current = { dx, dy };
         setDragDelta({ nodeId: ds.nodeId, dx, dy });
       }
     };
@@ -357,6 +363,10 @@ const GraphView = () => {
       const ds = dragState.current;
       if (ds && didDrag.current) {
         const pmap = parentMapRef.current;
+        const persisted = persistedPosRef.current;
+        const allPos = positionsRef.current;
+        const { dx, dy } = lastDeltaRef.current;
+        const sz = sizeRef.current;
         const isDescendantOf = (id: string, ancestor: string): boolean => {
           let cur: string | undefined = id;
           while (cur) {
@@ -365,15 +375,25 @@ const GraphView = () => {
           }
           return false;
         };
-        positionsRef.current.forEach(p => {
+        allPos.forEach(p => {
           if (!isDescendantOf(p.id, ds.nodeId)) return;
+          if (p.id === "root" || p.id === "hub") return;
+          const base = persisted[p.id] ?? { x: p.x, y: p.y };
+          const r = p.type === "category" ? CAT_R : NOTE_R;
+          const minX = r + EDGE_MARGIN;
+          const maxX = sz.w - r - EDGE_MARGIN;
+          const minY = r + EDGE_MARGIN;
+          const maxY = sz.h - r - EDGE_MARGIN;
+          const nx = Math.min(maxX, Math.max(minX, base.x + dx));
+          const ny = Math.min(maxY, Math.max(minY, base.y + dy));
           if (p.id.startsWith("note-")) {
-            setNotePosRef.current(p.id.replace("note-", ""), p.x, p.y);
+            setNotePosRef.current(p.id.replace("note-", ""), nx, ny);
           } else if (p.id.startsWith("cat-")) {
-            setCatPosRef.current(p.id.replace("cat-", ""), p.x, p.y);
+            setCatPosRef.current(p.id.replace("cat-", ""), nx, ny);
           }
         });
         setDragDelta(null);
+        lastDeltaRef.current = { dx: 0, dy: 0 };
       }
       dragState.current = null;
     };
