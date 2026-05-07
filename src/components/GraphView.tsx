@@ -379,9 +379,15 @@ const GraphView = () => {
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchend", onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchend", onUp);
     };
   }, []);
 
