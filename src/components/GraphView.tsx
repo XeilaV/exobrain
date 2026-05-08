@@ -211,30 +211,14 @@ const GraphView = () => {
       catCursorX += subtreeWidth + 20;
     });
 
+    // NO scaling, NO vertical compression. Positions are kept exactly as computed
+    // (and overridden by persisted positions later in positionsWithOffsets).
     const totalW = catCursorX - 20;
-    // Fit horizontally: scale x coordinates so the tree fits the viewport with margin.
-    const margin = 40;
-    const available = Math.max(200, W - margin * 2);
-    const scale = totalW > available ? available / totalW : 1;
-    const scaledTotalW = totalW * scale;
-    const offsetX = (W - scaledTotalW) / 2;
-    pos.forEach(p => { p.x = p.x * scale + offsetX; });
-
-    // Fit vertically: compress upward levels so nothing overflows the top.
-    const topMargin = 30;
-    const minY = pos.length ? Math.min(...pos.map(p => p.y)) : hubY;
-    if (minY < topMargin) {
-      // anchor: hubY stays constant; scale distances above hub.
-      const range = hubY - minY;
-      const maxRange = hubY - topMargin;
-      const yScale = maxRange / range;
-      pos.forEach(p => {
-        if (p.y < hubY) p.y = hubY - (hubY - p.y) * yScale;
-      });
-    }
+    const offsetX = (W - totalW) / 2;
+    pos.forEach(p => { p.x = p.x + offsetX; });
 
     const rootCenterX = catCenters.length
-      ? ((catCenters[0] + catCenters[catCenters.length - 1]) / 2) * scale + offsetX
+      ? ((catCenters[0] + catCenters[catCenters.length - 1]) / 2) + offsetX
       : W / 2;
 
     // Hub node: the "centro" where branches diverge.
@@ -281,16 +265,11 @@ const GraphView = () => {
     return positions.map(p => {
       const b = base[p.id];
       const d = deltaFor(p.id);
-      const r = p.type === "root" ? ROOT_R : p.id === "hub" ? 6 : p.type === "category" ? CAT_R : NOTE_R;
-      const minX = r + EDGE_MARGIN;
-      const maxX = size.w - r - EDGE_MARGIN;
-      const minY = r + EDGE_MARGIN;
-      const maxY = size.h - r - EDGE_MARGIN;
-      const nx = Math.min(maxX, Math.max(minX, b.x + d.dx));
-      const ny = Math.min(maxY, Math.max(minY, b.y + d.dy));
+      const nx = b.x + d.dx;
+      const ny = b.y + d.dy;
       return nx !== p.x || ny !== p.y ? { ...p, x: nx, y: ny } : p;
     });
-  }, [positions, persistedPos, dragDelta, parentMap, size.w, size.h]);
+  }, [positions, persistedPos, dragDelta, parentMap]);
 
 
   const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
@@ -366,7 +345,6 @@ const GraphView = () => {
         const persisted = persistedPosRef.current;
         const allPos = positionsRef.current;
         const { dx, dy } = lastDeltaRef.current;
-        const sz = sizeRef.current;
         const isDescendantOf = (id: string, ancestor: string): boolean => {
           let cur: string | undefined = id;
           while (cur) {
@@ -375,23 +353,22 @@ const GraphView = () => {
           }
           return false;
         };
+        let saved = 0;
         allPos.forEach(p => {
           if (!isDescendantOf(p.id, ds.nodeId)) return;
           if (p.id === "root" || p.id === "hub") return;
           const base = persisted[p.id] ?? { x: p.x, y: p.y };
-          const r = p.type === "category" ? CAT_R : NOTE_R;
-          const minX = r + EDGE_MARGIN;
-          const maxX = sz.w - r - EDGE_MARGIN;
-          const minY = r + EDGE_MARGIN;
-          const maxY = sz.h - r - EDGE_MARGIN;
-          const nx = Math.min(maxX, Math.max(minX, base.x + dx));
-          const ny = Math.min(maxY, Math.max(minY, base.y + dy));
+          const nx = base.x + dx;
+          const ny = base.y + dy;
           if (p.id.startsWith("note-")) {
             setNotePosRef.current(p.id.replace("note-", ""), nx, ny);
+            saved++;
           } else if (p.id.startsWith("cat-")) {
             setCatPosRef.current(p.id.replace("cat-", ""), nx, ny);
+            saved++;
           }
         });
+        console.log("[drag] saved", saved, "nodes from", ds.nodeId, "delta", dx, dy);
         setDragDelta(null);
         lastDeltaRef.current = { dx: 0, dy: 0 };
       }
