@@ -345,7 +345,6 @@ const GraphView = () => {
         const persisted = persistedPosRef.current;
         const allPos = positionsRef.current;
         const { dx, dy } = lastDeltaRef.current;
-        const sz = sizeRef.current;
         const isDescendantOf = (id: string, ancestor: string): boolean => {
           let cur: string | undefined = id;
           while (cur) {
@@ -354,23 +353,22 @@ const GraphView = () => {
           }
           return false;
         };
+        let saved = 0;
         allPos.forEach(p => {
           if (!isDescendantOf(p.id, ds.nodeId)) return;
           if (p.id === "root" || p.id === "hub") return;
           const base = persisted[p.id] ?? { x: p.x, y: p.y };
-          const r = p.type === "category" ? CAT_R : NOTE_R;
-          const minX = r + EDGE_MARGIN;
-          const maxX = sz.w - r - EDGE_MARGIN;
-          const minY = r + EDGE_MARGIN;
-          const maxY = sz.h - r - EDGE_MARGIN;
-          const nx = Math.min(maxX, Math.max(minX, base.x + dx));
-          const ny = Math.min(maxY, Math.max(minY, base.y + dy));
+          const nx = base.x + dx;
+          const ny = base.y + dy;
           if (p.id.startsWith("note-")) {
             setNotePosRef.current(p.id.replace("note-", ""), nx, ny);
+            saved++;
           } else if (p.id.startsWith("cat-")) {
             setCatPosRef.current(p.id.replace("cat-", ""), nx, ny);
+            saved++;
           }
         });
+        console.log("[drag] saved", saved, "nodes from", ds.nodeId, "delta", dx, dy);
         setDragDelta(null);
         lastDeltaRef.current = { dx: 0, dy: 0 };
       }
