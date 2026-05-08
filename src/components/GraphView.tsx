@@ -265,16 +265,11 @@ const GraphView = () => {
     return positions.map(p => {
       const b = base[p.id];
       const d = deltaFor(p.id);
-      const r = p.type === "root" ? ROOT_R : p.id === "hub" ? 6 : p.type === "category" ? CAT_R : NOTE_R;
-      const minX = r + EDGE_MARGIN;
-      const maxX = size.w - r - EDGE_MARGIN;
-      const minY = r + EDGE_MARGIN;
-      const maxY = size.h - r - EDGE_MARGIN;
-      const nx = Math.min(maxX, Math.max(minX, b.x + d.dx));
-      const ny = Math.min(maxY, Math.max(minY, b.y + d.dy));
+      const nx = b.x + d.dx;
+      const ny = b.y + d.dy;
       return nx !== p.x || ny !== p.y ? { ...p, x: nx, y: ny } : p;
     });
-  }, [positions, persistedPos, dragDelta, parentMap, size.w, size.h]);
+  }, [positions, persistedPos, dragDelta, parentMap]);
 
 
   const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
