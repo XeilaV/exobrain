@@ -211,30 +211,14 @@ const GraphView = () => {
       catCursorX += subtreeWidth + 20;
     });
 
+    // NO scaling, NO vertical compression. Positions are kept exactly as computed
+    // (and overridden by persisted positions later in positionsWithOffsets).
     const totalW = catCursorX - 20;
-    // Fit horizontally: scale x coordinates so the tree fits the viewport with margin.
-    const margin = 40;
-    const available = Math.max(200, W - margin * 2);
-    const scale = totalW > available ? available / totalW : 1;
-    const scaledTotalW = totalW * scale;
-    const offsetX = (W - scaledTotalW) / 2;
-    pos.forEach(p => { p.x = p.x * scale + offsetX; });
-
-    // Fit vertically: compress upward levels so nothing overflows the top.
-    const topMargin = 30;
-    const minY = pos.length ? Math.min(...pos.map(p => p.y)) : hubY;
-    if (minY < topMargin) {
-      // anchor: hubY stays constant; scale distances above hub.
-      const range = hubY - minY;
-      const maxRange = hubY - topMargin;
-      const yScale = maxRange / range;
-      pos.forEach(p => {
-        if (p.y < hubY) p.y = hubY - (hubY - p.y) * yScale;
-      });
-    }
+    const offsetX = (W - totalW) / 2;
+    pos.forEach(p => { p.x = p.x + offsetX; });
 
     const rootCenterX = catCenters.length
-      ? ((catCenters[0] + catCenters[catCenters.length - 1]) / 2) * scale + offsetX
+      ? ((catCenters[0] + catCenters[catCenters.length - 1]) / 2) + offsetX
       : W / 2;
 
     // Hub node: the "centro" where branches diverge.
