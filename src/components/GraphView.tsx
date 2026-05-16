@@ -241,19 +241,31 @@ const GraphView = () => {
     return { positions: pos, edges: eds, parentMap: parent };
   }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
 
-  // Apply persisted absolute positions + live drag delta (propagates to descendants).
+  // Resolve absolute base position for every node (see comment above onUp).
+  const baseByIdRef = useRef<Record<string, { x: number; y: number }>>({});
   const positionsWithOffsets = useMemo(() => {
-    // First pass: resolve base position per node (persisted absolute or auto layout).
-    const base: Record<string, { x: number; y: number }> = {};
-    positions.forEach(p => {
-      const pp = persistedPos[p.id];
-      base[p.id] = pp ? { x: pp.x, y: pp.y } : { x: p.x, y: p.y };
-    });
+    const autoById: Record<string, { x: number; y: number }> = {};
+    positions.forEach(p => { autoById[p.id] = { x: p.x, y: p.y }; });
 
-    // Second pass: if dragging, add delta to dragged node and all its descendants.
+    const baseById: Record<string, { x: number; y: number }> = {};
+    const resolveBase = (id: string): { x: number; y: number } => {
+      if (baseById[id]) return baseById[id];
+      const auto = autoById[id] ?? { x: 0, y: 0 };
+      const pp = persistedPos[id];
+      if (pp) { baseById[id] = pp; return pp; }
+      const parentId = parentMap[id];
+      if (!parentId || !autoById[parentId]) { baseById[id] = auto; return auto; }
+      const pBase = resolveBase(parentId);
+      const pAuto = autoById[parentId];
+      const b = { x: pBase.x + (auto.x - pAuto.x), y: pBase.y + (auto.y - pAuto.y) };
+      baseById[id] = b;
+      return b;
+    };
+    positions.forEach(p => resolveBase(p.id));
+    baseByIdRef.current = baseById;
+
     const deltaFor = (id: string): { dx: number; dy: number } => {
       if (!dragDelta) return { dx: 0, dy: 0 };
-      // walk up the parent chain; if dragged node is an ancestor (or self), apply delta
       let cur: string | undefined = id;
       while (cur) {
         if (cur === dragDelta.nodeId) return { dx: dragDelta.dx, dy: dragDelta.dy };
@@ -263,11 +275,9 @@ const GraphView = () => {
     };
 
     return positions.map(p => {
-      const b = base[p.id];
+      const b = baseById[p.id];
       const d = deltaFor(p.id);
-      const nx = b.x + d.dx;
-      const ny = b.y + d.dy;
-      return nx !== p.x || ny !== p.y ? { ...p, x: nx, y: ny } : p;
+      return { ...p, x: b.x + d.dx, y: b.y + d.dy };
     });
   }, [positions, persistedPos, dragDelta, parentMap]);
 
@@ -344,6 +354,7 @@ const GraphView = () => {
         const pmap = parentMapRef.current;
         const persisted = persistedPosRef.current;
         const allPos = positionsRef.current;
+        const baseById = baseByIdRef.current;
         const { dx, dy } = lastDeltaRef.current;
         const isDescendantOf = (id: string, ancestor: string): boolean => {
           let cur: string | undefined = id;
@@ -353,22 +364,25 @@ const GraphView = () => {
           }
           return false;
         };
-        let saved = 0;
-        allPos.forEach(p => {
-          if (!isDescendantOf(p.id, ds.nodeId)) return;
-          if (p.id === "root" || p.id === "hub") return;
-          const base = persisted[p.id] ?? { x: p.x, y: p.y };
+        const saveOne = (id: string) => {
+          if (id === "root" || id === "hub") return;
+          const base = baseById[id] ?? { x: 0, y: 0 };
           const nx = base.x + dx;
           const ny = base.y + dy;
-          if (p.id.startsWith("note-")) {
-            setNotePosRef.current(p.id.replace("note-", ""), nx, ny);
-            saved++;
-          } else if (p.id.startsWith("cat-")) {
-            setCatPosRef.current(p.id.replace("cat-", ""), nx, ny);
-            saved++;
-          }
+          if (id.startsWith("note-")) setNotePosRef.current(id.replace("note-", ""), nx, ny);
+          else if (id.startsWith("cat-")) setCatPosRef.current(id.replace("cat-", ""), nx, ny);
+        };
+        // Always save the dragged node itself (anchors its descendants).
+        saveOne(ds.nodeId);
+        // Save descendants that already had their own persisted absolute position,
+        // so they keep their independent placement after the drag. Descendants
+        // without persisted positions will inherit from the new anchor.
+        allPos.forEach(p => {
+          if (p.id === ds.nodeId) return;
+          if (!isDescendantOf(p.id, ds.nodeId)) return;
+          if (!persisted[p.id]) return;
+          saveOne(p.id);
         });
-        console.log("[drag] saved", saved, "nodes from", ds.nodeId, "delta", dx, dy);
         setDragDelta(null);
         lastDeltaRef.current = { dx: 0, dy: 0 };
       }

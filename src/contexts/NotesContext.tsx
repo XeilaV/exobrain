@@ -258,20 +258,15 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }));
   }, []);
 
-  const offsetTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const setNotePosition = useCallback((noteId: string, x: number | null, y: number | null) => {
+  const setNotePosition = useCallback(async (noteId: string, x: number | null, y: number | null) => {
     setNotes(prev => prev.map(n => n.id === noteId ? { ...n, posX: x, posY: y } : n));
-    clearTimeout(offsetTimers.current[`n-${noteId}`]);
-    offsetTimers.current[`n-${noteId}`] = setTimeout(() => {
-      supabase.from("notes").update({ pos_dx: x as any, pos_dy: y as any }).eq("id", noteId);
-    }, 300);
+    const { error } = await supabase.from("notes").update({ pos_dx: x as any, pos_dy: y as any }).eq("id", noteId);
+    if (error) console.error("[setNotePosition] save failed", noteId, error);
   }, []);
-  const setCategoryPosition = useCallback((categoryId: string, x: number | null, y: number | null) => {
+  const setCategoryPosition = useCallback(async (categoryId: string, x: number | null, y: number | null) => {
     setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, posX: x, posY: y } : c));
-    clearTimeout(offsetTimers.current[`c-${categoryId}`]);
-    offsetTimers.current[`c-${categoryId}`] = setTimeout(() => {
-      supabase.from("categories").update({ pos_dx: x as any, pos_dy: y as any }).eq("id", categoryId);
-    }, 300);
+    const { error } = await supabase.from("categories").update({ pos_dx: x as any, pos_dy: y as any }).eq("id", categoryId);
+    if (error) console.error("[setCategoryPosition] save failed", categoryId, error);
   }, []);
 
   const linkNotes = useCallback((noteIdA: string, noteIdB: string) => {
