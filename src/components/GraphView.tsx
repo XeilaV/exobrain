@@ -354,6 +354,7 @@ const GraphView = () => {
         const pmap = parentMapRef.current;
         const persisted = persistedPosRef.current;
         const allPos = positionsRef.current;
+        const baseById = baseByIdRef.current;
         const { dx, dy } = lastDeltaRef.current;
         const isDescendantOf = (id: string, ancestor: string): boolean => {
           let cur: string | undefined = id;
@@ -363,22 +364,25 @@ const GraphView = () => {
           }
           return false;
         };
-        let saved = 0;
-        allPos.forEach(p => {
-          if (!isDescendantOf(p.id, ds.nodeId)) return;
-          if (p.id === "root" || p.id === "hub") return;
-          const base = persisted[p.id] ?? { x: p.x, y: p.y };
+        const saveOne = (id: string) => {
+          if (id === "root" || id === "hub") return;
+          const base = baseById[id] ?? { x: 0, y: 0 };
           const nx = base.x + dx;
           const ny = base.y + dy;
-          if (p.id.startsWith("note-")) {
-            setNotePosRef.current(p.id.replace("note-", ""), nx, ny);
-            saved++;
-          } else if (p.id.startsWith("cat-")) {
-            setCatPosRef.current(p.id.replace("cat-", ""), nx, ny);
-            saved++;
-          }
+          if (id.startsWith("note-")) setNotePosRef.current(id.replace("note-", ""), nx, ny);
+          else if (id.startsWith("cat-")) setCatPosRef.current(id.replace("cat-", ""), nx, ny);
+        };
+        // Always save the dragged node itself (anchors its descendants).
+        saveOne(ds.nodeId);
+        // Save descendants that already had their own persisted absolute position,
+        // so they keep their independent placement after the drag. Descendants
+        // without persisted positions will inherit from the new anchor.
+        allPos.forEach(p => {
+          if (p.id === ds.nodeId) return;
+          if (!isDescendantOf(p.id, ds.nodeId)) return;
+          if (!persisted[p.id]) return;
+          saveOne(p.id);
         });
-        console.log("[drag] saved", saved, "nodes from", ds.nodeId, "delta", dx, dy);
         setDragDelta(null);
         lastDeltaRef.current = { dx: 0, dy: 0 };
       }
