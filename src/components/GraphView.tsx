@@ -241,13 +241,8 @@ const GraphView = () => {
     return { positions: pos, edges: eds, parentMap: parent };
   }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
 
-  // Resolve absolute base position for every node.
-  // Rule: if the node has a persisted absolute position, use it.
-  //        Otherwise, take its nearest ancestor that DOES have a persisted position
-  //        and add the auto-layout offset (autoNode - autoAncestor) so it appears in
-  //        a sensible spot relative to that ancestor. If no ancestor is persisted,
-  //        fall back to the auto-layout position. This ensures that once you place
-  //        a node, none of its descendants get re-aligned by the auto-layout.
+  // Resolve absolute base position for every node (see comment above onUp).
+  const baseByIdRef = useRef<Record<string, { x: number; y: number }>>({});
   const positionsWithOffsets = useMemo(() => {
     const autoById: Record<string, { x: number; y: number }> = {};
     positions.forEach(p => { autoById[p.id] = { x: p.x, y: p.y }; });
@@ -267,6 +262,7 @@ const GraphView = () => {
       return b;
     };
     positions.forEach(p => resolveBase(p.id));
+    baseByIdRef.current = baseById;
 
     const deltaFor = (id: string): { dx: number; dy: number } => {
       if (!dragDelta) return { dx: 0, dy: 0 };
