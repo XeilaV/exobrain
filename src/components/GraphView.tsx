@@ -41,7 +41,7 @@ const GraphView = () => {
     notes, categories, addNote, addCategory, deleteNote, deleteCategory,
     updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
     setSelectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
-    setNotePosition, setCategoryPosition,
+    setNotePosition, setCategoryPosition, resetAllPositions,
   } = useNotes();
 
   const containerRef = useRef<HTMLDivElement>(null);
