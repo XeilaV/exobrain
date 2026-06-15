@@ -29,6 +29,7 @@ interface NotesContextType {
   unlinkNotes: (noteIdA: string, noteIdB: string) => void;
   setNotePosition: (noteId: string, x: number | null, y: number | null) => void;
   setCategoryPosition: (categoryId: string, x: number | null, y: number | null) => void;
+  resetAllPositions: () => Promise<void>;
   filteredNotes: Note[];
   selectedNote: Note | undefined;
   createNoteFromChat: (title: string, content: string, categoryId?: string) => Note;
@@ -269,6 +270,16 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (error) console.error("[setCategoryPosition] save failed", categoryId, error);
   }, []);
 
+  const resetAllPositions = useCallback(async () => {
+    if (!user) return;
+    setNotes(prev => prev.map(n => ({ ...n, posX: null, posY: null })));
+    setCategories(prev => prev.map(c => ({ ...c, posX: null, posY: null })));
+    await Promise.all([
+      supabase.from("notes").update({ pos_dx: null, pos_dy: null }).eq("user_id", user.id),
+      supabase.from("categories").update({ pos_dx: null, pos_dy: null }).eq("user_id", user.id),
+    ]);
+  }, [user]);
+
   const linkNotes = useCallback((noteIdA: string, noteIdB: string) => {
     if (noteIdA === noteIdB) return;
     setNotes(prev => {
@@ -349,7 +360,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addNote, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
       addChecklistItem, toggleChecklistItem, deleteChecklistItem,
       toggleNoteCollapsed, toggleCategoryCollapsed,
-      linkNotes, unlinkNotes, setNotePosition, setCategoryPosition,
+      linkNotes, unlinkNotes, setNotePosition, setCategoryPosition, resetAllPositions,
       filteredNotes, selectedNote, createNoteFromChat,
       getChildNotes, getLinkedNotes, getParentNote,
       getSubcategories, getRootCategories, getCategoryPath,

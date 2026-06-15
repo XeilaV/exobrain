@@ -1,41 +1,50 @@
-Entendido: el problema no es solo que “no guarde el drag”, es que el mapa sigue teniendo un layout automático que vuelve a mandar cuando recargas o despliegas. La solución tiene que hacer que tus posiciones manuales sean la única fuente de verdad después de que coloques algo.
+Voy a replantear el grafo para dejar de perseguir posiciones libres que se salen de pantalla y pasar a un modelo estable tipo árbol, como la imagen de referencia.
 
-Plan de implementación:
+## Objetivo
 
-1. Cambiar el modelo mental del grafo
-- El auto-layout solo se usará para dar una posición inicial a elementos que nunca tuvieron posición guardada.
-- En cuanto un elemento exista en pantalla, su posición absoluta se guardará y se reutilizará siempre.
-- Al recargar, no se recalculará la posición de notas/categorías que ya tengan posición.
+- Que el mapa siempre encaje dentro de la pantalla.
+- Que al abrir la app aparezca al menos el tronco/raíz y las notas madre/temas.
+- Que las ramas puedan abrirse y comprimirse.
+- Que al recargar se mantenga qué estaba abierto/cerrado.
+- Que se puedan seguir añadiendo temas, notas hijas y subnotas.
+- Que haya una posición clara de “volver al árbol ordenado” si el usuario mueve o descoloca elementos.
 
-2. Guardar también al desplegar
-- Cuando despliegas una categoría o nota y aparecen hijos que todavía no tienen posición, se les asignará una posición inicial cercana al padre.
-- Esa posición se guardará inmediatamente.
-- Después de eso, esos hijos ya no volverán a alinearse automáticamente al plegar/desplegar o recargar.
+## Plan de implementación
 
-3. No forzar abierto/cerrado por defecto
-- Revertiré el cambio que dejó todo desplegado porque eso no es lo que pediste.
-- El estado abierto/cerrado será exactamente el último que tú dejaste.
-- Nuevos temas/notas podrán empezar cerrados, pero una vez los abras o cierres, ese estado se conserva.
+1. **Rehacer el layout del árbol**
+   - Sustituir el cálculo actual que puede salirse de pantalla por un layout centrado y escalado dentro del viewport.
+   - Mantener la forma de árbol neuronal: raíz abajo, temas/madres sobre el tronco y ramas hacia arriba.
+   - Calcular automáticamente separación horizontal y vertical según el tamaño de pantalla y el número de elementos visibles.
 
-4. Quitar reposicionamientos invisibles
-- Eliminaré del render cualquier dependencia que haga que las posiciones cambien por tamaño de pantalla, número de nodos, apertura/cierre o recálculo del árbol.
-- Las coordenadas guardadas `pos_dx` / `pos_dy` se tratarán como coordenadas absolutas de pantalla del lienzo actual, no como offsets relativos al árbol automático.
+2. **Eliminar el comportamiento que intenta conservar coordenadas absolutas fuera de pantalla**
+   - Las posiciones manuales dejarán de forzar que el árbol se salga de la vista.
+   - Si hay posiciones antiguas guardadas que están fuera de pantalla, no dominarán el layout inicial.
+   - El árbol tendrá una distribución predecible y visible al recargar.
 
-5. Arreglar el guardado del arrastre de forma verificable
-- Al soltar un nodo, guardaré directamente la posición final exacta del nodo arrastrado y de los descendientes visibles que se movieron con él.
-- Quitaré el guardado con debounce para posiciones, o lo dejaré como guardado inmediato, para evitar que recargar rápido pierda el cambio.
-- Revisaré errores de red al guardar posiciones para no asumir que se guardó si el backend rechazó el cambio.
+3. **Estado abierto/cerrado persistente**
+   - Los temas/madres aparecerán visibles por defecto.
+   - Las notas hijas aparecerán solo si su madre/tema está desplegado.
+   - Al abrir o cerrar ramas, ese estado se guardará y se restaurará tras recargar.
 
-6. Prueba obligatoria antes de terminar
-- Probaré en el navegador: desplegar, mover varios elementos, recargar y comparar la posición antes/después.
-- Revisaré la base de datos para confirmar que las coordenadas dejan de estar vacías.
-- Repetiré en desktop y en viewport móvil.
+4. **Añadir un botón de “recentrar / ordenar árbol”**
+   - Añadir un control sencillo para volver al árbol ordenado y ajustado a pantalla.
+   - Esto servirá como posición segura a la que volver cuando el mapa quede descolocado.
 
-Archivos previstos:
-- `src/components/GraphView.tsx`: separar layout inicial de posiciones guardadas y eliminar realineación al desplegar/recargar.
-- `src/contexts/NotesContext.tsx`: guardar posiciones inmediatamente y conservar correctamente el estado abierto/cerrado.
+5. **Mantener creación de notas y ramas**
+   - El menú actual para añadir tema, nota, lista y nota hija se mantiene.
+   - Al crear una nota nueva, aparecerá dentro del árbol ordenado, cerca de su madre.
 
-Resultado esperado:
-- Si dejas el árbol dibujado de una forma, al recargar vuelve exactamente igual.
-- Si despliegas ramas, las colocas y recargas, siguen donde las dejaste.
-- Nada se autoalinea, autoabre, autocierra o se recoloca después de que tú lo hayas colocado.
+6. **Verificación manual**
+   - Probaré en la vista móvil actual:
+     - abrir ramas,
+     - añadir una nota hija,
+     - cerrar y abrir temas,
+     - recargar,
+     - comprobar que el árbol sigue visible y conserva el estado abierto/cerrado.
+
+## Detalles técnicos
+
+- Archivo principal: `src/components/GraphView.tsx`.
+- Archivo de estado/persistencia: `src/contexts/NotesContext.tsx`.
+- No cambiaré la interfaz a listas ni sidebars; seguirá siendo solo el grafo.
+- No usaré la imagen subida como asset directo; la usaré como referencia visual para la forma del árbol.

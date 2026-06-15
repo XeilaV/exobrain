@@ -41,7 +41,7 @@ const GraphView = () => {
     notes, categories, addNote, addCategory, deleteNote, deleteCategory,
     updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
     setSelectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
-    setNotePosition, setCategoryPosition,
+    setNotePosition, setCategoryPosition, resetAllPositions,
   } = useNotes();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -211,20 +211,11 @@ const GraphView = () => {
       catCursorX += subtreeWidth + 20;
     });
 
-    // NO scaling, NO vertical compression. Positions are kept exactly as computed
-    // (and overridden by persisted positions later in positionsWithOffsets).
-    const totalW = catCursorX - 20;
-    const offsetX = (W - totalW) / 2;
-    pos.forEach(p => { p.x = p.x + offsetX; });
-
-    const rootCenterX = catCenters.length
-      ? ((catCenters[0] + catCenters[catCenters.length - 1]) / 2) + offsetX
-      : W / 2;
-
-    // Hub node: the "centro" where branches diverge.
+    // Compute bounds of the auto layout (in tree coordinates, before centering).
+    const totalW = Math.max(SIBLING_GAP, catCursorX - 20);
     pos.push({
       id: "hub",
-      x: rootCenterX, y: hubY,
+      x: totalW / 2, y: hubY,
       type: "category", label: "", color: "30 8% 30%", depth: -1,
     });
     parent["hub"] = "root";
@@ -232,36 +223,63 @@ const GraphView = () => {
 
     pos.push({
       id: "root",
-      x: rootCenterX, y: rootY,
+      x: totalW / 2, y: rootY,
       type: "root", label: brainName || "ExoBrain",
       color: "30 8% 25%", depth: -1,
     });
     eds.push({ from: "root", to: "hub" });
 
     return { positions: pos, edges: eds, parentMap: parent };
-  }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
+  }, [notes, categories, visibleCategories, brainName]);
 
-  // Resolve absolute base position for every node (see comment above onUp).
+  // Fit the auto-layout into the viewport with margin, then apply per-node
+  // persisted offsets ON TOP (clamped so nothing escapes the screen).
   const baseByIdRef = useRef<Record<string, { x: number; y: number }>>({});
   const positionsWithOffsets = useMemo(() => {
-    const autoById: Record<string, { x: number; y: number }> = {};
-    positions.forEach(p => { autoById[p.id] = { x: p.x, y: p.y }; });
+    if (positions.length === 0) return [];
+    const W = size.w, H = size.h;
+    const MARGIN = 40;
+    const labelTop = 30;     // reserve for labels above category circles
+    const labelBottom = 40;  // reserve for root label
 
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    positions.forEach(p => {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    });
+    const treeW = Math.max(1, maxX - minX);
+    const treeH = Math.max(1, maxY - minY);
+    const availW = Math.max(100, W - MARGIN * 2);
+    const availH = Math.max(100, H - MARGIN * 2 - labelTop - labelBottom);
+    const scale = Math.min(1, availW / treeW, availH / treeH);
+
+    const scaledW = treeW * scale;
+    const scaledH = treeH * scale;
+    const tx = (W - scaledW) / 2 - minX * scale;
+    const ty = MARGIN + labelTop - minY * scale + Math.max(0, (availH - scaledH) / 2);
+
+    const autoScreen: Record<string, { x: number; y: number }> = {};
+    positions.forEach(p => {
+      autoScreen[p.id] = { x: p.x * scale + tx, y: p.y * scale + ty };
+    });
+
+    const clampX = (x: number) => Math.max(MARGIN, Math.min(W - MARGIN, x));
+    const clampY = (y: number) => Math.max(MARGIN + labelTop, Math.min(H - MARGIN - labelBottom, y));
+
+    // Use persisted absolute position ONLY if it still lands inside the viewport;
+    // otherwise fall back to the auto position so the tree is always visible.
     const baseById: Record<string, { x: number; y: number }> = {};
-    const resolveBase = (id: string): { x: number; y: number } => {
-      if (baseById[id]) return baseById[id];
-      const auto = autoById[id] ?? { x: 0, y: 0 };
-      const pp = persistedPos[id];
-      if (pp) { baseById[id] = pp; return pp; }
-      const parentId = parentMap[id];
-      if (!parentId || !autoById[parentId]) { baseById[id] = auto; return auto; }
-      const pBase = resolveBase(parentId);
-      const pAuto = autoById[parentId];
-      const b = { x: pBase.x + (auto.x - pAuto.x), y: pBase.y + (auto.y - pAuto.y) };
-      baseById[id] = b;
-      return b;
-    };
-    positions.forEach(p => resolveBase(p.id));
+    positions.forEach(p => {
+      const auto = autoScreen[p.id];
+      const pp = persistedPos[p.id];
+      if (pp && pp.x >= MARGIN && pp.x <= W - MARGIN && pp.y >= MARGIN && pp.y <= H - MARGIN) {
+        baseById[p.id] = { x: pp.x, y: pp.y };
+      } else {
+        baseById[p.id] = auto;
+      }
+    });
     baseByIdRef.current = baseById;
 
     const deltaFor = (id: string): { dx: number; dy: number } => {
@@ -277,9 +295,9 @@ const GraphView = () => {
     return positions.map(p => {
       const b = baseById[p.id];
       const d = deltaFor(p.id);
-      return { ...p, x: b.x + d.dx, y: b.y + d.dy };
+      return { ...p, x: clampX(b.x + d.dx), y: clampY(b.y + d.dy) };
     });
-  }, [positions, persistedPos, dragDelta, parentMap]);
+  }, [positions, persistedPos, dragDelta, parentMap, size.w, size.h]);
 
 
   const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
@@ -783,13 +801,25 @@ const GraphView = () => {
       {/* Top-right controls */}
       <div className="fixed top-3 right-3 z-30 flex gap-2">
         <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmDialog({
+              message: "¿Reordenar el árbol y centrarlo en pantalla?",
+              onConfirm: async () => { await resetAllPositions(); setConfirmDialog(null); toast.success("Árbol reordenado"); },
+            });
+          }}
+          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+          title="Recentrar árbol"
+        >
+          <span className="text-sm leading-none">🌳</span>
+        </button>
+        <button
           onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); setIsAddingCat(false); }}
           className={`p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all ${
             hiddenCategoryIds.size > 0 ? "text-primary" : "text-muted-foreground"
           }`}
           title="Filtrar temas"
         >
-          {/* eye icon via emoji to avoid extra import */}
           <span className="text-sm leading-none">{hiddenCategoryIds.size > 0 ? "🙈" : "👁"}</span>
         </button>
         <button
