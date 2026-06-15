@@ -801,13 +801,25 @@ const GraphView = () => {
       {/* Top-right controls */}
       <div className="fixed top-3 right-3 z-30 flex gap-2">
         <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmDialog({
+              message: "¿Reordenar el árbol y centrarlo en pantalla?",
+              onConfirm: async () => { await resetAllPositions(); setConfirmDialog(null); toast.success("Árbol reordenado"); },
+            });
+          }}
+          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+          title="Recentrar árbol"
+        >
+          <span className="text-sm leading-none">🌳</span>
+        </button>
+        <button
           onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); setIsAddingCat(false); }}
           className={`p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all ${
             hiddenCategoryIds.size > 0 ? "text-primary" : "text-muted-foreground"
           }`}
           title="Filtrar temas"
         >
-          {/* eye icon via emoji to avoid extra import */}
           <span className="text-sm leading-none">{hiddenCategoryIds.size > 0 ? "🙈" : "👁"}</span>
         </button>
         <button
