@@ -29,6 +29,7 @@ interface NotesContextType {
   unlinkNotes: (noteIdA: string, noteIdB: string) => void;
   setNotePosition: (noteId: string, x: number | null, y: number | null) => void;
   setCategoryPosition: (categoryId: string, x: number | null, y: number | null) => void;
+  resetAllPositions: () => Promise<void>;
   filteredNotes: Note[];
   selectedNote: Note | undefined;
   createNoteFromChat: (title: string, content: string, categoryId?: string) => Note;
