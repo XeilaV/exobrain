@@ -270,6 +270,16 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (error) console.error("[setCategoryPosition] save failed", categoryId, error);
   }, []);
 
+  const resetAllPositions = useCallback(async () => {
+    if (!user) return;
+    setNotes(prev => prev.map(n => ({ ...n, posX: null, posY: null })));
+    setCategories(prev => prev.map(c => ({ ...c, posX: null, posY: null })));
+    await Promise.all([
+      supabase.from("notes").update({ pos_dx: null, pos_dy: null }).eq("user_id", user.id),
+      supabase.from("categories").update({ pos_dx: null, pos_dy: null }).eq("user_id", user.id),
+    ]);
+  }, [user]);
+
   const linkNotes = useCallback((noteIdA: string, noteIdB: string) => {
     if (noteIdA === noteIdB) return;
     setNotes(prev => {
