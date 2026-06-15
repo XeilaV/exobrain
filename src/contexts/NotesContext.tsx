@@ -360,7 +360,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addNote, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
       addChecklistItem, toggleChecklistItem, deleteChecklistItem,
       toggleNoteCollapsed, toggleCategoryCollapsed,
-      linkNotes, unlinkNotes, setNotePosition, setCategoryPosition,
+      linkNotes, unlinkNotes, setNotePosition, setCategoryPosition, resetAllPositions,
       filteredNotes, selectedNote, createNoteFromChat,
       getChildNotes, getLinkedNotes, getParentNote,
       getSubcategories, getRootCategories, getCategoryPath,
