@@ -1,0 +1,1 @@
+UPDATE public.categories SET is_collapsed = true; UPDATE public.notes SET is_collapsed = true;
