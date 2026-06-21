@@ -45,6 +45,9 @@ const GraphView = () => {
     setSelectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
   } = useNotes();
 
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 1200, h: 800 });
   const [openPostIt, setOpenPostIt] = useState<{ noteId: string; x: number; y: number } | null>(null);
