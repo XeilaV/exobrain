@@ -101,6 +101,14 @@ const GraphView = () => {
 
     if (categories.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
+    // Vertical stagger for siblings to avoid label overlap, larger on mobile.
+    const STAGGER = W < 640 ? 20 : 12;
+    // 3-step staggering pattern (0, -1, +1) cycles through siblings.
+    const staggerOffset = (i: number) => {
+      const m = i % 3;
+      return m === 0 ? 0 : m === 1 ? -STAGGER : STAGGER;
+    };
+
     // Recursive note tree builder. Tree grows UPWARD (smaller y).
     const buildNoteSubtree = (
       note: Note, color: string, depth: number, currentX: number, y: number,
@@ -126,9 +134,10 @@ const GraphView = () => {
 
       let childX = currentX;
       const childCenters: number[] = [];
-      const childY = y - LEVEL_GAP;
-      children.forEach(child => {
-        const r = buildNoteSubtree(child, color, depth + 1, childX, childY);
+      const baseChildY = y - LEVEL_GAP;
+      children.forEach((child, i) => {
+        const cy = baseChildY + staggerOffset(i);
+        const r = buildNoteSubtree(child, color, depth + 1, childX, cy);
         childCenters.push(r.centerX);
         childX += r.width;
         parent[`note-${child.id}`] = `note-${note.id}`;
@@ -172,8 +181,9 @@ const GraphView = () => {
       if (catExpanded) {
         let noteCursorX = catCursorX;
         const noteCenters: number[] = [];
-        rootNotes.forEach(rn => {
-          const r = buildNoteSubtree(rn, cat.color, 0, noteCursorX, noteStartY);
+        rootNotes.forEach((rn, i) => {
+          const ry = noteStartY + staggerOffset(i);
+          const r = buildNoteSubtree(rn, cat.color, 0, noteCursorX, ry);
           noteCenters.push(r.centerX);
           noteCursorX += r.width;
           parent[`note-${rn.id}`] = `cat-${cat.id}`;
