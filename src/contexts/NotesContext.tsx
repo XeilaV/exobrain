@@ -29,7 +29,6 @@ interface NotesContextType {
   unlinkNotes: (noteIdA: string, noteIdB: string) => void;
   setNotePosition: (noteId: string, x: number | null, y: number | null) => void;
   setCategoryPosition: (categoryId: string, x: number | null, y: number | null) => void;
-  resetAllPositions: () => Promise<void>;
   filteredNotes: Note[];
   selectedNote: Note | undefined;
   createNoteFromChat: (title: string, content: string, categoryId?: string) => Note;
@@ -259,26 +258,21 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }));
   }, []);
 
-  const setNotePosition = useCallback(async (noteId: string, x: number | null, y: number | null) => {
+  const offsetTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const setNotePosition = useCallback((noteId: string, x: number | null, y: number | null) => {
     setNotes(prev => prev.map(n => n.id === noteId ? { ...n, posX: x, posY: y } : n));
-    const { error } = await supabase.from("notes").update({ pos_dx: x as any, pos_dy: y as any }).eq("id", noteId);
-    if (error) console.error("[setNotePosition] save failed", noteId, error);
+    clearTimeout(offsetTimers.current[`n-${noteId}`]);
+    offsetTimers.current[`n-${noteId}`] = setTimeout(() => {
+      supabase.from("notes").update({ pos_dx: x as any, pos_dy: y as any }).eq("id", noteId);
+    }, 300);
   }, []);
-  const setCategoryPosition = useCallback(async (categoryId: string, x: number | null, y: number | null) => {
+  const setCategoryPosition = useCallback((categoryId: string, x: number | null, y: number | null) => {
     setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, posX: x, posY: y } : c));
-    const { error } = await supabase.from("categories").update({ pos_dx: x as any, pos_dy: y as any }).eq("id", categoryId);
-    if (error) console.error("[setCategoryPosition] save failed", categoryId, error);
+    clearTimeout(offsetTimers.current[`c-${categoryId}`]);
+    offsetTimers.current[`c-${categoryId}`] = setTimeout(() => {
+      supabase.from("categories").update({ pos_dx: x as any, pos_dy: y as any }).eq("id", categoryId);
+    }, 300);
   }, []);
-
-  const resetAllPositions = useCallback(async () => {
-    if (!user) return;
-    setNotes(prev => prev.map(n => ({ ...n, posX: null, posY: null })));
-    setCategories(prev => prev.map(c => ({ ...c, posX: null, posY: null })));
-    await Promise.all([
-      supabase.from("notes").update({ pos_dx: null, pos_dy: null }).eq("user_id", user.id),
-      supabase.from("categories").update({ pos_dx: null, pos_dy: null }).eq("user_id", user.id),
-    ]);
-  }, [user]);
 
   const linkNotes = useCallback((noteIdA: string, noteIdB: string) => {
     if (noteIdA === noteIdB) return;
@@ -360,7 +354,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addNote, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
       addChecklistItem, toggleChecklistItem, deleteChecklistItem,
       toggleNoteCollapsed, toggleCategoryCollapsed,
-      linkNotes, unlinkNotes, setNotePosition, setCategoryPosition, resetAllPositions,
+      linkNotes, unlinkNotes, setNotePosition, setCategoryPosition,
       filteredNotes, selectedNote, createNoteFromChat,
       getChildNotes, getLinkedNotes, getParentNote,
       getSubcategories, getRootCategories, getCategoryPath,

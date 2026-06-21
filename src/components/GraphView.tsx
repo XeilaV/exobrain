@@ -41,7 +41,7 @@ const GraphView = () => {
     notes, categories, addNote, addCategory, deleteNote, deleteCategory,
     updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
     setSelectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
-    setNotePosition, setCategoryPosition, resetAllPositions,
+    setNotePosition, setCategoryPosition,
   } = useNotes();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -211,11 +211,36 @@ const GraphView = () => {
       catCursorX += subtreeWidth + 20;
     });
 
-    // Compute bounds of the auto layout (in tree coordinates, before centering).
-    const totalW = Math.max(SIBLING_GAP, catCursorX - 20);
+    const totalW = catCursorX - 20;
+    // Fit horizontally: scale x coordinates so the tree fits the viewport with margin.
+    const margin = 40;
+    const available = Math.max(200, W - margin * 2);
+    const scale = totalW > available ? available / totalW : 1;
+    const scaledTotalW = totalW * scale;
+    const offsetX = (W - scaledTotalW) / 2;
+    pos.forEach(p => { p.x = p.x * scale + offsetX; });
+
+    // Fit vertically: compress upward levels so nothing overflows the top.
+    const topMargin = 30;
+    const minY = pos.length ? Math.min(...pos.map(p => p.y)) : hubY;
+    if (minY < topMargin) {
+      // anchor: hubY stays constant; scale distances above hub.
+      const range = hubY - minY;
+      const maxRange = hubY - topMargin;
+      const yScale = maxRange / range;
+      pos.forEach(p => {
+        if (p.y < hubY) p.y = hubY - (hubY - p.y) * yScale;
+      });
+    }
+
+    const rootCenterX = catCenters.length
+      ? ((catCenters[0] + catCenters[catCenters.length - 1]) / 2) * scale + offsetX
+      : W / 2;
+
+    // Hub node: the "centro" where branches diverge.
     pos.push({
       id: "hub",
-      x: totalW / 2, y: hubY,
+      x: rootCenterX, y: hubY,
       type: "category", label: "", color: "30 8% 30%", depth: -1,
     });
     parent["hub"] = "root";
@@ -223,67 +248,28 @@ const GraphView = () => {
 
     pos.push({
       id: "root",
-      x: totalW / 2, y: rootY,
+      x: rootCenterX, y: rootY,
       type: "root", label: brainName || "ExoBrain",
       color: "30 8% 25%", depth: -1,
     });
     eds.push({ from: "root", to: "hub" });
 
     return { positions: pos, edges: eds, parentMap: parent };
-  }, [notes, categories, visibleCategories, brainName]);
+  }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
 
-  // Fit the auto-layout into the viewport with margin, then apply per-node
-  // persisted offsets ON TOP (clamped so nothing escapes the screen).
-  const baseByIdRef = useRef<Record<string, { x: number; y: number }>>({});
+  // Apply persisted absolute positions + live drag delta (propagates to descendants).
   const positionsWithOffsets = useMemo(() => {
-    if (positions.length === 0) return [];
-    const W = size.w, H = size.h;
-    const MARGIN = 40;
-    const labelTop = 30;     // reserve for labels above category circles
-    const labelBottom = 40;  // reserve for root label
-
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    // First pass: resolve base position per node (persisted absolute or auto layout).
+    const base: Record<string, { x: number; y: number }> = {};
     positions.forEach(p => {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    });
-    const treeW = Math.max(1, maxX - minX);
-    const treeH = Math.max(1, maxY - minY);
-    const availW = Math.max(100, W - MARGIN * 2);
-    const availH = Math.max(100, H - MARGIN * 2 - labelTop - labelBottom);
-    const scale = Math.min(1, availW / treeW, availH / treeH);
-
-    const scaledW = treeW * scale;
-    const scaledH = treeH * scale;
-    const tx = (W - scaledW) / 2 - minX * scale;
-    const ty = MARGIN + labelTop - minY * scale + Math.max(0, (availH - scaledH) / 2);
-
-    const autoScreen: Record<string, { x: number; y: number }> = {};
-    positions.forEach(p => {
-      autoScreen[p.id] = { x: p.x * scale + tx, y: p.y * scale + ty };
-    });
-
-    const clampX = (x: number) => Math.max(MARGIN, Math.min(W - MARGIN, x));
-    const clampY = (y: number) => Math.max(MARGIN + labelTop, Math.min(H - MARGIN - labelBottom, y));
-
-    // Use persisted absolute position ONLY if it still lands inside the viewport;
-    // otherwise fall back to the auto position so the tree is always visible.
-    const baseById: Record<string, { x: number; y: number }> = {};
-    positions.forEach(p => {
-      const auto = autoScreen[p.id];
       const pp = persistedPos[p.id];
-      if (pp && pp.x >= MARGIN && pp.x <= W - MARGIN && pp.y >= MARGIN && pp.y <= H - MARGIN) {
-        baseById[p.id] = { x: pp.x, y: pp.y };
-      } else {
-        baseById[p.id] = auto;
-      }
+      base[p.id] = pp ? { x: pp.x, y: pp.y } : { x: p.x, y: p.y };
     });
-    baseByIdRef.current = baseById;
 
+    // Second pass: if dragging, add delta to dragged node and all its descendants.
     const deltaFor = (id: string): { dx: number; dy: number } => {
       if (!dragDelta) return { dx: 0, dy: 0 };
+      // walk up the parent chain; if dragged node is an ancestor (or self), apply delta
       let cur: string | undefined = id;
       while (cur) {
         if (cur === dragDelta.nodeId) return { dx: dragDelta.dx, dy: dragDelta.dy };
@@ -293,9 +279,16 @@ const GraphView = () => {
     };
 
     return positions.map(p => {
-      const b = baseById[p.id];
+      const b = base[p.id];
       const d = deltaFor(p.id);
-      return { ...p, x: clampX(b.x + d.dx), y: clampY(b.y + d.dy) };
+      const r = p.type === "root" ? ROOT_R : p.id === "hub" ? 6 : p.type === "category" ? CAT_R : NOTE_R;
+      const minX = r + EDGE_MARGIN;
+      const maxX = size.w - r - EDGE_MARGIN;
+      const minY = r + EDGE_MARGIN;
+      const maxY = size.h - r - EDGE_MARGIN;
+      const nx = Math.min(maxX, Math.max(minX, b.x + d.dx));
+      const ny = Math.min(maxY, Math.max(minY, b.y + d.dy));
+      return nx !== p.x || ny !== p.y ? { ...p, x: nx, y: ny } : p;
     });
   }, [positions, persistedPos, dragDelta, parentMap, size.w, size.h]);
 
@@ -333,19 +326,14 @@ const GraphView = () => {
 
   // Refs so window listeners (mounted ONCE) always read fresh values
   // without re-subscribing on every drag tick.
-  const positionsRef = useRef(positions);
-  const persistedPosRef = useRef(persistedPos);
+  const positionsRef = useRef(positionsWithOffsets);
   const parentMapRef = useRef(parentMap);
   const setNotePosRef = useRef(setNotePosition);
   const setCatPosRef = useRef(setCategoryPosition);
-  const sizeRef = useRef(size);
-  const lastDeltaRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
-  useEffect(() => { positionsRef.current = positions; }, [positions]);
-  useEffect(() => { persistedPosRef.current = persistedPos; }, [persistedPos]);
+  useEffect(() => { positionsRef.current = positionsWithOffsets; }, [positionsWithOffsets]);
   useEffect(() => { parentMapRef.current = parentMap; }, [parentMap]);
   useEffect(() => { setNotePosRef.current = setNotePosition; }, [setNotePosition]);
   useEffect(() => { setCatPosRef.current = setCategoryPosition; }, [setCategoryPosition]);
-  useEffect(() => { sizeRef.current = size; }, [size]);
 
   // Drag pointer handlers (window-level) — mounted ONCE so they survive every
   // drag tick. Previously they were torn down on every pointermove (because
@@ -362,7 +350,6 @@ const GraphView = () => {
         if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
       }
       if (didDrag.current) {
-        lastDeltaRef.current = { dx, dy };
         setDragDelta({ nodeId: ds.nodeId, dx, dy });
       }
     };
@@ -370,10 +357,6 @@ const GraphView = () => {
       const ds = dragState.current;
       if (ds && didDrag.current) {
         const pmap = parentMapRef.current;
-        const persisted = persistedPosRef.current;
-        const allPos = positionsRef.current;
-        const baseById = baseByIdRef.current;
-        const { dx, dy } = lastDeltaRef.current;
         const isDescendantOf = (id: string, ancestor: string): boolean => {
           let cur: string | undefined = id;
           while (cur) {
@@ -382,27 +365,15 @@ const GraphView = () => {
           }
           return false;
         };
-        const saveOne = (id: string) => {
-          if (id === "root" || id === "hub") return;
-          const base = baseById[id] ?? { x: 0, y: 0 };
-          const nx = base.x + dx;
-          const ny = base.y + dy;
-          if (id.startsWith("note-")) setNotePosRef.current(id.replace("note-", ""), nx, ny);
-          else if (id.startsWith("cat-")) setCatPosRef.current(id.replace("cat-", ""), nx, ny);
-        };
-        // Always save the dragged node itself (anchors its descendants).
-        saveOne(ds.nodeId);
-        // Save descendants that already had their own persisted absolute position,
-        // so they keep their independent placement after the drag. Descendants
-        // without persisted positions will inherit from the new anchor.
-        allPos.forEach(p => {
-          if (p.id === ds.nodeId) return;
+        positionsRef.current.forEach(p => {
           if (!isDescendantOf(p.id, ds.nodeId)) return;
-          if (!persisted[p.id]) return;
-          saveOne(p.id);
+          if (p.id.startsWith("note-")) {
+            setNotePosRef.current(p.id.replace("note-", ""), p.x, p.y);
+          } else if (p.id.startsWith("cat-")) {
+            setCatPosRef.current(p.id.replace("cat-", ""), p.x, p.y);
+          }
         });
         setDragDelta(null);
-        lastDeltaRef.current = { dx: 0, dy: 0 };
       }
       dragState.current = null;
     };
@@ -801,25 +772,13 @@ const GraphView = () => {
       {/* Top-right controls */}
       <div className="fixed top-3 right-3 z-30 flex gap-2">
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmDialog({
-              message: "¿Reordenar el árbol y centrarlo en pantalla?",
-              onConfirm: async () => { await resetAllPositions(); setConfirmDialog(null); toast.success("Árbol reordenado"); },
-            });
-          }}
-          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
-          title="Recentrar árbol"
-        >
-          <span className="text-sm leading-none">🌳</span>
-        </button>
-        <button
           onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); setIsAddingCat(false); }}
           className={`p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all ${
             hiddenCategoryIds.size > 0 ? "text-primary" : "text-muted-foreground"
           }`}
           title="Filtrar temas"
         >
+          {/* eye icon via emoji to avoid extra import */}
           <span className="text-sm leading-none">{hiddenCategoryIds.size > 0 ? "🙈" : "👁"}</span>
         </button>
         <button
