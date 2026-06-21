@@ -20,10 +20,7 @@ export type Database = {
           created_at: string
           icon: string
           id: string
-          is_collapsed: boolean
           name: string
-          pos_dx: number | null
-          pos_dy: number | null
           user_id: string
         }
         Insert: {
@@ -31,10 +28,7 @@ export type Database = {
           created_at?: string
           icon?: string
           id?: string
-          is_collapsed?: boolean
           name: string
-          pos_dx?: number | null
-          pos_dy?: number | null
           user_id: string
         }
         Update: {
@@ -42,10 +36,7 @@ export type Database = {
           created_at?: string
           icon?: string
           id?: string
-          is_collapsed?: boolean
           name?: string
-          pos_dx?: number | null
-          pos_dy?: number | null
           user_id?: string
         }
         Relationships: []
@@ -98,12 +89,9 @@ export type Database = {
           content: string
           created_at: string
           id: string
-          is_collapsed: boolean
           linked_note_ids: string[]
           note_type: string
           parent_note_id: string | null
-          pos_dx: number | null
-          pos_dy: number | null
           title: string
           updated_at: string
           user_id: string
@@ -114,12 +102,9 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
-          is_collapsed?: boolean
           linked_note_ids?: string[]
           note_type?: string
           parent_note_id?: string | null
-          pos_dx?: number | null
-          pos_dy?: number | null
           title?: string
           updated_at?: string
           user_id: string
@@ -130,12 +115,9 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
-          is_collapsed?: boolean
           linked_note_ids?: string[]
           note_type?: string
           parent_note_id?: string | null
-          pos_dx?: number | null
-          pos_dy?: number | null
           title?: string
           updated_at?: string
           user_id?: string
@@ -160,29 +142,23 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
-          brain_name: string
           created_at: string
           display_name: string | null
           id: string
-          onboarded: boolean
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
-          brain_name?: string
           created_at?: string
           display_name?: string | null
           id: string
-          onboarded?: boolean
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
-          brain_name?: string
           created_at?: string
           display_name?: string | null
           id?: string
-          onboarded?: boolean
           updated_at?: string
         }
         Relationships: []

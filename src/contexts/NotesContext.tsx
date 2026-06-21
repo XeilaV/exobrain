@@ -17,18 +17,14 @@ interface NotesContextType {
   addNote: (categoryId: string, parentNoteId?: string | null, noteType?: NoteType) => Promise<Note | null>;
   updateNote: (id: string, updates: Partial<Note>) => void;
   deleteNote: (id: string) => void;
-  addCategory: (name: string, icon: string, color?: string, parentId?: string | null) => void;
-  updateCategory: (id: string, updates: Partial<Pick<Category, "name" | "icon" | "color">>) => void;
+  addCategory: (name: string, icon: string, parentId?: string | null) => void;
+  updateCategory: (id: string, updates: Partial<Pick<Category, "name" | "icon">>) => void;
   deleteCategory: (id: string) => void;
   addChecklistItem: (noteId: string, text: string) => void;
   toggleChecklistItem: (noteId: string, itemId: string) => void;
   deleteChecklistItem: (noteId: string, itemId: string) => void;
-  toggleNoteCollapsed: (noteId: string) => void;
-  toggleCategoryCollapsed: (categoryId: string) => void;
   linkNotes: (noteIdA: string, noteIdB: string) => void;
   unlinkNotes: (noteIdA: string, noteIdB: string) => void;
-  setNotePosition: (noteId: string, x: number | null, y: number | null) => void;
-  setCategoryPosition: (categoryId: string, x: number | null, y: number | null) => void;
   filteredNotes: Note[];
   selectedNote: Note | undefined;
   createNoteFromChat: (title: string, content: string, categoryId?: string) => Note;
@@ -38,10 +34,6 @@ interface NotesContextType {
   getSubcategories: (categoryId: string) => Category[];
   getRootCategories: () => Category[];
   getCategoryPath: (categoryId: string) => Category[];
-  brainName: string;
-  setBrainName: (name: string) => void;
-  onboarded: boolean;
-  setOnboarded: (v: boolean) => void;
 }
 
 const NotesContext = createContext<NotesContextType | null>(null);
@@ -62,9 +54,6 @@ const dbToNote = (row: any): Note => ({
   linkedNoteIds: row.linked_note_ids ?? [],
   checklist: (row.checklist as ChecklistItem[]) ?? [],
   noteType: (row.note_type as NoteType) ?? "text",
-  isCollapsed: row.is_collapsed ?? true,
-  posX: row.pos_dx == null ? null : Number(row.pos_dx),
-  posY: row.pos_dy == null ? null : Number(row.pos_dy),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -75,9 +64,6 @@ const dbToCategory = (row: any): Category => ({
   icon: row.icon,
   color: row.color,
   parentId: null,
-  isCollapsed: row.is_collapsed ?? true,
-  posX: row.pos_dx == null ? null : Number(row.pos_dx),
-  posY: row.pos_dy == null ? null : Number(row.pos_dy),
 });
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -88,42 +74,22 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<"notes" | "graph">("graph");
   const [loading, setLoading] = useState(true);
-  const [brainName, setBrainNameState] = useState<string>("ExoBrain");
-  const [onboarded, setOnboardedState] = useState<boolean>(true);
 
   // Load data from DB
   useEffect(() => {
     if (!user) { setNotes([]); setCategories([]); setLoading(false); return; }
     setLoading(true);
     const load = async () => {
-      const [catsRes, notesRes, profileRes] = await Promise.all([
+      const [catsRes, notesRes] = await Promise.all([
         supabase.from("categories").select("*").order("created_at"),
         supabase.from("notes").select("*").order("created_at", { ascending: false }),
-        supabase.from("profiles").select("brain_name, onboarded").eq("id", user.id).maybeSingle(),
       ]);
       if (catsRes.data) setCategories(catsRes.data.map(dbToCategory));
       if (notesRes.data) setNotes(notesRes.data.map(dbToNote));
-      if (profileRes.data) {
-        setBrainNameState(profileRes.data.brain_name || "ExoBrain");
-        setOnboardedState(profileRes.data.onboarded ?? false);
-      }
       setLoading(false);
     };
     load();
   }, [user]);
-
-  const setBrainName = useCallback(async (name: string) => {
-    if (!user) return;
-    setBrainNameState(name);
-    await supabase.from("profiles").update({ brain_name: name }).eq("id", user.id);
-  }, [user]);
-
-  const setOnboarded = useCallback(async (v: boolean) => {
-    if (!user) return;
-    setOnboardedState(v);
-    await supabase.from("profiles").update({ onboarded: v }).eq("id", user.id);
-  }, [user]);
-
 
   // Debounced save for note updates
   const updateTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -187,20 +153,19 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await supabase.from("notes").delete().eq("id", id);
   }, [notes]);
 
-  const addCategory = useCallback(async (name: string, icon: string, color?: string, _parentId?: string | null) => {
+  const addCategory = useCallback(async (name: string, icon: string, _parentId?: string | null) => {
     if (!user) return;
     const { data, error } = await supabase.from("categories").insert({
-      user_id: user.id, name, icon, color: color ?? "14 65% 55%",
+      user_id: user.id, name, icon, color: "30 50% 50%",
     }).select().single();
     if (error) { toast.error("Error al crear categoría"); return; }
     setCategories(prev => [...prev, dbToCategory(data)]);
   }, [user]);
 
-  const updateCategory = useCallback(async (id: string, updates: Partial<Pick<Category, "name" | "icon" | "color">>) => {
+  const updateCategory = useCallback(async (id: string, updates: Partial<Pick<Category, "name" | "icon">>) => {
     setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
     await supabase.from("categories").update(updates).eq("id", id);
   }, []);
-
 
   const deleteCategory = useCallback(async (id: string) => {
     setCategories(prev => prev.filter(c => c.id !== id));
@@ -209,69 +174,31 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const addChecklistItem = useCallback((noteId: string, text: string) => {
-    let newChecklist: ChecklistItem[] = [];
     setNotes(prev => prev.map(n => {
       if (n.id !== noteId) return n;
-      newChecklist = [...n.checklist, { id: crypto.randomUUID(), text, completed: false }];
+      const newChecklist = [...n.checklist, { id: crypto.randomUUID(), text, completed: false }];
+      // Save to DB
+      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
       return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
     }));
-    supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId).then(({ error }) => {
-      if (error) toast.error("Error al guardar tarea");
-    });
   }, []);
 
   const toggleChecklistItem = useCallback((noteId: string, itemId: string) => {
-    let newChecklist: ChecklistItem[] = [];
     setNotes(prev => prev.map(n => {
       if (n.id !== noteId) return n;
-      newChecklist = n.checklist.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
+      const newChecklist = n.checklist.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
+      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
       return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
     }));
-    supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
   }, []);
 
   const deleteChecklistItem = useCallback((noteId: string, itemId: string) => {
-    let newChecklist: ChecklistItem[] = [];
     setNotes(prev => prev.map(n => {
       if (n.id !== noteId) return n;
-      newChecklist = n.checklist.filter(i => i.id !== itemId);
+      const newChecklist = n.checklist.filter(i => i.id !== itemId);
+      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
       return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
     }));
-    supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
-  }, []);
-
-  const toggleNoteCollapsed = useCallback((noteId: string) => {
-    setNotes(prev => prev.map(n => {
-      if (n.id !== noteId) return n;
-      const next = !n.isCollapsed;
-      supabase.from("notes").update({ is_collapsed: next }).eq("id", noteId);
-      return { ...n, isCollapsed: next };
-    }));
-  }, []);
-
-  const toggleCategoryCollapsed = useCallback((categoryId: string) => {
-    setCategories(prev => prev.map(c => {
-      if (c.id !== categoryId) return c;
-      const next = !c.isCollapsed;
-      supabase.from("categories").update({ is_collapsed: next }).eq("id", categoryId);
-      return { ...c, isCollapsed: next };
-    }));
-  }, []);
-
-  const offsetTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const setNotePosition = useCallback((noteId: string, x: number | null, y: number | null) => {
-    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, posX: x, posY: y } : n));
-    clearTimeout(offsetTimers.current[`n-${noteId}`]);
-    offsetTimers.current[`n-${noteId}`] = setTimeout(() => {
-      supabase.from("notes").update({ pos_dx: x as any, pos_dy: y as any }).eq("id", noteId);
-    }, 300);
-  }, []);
-  const setCategoryPosition = useCallback((categoryId: string, x: number | null, y: number | null) => {
-    setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, posX: x, posY: y } : c));
-    clearTimeout(offsetTimers.current[`c-${categoryId}`]);
-    offsetTimers.current[`c-${categoryId}`] = setTimeout(() => {
-      supabase.from("categories").update({ pos_dx: x as any, pos_dy: y as any }).eq("id", categoryId);
-    }, 300);
   }, []);
 
   const linkNotes = useCallback((noteIdA: string, noteIdB: string) => {
@@ -316,7 +243,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const note: Note = {
       id: crypto.randomUUID(), title, content, categoryId: catId,
       parentNoteId: null, linkedNoteIds: [], checklist: [],
-      noteType: "text", isCollapsed: true, posX: null, posY: null,
+      noteType: "text",
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
     return note;
@@ -353,12 +280,10 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setActiveView, setSelectedCategoryId, setSelectedNoteId,
       addNote, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
       addChecklistItem, toggleChecklistItem, deleteChecklistItem,
-      toggleNoteCollapsed, toggleCategoryCollapsed,
-      linkNotes, unlinkNotes, setNotePosition, setCategoryPosition,
+      linkNotes, unlinkNotes,
       filteredNotes, selectedNote, createNoteFromChat,
       getChildNotes, getLinkedNotes, getParentNote,
       getSubcategories, getRootCategories, getCategoryPath,
-      brainName, setBrainName, onboarded, setOnboarded,
     }}>
       {children}
     </NotesContext.Provider>
