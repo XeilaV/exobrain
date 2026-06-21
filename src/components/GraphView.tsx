@@ -1,13 +1,15 @@
 import { useNotes } from "@/contexts/NotesContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename } from "lucide-react";
+import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain } from "lucide-react";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
 import ColorPicker from "./ColorPicker";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 type NodeType = "root" | "category" | "note";
 
@@ -43,6 +45,9 @@ const GraphView = () => {
     setSelectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
   } = useNotes();
 
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 1200, h: 800 });
   const [openPostIt, setOpenPostIt] = useState<{ noteId: string; x: number; y: number } | null>(null);
@@ -730,6 +735,50 @@ const GraphView = () => {
 
       {/* Top-right controls */}
       <div className="fixed top-3 right-3 z-30 flex gap-2">
+        <div className="relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowProfileMenu(v => !v); setShowFilterPanel(false); setIsAddingCat(false); }}
+            className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+            title={user ? "Perfil" : "Iniciar sesión"}
+          >
+            <UserIcon size={16} />
+          </button>
+          {showProfileMenu && (
+            <div
+              className="absolute right-0 top-11 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[200px]"
+              onClick={e => e.stopPropagation()}
+            >
+              {user ? (
+                <>
+                  <div className="px-3 py-2 border-b border-border">
+                    <p className="text-[10px] font-body text-muted-foreground">Sesión</p>
+                    <p className="text-xs font-body text-foreground truncate">{user.email}</p>
+                  </div>
+                  <button
+                    onClick={() => { setShowBrainDialog(true); setShowProfileMenu(false); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <Brain size={12} />Renombrar tu brain
+                  </button>
+                  <button
+                    onClick={async () => { setShowProfileMenu(false); await signOut(); navigate("/auth"); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
+                  >
+                    <LogOut size={12} />Cerrar sesión
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => { setShowProfileMenu(false); navigate("/auth"); }}
+                  className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                >
+                  <LogIn size={12} />Iniciar sesión
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         <button
           onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); setIsAddingCat(false); }}
           className={`p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all ${
