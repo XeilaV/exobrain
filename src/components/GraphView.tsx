@@ -1,13 +1,15 @@
 import { useNotes } from "@/contexts/NotesContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename } from "lucide-react";
+import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain } from "lucide-react";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
 import ColorPicker from "./ColorPicker";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 type NodeType = "root" | "category" | "note";
 
