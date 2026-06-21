@@ -20,6 +20,7 @@ export type Database = {
           created_at: string
           icon: string
           id: string
+          is_collapsed: boolean
           name: string
           user_id: string
         }
@@ -28,6 +29,7 @@ export type Database = {
           created_at?: string
           icon?: string
           id?: string
+          is_collapsed?: boolean
           name: string
           user_id: string
         }
@@ -36,6 +38,7 @@ export type Database = {
           created_at?: string
           icon?: string
           id?: string
+          is_collapsed?: boolean
           name?: string
           user_id?: string
         }
@@ -89,6 +92,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          is_collapsed: boolean
           linked_note_ids: string[]
           note_type: string
           parent_note_id: string | null
@@ -102,6 +106,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          is_collapsed?: boolean
           linked_note_ids?: string[]
           note_type?: string
           parent_note_id?: string | null
@@ -115,6 +120,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          is_collapsed?: boolean
           linked_note_ids?: string[]
           note_type?: string
           parent_note_id?: string | null
@@ -142,23 +148,29 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          brain_name: string
           created_at: string
           display_name: string | null
           id: string
+          onboarded: boolean
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
+          brain_name?: string
           created_at?: string
           display_name?: string | null
           id: string
+          onboarded?: boolean
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
+          brain_name?: string
           created_at?: string
           display_name?: string | null
           id?: string
+          onboarded?: boolean
           updated_at?: string
         }
         Relationships: []

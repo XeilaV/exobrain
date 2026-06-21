@@ -15,6 +15,7 @@ export interface Note {
   linkedNoteIds: string[];
   checklist: ChecklistItem[];
   noteType: NoteType;
+  isCollapsed: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -25,6 +26,7 @@ export interface Category {
   icon: string;
   color: string;
   parentId: string | null;
+  isCollapsed: boolean;
 }
 
 export interface ChatMessage {
