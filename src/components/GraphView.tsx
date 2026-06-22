@@ -308,13 +308,16 @@ const GraphView = () => {
     const onMove = (e: PointerEvent) => {
       const ds = dragState.current;
       if (!ds) return;
-      const dx = e.clientX - ds.startX;
-      const dy = e.clientY - ds.startY;
-      if (!didDrag.current && Math.hypot(dx, dy) > 5) {
+      const rawDx = e.clientX - ds.startX;
+      const rawDy = e.clientY - ds.startY;
+      if (!didDrag.current && Math.hypot(rawDx, rawDy) > 5) {
         didDrag.current = true;
         cancelLongPress();
       }
       if (didDrag.current) {
+        const s = viewScaleRef.current || 1;
+        const dx = rawDx / s;
+        const dy = rawDy / s;
         setOffsets(prev => ({
           ...prev,
           [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
