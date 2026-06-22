@@ -419,6 +419,39 @@ const GraphView = () => {
     return out;
   }, [notes, positions]);
 
+  // Compute zoom-to-subtree transform when a node is focused.
+  const viewTransform = useMemo(() => {
+    if (!focusedNodeId) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
+    const subtree = new Set<string>();
+    const collect = (id: string) => {
+      if (subtree.has(id)) return;
+      subtree.add(id);
+      positionsWithOffsets.forEach(p => {
+        if (parentMap[p.id] === id) collect(p.id);
+      });
+    };
+    collect(focusedNodeId);
+    const pts = positionsWithOffsets.filter(p => subtree.has(p.id));
+    if (pts.length < 2) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
+    const pad = size.w < 640 ? 70 : 90;
+    const minX = Math.min(...pts.map(p => p.x)) - pad;
+    const maxX = Math.max(...pts.map(p => p.x)) + pad;
+    const minY = Math.min(...pts.map(p => p.y)) - pad;
+    const maxY = Math.max(...pts.map(p => p.y)) + pad;
+    const bw = Math.max(1, maxX - minX);
+    const bh = Math.max(1, maxY - minY);
+    const scale = Math.min(size.w / bw, size.h / bh, 2.6);
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const tx = size.w / 2 - cx * scale;
+    const ty = size.h / 2 - cy * scale;
+    return { transform: `translate(${tx}px, ${ty}px) scale(${scale})`, scale };
+  }, [focusedNodeId, positionsWithOffsets, parentMap, size.w, size.h]);
+
+  const viewScaleRef = useRef(1);
+  useEffect(() => { viewScaleRef.current = viewTransform.scale; }, [viewTransform.scale]);
+
+
   return (
     <div
       ref={containerRef}
