@@ -2,7 +2,7 @@ import { useNotes } from "@/contexts/NotesContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain } from "lucide-react";
+import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine } from "lucide-react";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
 import ColorPicker from "./ColorPicker";
@@ -61,6 +61,7 @@ const GraphView = () => {
   const [showBrainDialog, setShowBrainDialog] = useState(false);
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
@@ -96,172 +97,148 @@ const GraphView = () => {
     if (!loading && !onboarded) setShowBrainDialog(true);
   }, [loading, onboarded]);
 
-  // Build hierarchical tree positions + parent map (for drag propagation)
+  // Build radial tree positions + parent map (for drag propagation)
   const { positions, edges, parentMap } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
     const parent: Record<string, string> = {}; // childId -> parentId
     const W = size.w;
     const H = size.h;
+    const isMobile = W < 640;
 
     if (categories.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
-    // Vertical stagger for siblings to avoid label overlap, larger on mobile.
-    const STAGGER = W < 640 ? 20 : 12;
-    // 3-step staggering pattern (0, -1, +1) cycles through siblings.
-    const staggerOffset = (i: number) => {
-      const m = i % 3;
-      return m === 0 ? 0 : m === 1 ? -STAGGER : STAGGER;
+    // Radii per depth (distance from parent)
+    const radiusForDepth = (depth: number) => {
+      const base = depth === 0 ? 130 : depth === 1 ? 100 : depth === 2 ? 85 : 75;
+      return base * (isMobile ? 0.78 : 1);
     };
 
-    // Recursive note tree builder. Tree grows UPWARD (smaller y).
-    const buildNoteSubtree = (
-      note: Note, color: string, depth: number, currentX: number, y: number,
-    ): { width: number; centerX: number } => {
+    // Recursive note placement. `outwardAngle` is the direction (in radians,
+    // screen coords with y-down) from the parent to this note. The note's own
+    // children spread in a semicircle continuing outward along that angle.
+    const placeNoteSubtree = (
+      note: Note,
+      color: string,
+      parentX: number,
+      parentY: number,
+      outwardAngle: number,
+      depth: number,
+    ) => {
+      const R = radiusForDepth(depth);
+      const x = parentX + R * Math.cos(outwardAngle);
+      const y = parentY + R * Math.sin(outwardAngle);
+
       const children = notes.filter(n => n.parentNoteId === note.id);
       const expanded = !note.isCollapsed && children.length > 0;
 
-      if (!expanded) {
-        const w = SIBLING_GAP;
-        pos.push({
-          id: `note-${note.id}`,
-          x: currentX + w / 2, y,
-          type: "note", label: note.title, color,
-          categoryId: note.categoryId, noteId: note.id,
-          parentNoteId: note.parentNoteId,
-          noteType: note.noteType,
-          hasChildren: children.length > 0,
-          isCollapsed: true,
-          depth,
-        });
-        return { width: w, centerX: currentX + w / 2 };
-      }
-
-      let childX = currentX;
-      const childCenters: number[] = [];
-      const baseChildY = y - LEVEL_GAP;
-      children.forEach((child, i) => {
-        const cy = baseChildY + staggerOffset(i);
-        const r = buildNoteSubtree(child, color, depth + 1, childX, cy);
-        childCenters.push(r.centerX);
-        childX += r.width;
-        parent[`note-${child.id}`] = `note-${note.id}`;
-      });
-      const totalW = Math.max(SIBLING_GAP, childX - currentX);
-      const myCenter = childCenters.length
-        ? (childCenters[0] + childCenters[childCenters.length - 1]) / 2
-        : currentX + totalW / 2;
-
       pos.push({
         id: `note-${note.id}`,
-        x: myCenter, y,
+        x, y,
         type: "note", label: note.title, color,
         categoryId: note.categoryId, noteId: note.id,
         parentNoteId: note.parentNoteId,
         noteType: note.noteType,
-        hasChildren: true,
-        isCollapsed: false,
+        hasChildren: children.length > 0,
+        isCollapsed: !expanded,
         depth,
       });
-      children.forEach(child => eds.push({ from: `note-${note.id}`, to: `note-${child.id}` }));
-      return { width: totalW, centerX: myCenter };
+
+      if (!expanded) return;
+
+      const count = children.length;
+      // Spread grows with child count, capped at ~160°.
+      const spread = Math.min(Math.PI * 0.9, Math.PI * 0.35 + count * 0.18);
+      children.forEach((child, i) => {
+        const t = count === 1 ? 0 : (i / (count - 1)) - 0.5; // -0.5..0.5
+        const angle = outwardAngle + t * spread;
+        eds.push({ from: `note-${note.id}`, to: `note-${child.id}` });
+        parent[`note-${child.id}`] = `note-${note.id}`;
+        placeNoteSubtree(child, color, x, y, angle, depth + 1);
+      });
     };
 
-    // Layout INVERTED: root at bottom, hub above as the "trunk top".
-    const rootY = H - 70;
-    const hubY = rootY - 80;          // trunk length
-    const catY = hubY - LEVEL_GAP;
-    const noteStartY = catY - LEVEL_GAP;
+    // Hub at bottom-center; categories spread in a semicircle above hub.
+    const hubX = W / 2;
+    const hubY = H - (isMobile ? 90 : 110);
+    const rootY = H - (isMobile ? 36 : 44);
 
-    let catCursorX = 0;
-    const catCenters: number[] = [];
+    const catRadius = (isMobile ? 110 : 150);
+    const catCount = visibleCategories.length;
 
-    visibleCategories.forEach((cat) => {
+    visibleCategories.forEach((cat, i) => {
+      // Angle range: -PI (left) to 0 (right), passing through -PI/2 (up).
+      const t = catCount === 1 ? 0.5 : i / (catCount - 1);
+      const catAngle = -Math.PI + t * Math.PI;
+      const cx = hubX + catRadius * Math.cos(catAngle);
+      const cy = hubY + catRadius * Math.sin(catAngle);
+
       const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
       const catExpanded = !cat.isCollapsed && rootNotes.length > 0;
 
-      let subtreeWidth: number;
-      let catCenter: number;
-
-      if (catExpanded) {
-        let noteCursorX = catCursorX;
-        const noteCenters: number[] = [];
-        rootNotes.forEach((rn, i) => {
-          const ry = noteStartY + staggerOffset(i);
-          const r = buildNoteSubtree(rn, cat.color, 0, noteCursorX, ry);
-          noteCenters.push(r.centerX);
-          noteCursorX += r.width;
-          parent[`note-${rn.id}`] = `cat-${cat.id}`;
-        });
-        subtreeWidth = Math.max(SIBLING_GAP * 1.5, noteCursorX - catCursorX);
-        catCenter = noteCenters.length
-          ? (noteCenters[0] + noteCenters[noteCenters.length - 1]) / 2
-          : catCursorX + subtreeWidth / 2;
-        rootNotes.forEach(rn => eds.push({ from: `cat-${cat.id}`, to: `note-${rn.id}` }));
-      } else {
-        subtreeWidth = SIBLING_GAP * 1.5;
-        catCenter = catCursorX + subtreeWidth / 2;
-      }
-
       pos.push({
         id: `cat-${cat.id}`,
-        x: catCenter, y: catY,
+        x: cx, y: cy,
         type: "category", label: cat.name, color: cat.color,
         categoryId: cat.id, depth: 0,
         hasChildren: rootNotes.length > 0,
         isCollapsed: cat.isCollapsed,
       });
       parent[`cat-${cat.id}`] = "hub";
+      eds.push({ from: "hub", to: `cat-${cat.id}` });
 
-      catCenters.push(catCenter);
-      catCursorX += subtreeWidth + 20;
+      if (catExpanded) {
+        const rnCount = rootNotes.length;
+        const spread = Math.min(Math.PI * 0.95, Math.PI * 0.4 + rnCount * 0.18);
+        rootNotes.forEach((rn, i2) => {
+          const t2 = rnCount === 1 ? 0 : (i2 / (rnCount - 1)) - 0.5;
+          const angle = catAngle + t2 * spread;
+          eds.push({ from: `cat-${cat.id}`, to: `note-${rn.id}` });
+          parent[`note-${rn.id}`] = `cat-${cat.id}`;
+          placeNoteSubtree(rn, cat.color, cx, cy, angle, 0);
+        });
+      }
     });
 
-    const totalW = catCursorX - 20;
-    // Fit horizontally: scale x coordinates so the tree fits the viewport with margin.
-    const margin = 40;
-    const available = Math.max(200, W - margin * 2);
-    const scale = totalW > available ? available / totalW : 1;
-    const scaledTotalW = totalW * scale;
-    const offsetX = (W - scaledTotalW) / 2;
-    pos.forEach(p => { p.x = p.x * scale + offsetX; });
-
-    // Fit vertically: compress upward levels so nothing overflows the top.
-    const topMargin = 30;
-    const minY = pos.length ? Math.min(...pos.map(p => p.y)) : hubY;
-    if (minY < topMargin) {
-      // anchor: hubY stays constant; scale distances above hub.
-      const range = hubY - minY;
-      const maxRange = hubY - topMargin;
-      const yScale = maxRange / range;
-      pos.forEach(p => {
-        if (p.y < hubY) p.y = hubY - (hubY - p.y) * yScale;
-      });
-    }
-
-    const rootCenterX = catCenters.length
-      ? ((catCenters[0] + catCenters[catCenters.length - 1]) / 2) * scale + offsetX
-      : W / 2;
-
-    // Hub node: the "centro" where branches diverge.
+    // Hub node
     pos.push({
       id: "hub",
-      x: rootCenterX, y: hubY,
+      x: hubX, y: hubY,
       type: "category", label: "", color: "30 8% 30%", depth: -1,
     });
     parent["hub"] = "root";
-    visibleCategories.forEach(cat => eds.push({ from: "hub", to: `cat-${cat.id}` }));
 
     pos.push({
       id: "root",
-      x: rootCenterX, y: rootY,
+      x: hubX, y: rootY,
       type: "root", label: brainName || "ExoBrain",
       color: "30 8% 25%", depth: -1,
     });
     eds.push({ from: "root", to: "hub" });
 
+    // Fit-to-viewport: scale all positions around the hub so nothing overflows.
+    const topMargin = isMobile ? 50 : 60;
+    const sideMargin = isMobile ? 30 : 40;
+    const minX = Math.min(...pos.map(p => p.x));
+    const maxX = Math.max(...pos.map(p => p.x));
+    const minY = Math.min(...pos.map(p => p.y));
+
+    const upScale = (hubY - topMargin) / Math.max(1, hubY - minY);
+    const leftScale = (hubX - sideMargin) / Math.max(1, hubX - minX);
+    const rightScale = (W - hubX - sideMargin) / Math.max(1, maxX - hubX);
+    const scale = Math.min(1, upScale, leftScale, rightScale);
+
+    if (scale < 1) {
+      pos.forEach(p => {
+        if (p.id === "root") return; // keep trunk anchored at the bottom
+        p.x = hubX + (p.x - hubX) * scale;
+        p.y = hubY + (p.y - hubY) * scale;
+      });
+    }
+
     return { positions: pos, edges: eds, parentMap: parent };
   }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
+
 
   // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
   // node moves its whole subtree along with it.
@@ -331,13 +308,16 @@ const GraphView = () => {
     const onMove = (e: PointerEvent) => {
       const ds = dragState.current;
       if (!ds) return;
-      const dx = e.clientX - ds.startX;
-      const dy = e.clientY - ds.startY;
-      if (!didDrag.current && Math.hypot(dx, dy) > 5) {
+      const rawDx = e.clientX - ds.startX;
+      const rawDy = e.clientY - ds.startY;
+      if (!didDrag.current && Math.hypot(rawDx, rawDy) > 5) {
         didDrag.current = true;
         cancelLongPress();
       }
       if (didDrag.current) {
+        const s = viewScaleRef.current || 1;
+        const dx = rawDx / s;
+        const dy = rawDy / s;
         setOffsets(prev => ({
           ...prev,
           [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
@@ -365,12 +345,23 @@ const GraphView = () => {
       // Double click
       if (nodeId.startsWith("note-")) {
         const nId = nodeId.replace("note-", "");
+        const note = notes.find(n => n.id === nId);
         const hasChildren = notes.some(n => n.parentNoteId === nId);
-        if (hasChildren) toggleNoteCollapsed(nId);
+        if (hasChildren && note) {
+          const wasCollapsed = note.isCollapsed;
+          toggleNoteCollapsed(nId);
+          // If we are EXPANDING, zoom into this subtree. If collapsing, clear focus.
+          setFocusedNodeId(wasCollapsed ? nodeId : null);
+        }
       } else if (nodeId.startsWith("cat-")) {
         const cId = nodeId.replace("cat-", "");
+        const cat = categories.find(c => c.id === cId);
         const hasChildren = notes.some(n => n.categoryId === cId && !n.parentNoteId);
-        if (hasChildren) toggleCategoryCollapsed(cId);
+        if (hasChildren && cat) {
+          const wasCollapsed = cat.isCollapsed;
+          toggleCategoryCollapsed(cId);
+          setFocusedNodeId(wasCollapsed ? nodeId : null);
+        }
       } else if (nodeId === "root") {
         setShowBrainDialog(true);
       }
@@ -400,7 +391,7 @@ const GraphView = () => {
       }
       // categories: single click does nothing (use long-press menu)
     }, 240);
-  }, [contextMenu, notes, toggleNoteCollapsed, toggleCategoryCollapsed, linkingNoteId, linkNotes]);
+  }, [contextMenu, notes, categories, toggleNoteCollapsed, toggleCategoryCollapsed, linkingNoteId, linkNotes]);
 
   const handleAddCategory = () => {
     if (newCatName.trim()) {
@@ -431,6 +422,39 @@ const GraphView = () => {
     return out;
   }, [notes, positions]);
 
+  // Compute zoom-to-subtree transform when a node is focused.
+  const viewTransform = useMemo(() => {
+    if (!focusedNodeId) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
+    const subtree = new Set<string>();
+    const collect = (id: string) => {
+      if (subtree.has(id)) return;
+      subtree.add(id);
+      positionsWithOffsets.forEach(p => {
+        if (parentMap[p.id] === id) collect(p.id);
+      });
+    };
+    collect(focusedNodeId);
+    const pts = positionsWithOffsets.filter(p => subtree.has(p.id));
+    if (pts.length < 2) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
+    const pad = size.w < 640 ? 70 : 90;
+    const minX = Math.min(...pts.map(p => p.x)) - pad;
+    const maxX = Math.max(...pts.map(p => p.x)) + pad;
+    const minY = Math.min(...pts.map(p => p.y)) - pad;
+    const maxY = Math.max(...pts.map(p => p.y)) + pad;
+    const bw = Math.max(1, maxX - minX);
+    const bh = Math.max(1, maxY - minY);
+    const scale = Math.min(size.w / bw, size.h / bh, 2.6);
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const tx = size.w / 2 - cx * scale;
+    const ty = size.h / 2 - cy * scale;
+    return { transform: `translate(${tx}px, ${ty}px) scale(${scale})`, scale };
+  }, [focusedNodeId, positionsWithOffsets, parentMap, size.w, size.h]);
+
+  const viewScaleRef = useRef(1);
+  useEffect(() => { viewScaleRef.current = viewTransform.scale; }, [viewTransform.scale]);
+
+
   return (
     <div
       ref={containerRef}
@@ -449,6 +473,15 @@ const GraphView = () => {
         </div>
       )}
 
+      {/* Zoomable world: SVG branches + nodes */}
+      <div
+        className="absolute inset-0"
+        style={{
+          transform: viewTransform.transform,
+          transformOrigin: "0 0",
+          transition: "transform 450ms cubic-bezier(0.22, 1, 0.36, 1)",
+        }}
+      >
       {/* SVG branches */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
         {edges.map((edge, idx) => {
@@ -576,6 +609,7 @@ const GraphView = () => {
           );
         })}
       </AnimatePresence>
+      </div>
 
       {/* Context menu */}
       <AnimatePresence>
@@ -778,6 +812,17 @@ const GraphView = () => {
             </div>
           )}
         </div>
+
+        {focusedNodeId && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setFocusedNodeId(null); }}
+            className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-primary transition-all animate-in fade-in"
+            title="Ver árbol completo"
+          >
+            <TreePine size={16} />
+          </button>
+        )}
+
 
         <button
           onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); setIsAddingCat(false); }}

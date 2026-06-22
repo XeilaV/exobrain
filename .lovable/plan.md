@@ -1,30 +1,31 @@
-## Plan
 
-### 1. Distribución vertical escalonada de notas en mobile (anti-solape)
-En `src/components/GraphView.tsx`, dentro del cálculo de layout, aplicar un offset vertical alternado a los hermanos del mismo nivel (zig-zag pequeño) cuando el ancho de pantalla es reducido:
-- Para cada grupo de hermanos, alternar la `y` base con `±STAGGER` (≈18–24px) según el índice (par/impar), o usar un patrón de 3 alturas.
-- Mantener clamp al viewport y propagación de drag a descendientes ya existentes.
-- Aplicar el escalonado tanto en categorías como en notas hijas, con magnitud menor en desktop (o sólo si `window.innerWidth < 640`).
+## Cambios en `src/components/GraphView.tsx`
 
-### 2. Hijas cerradas por defecto, madres abiertas
-Actualmente las notas tienen `is_collapsed default true`. Lo que falta es asegurar que:
-- Las **notas raíz de cada categoría** (sin `parent_note_id`) se muestran al expandir la categoría — ya ocurre.
-- Las **sub-notas** (con `parent_note_id`) permanecen ocultas hasta doble-click en su madre — verificar render en `GraphView.tsx`: cuando `is_collapsed` de una nota madre es true, no se renderizan sus hijas ni sus enlaces.
-- Ajustar la lógica de visibilidad para que el primer nivel de notas bajo una categoría se muestre cuando la categoría está expandida, pero las sub-notas (nietas y siguientes) sólo si su madre tiene `is_collapsed=false`.
+### 1. Layout en semicírculo (radial) en vez de línea
+Reemplazar la disposición horizontal+stagger actual de los hijos por una distribución radial:
+- Para cada nodo padre con N hijos visibles, colocarlos en un arco semicircular orientado hacia "afuera" del padre (lejos del abuelo / centro del árbol).
+- Fórmula: ángulo base = vector (padre → abuelo) invertido; los hijos se reparten en `±SPREAD` (≈ 100–140°) alrededor de ese ángulo base.
+- Radio según nivel: `R = baseRadius * (mobile ? 0.75 : 1)`, con `baseRadius` ~110px nivel 1, decreciendo en niveles más profundos.
+- Para las categorías (nivel raíz) también se reparten en semicírculo desde el "centro/tronco" como ya hace la imagen de referencia.
+- Mantener el clamping a viewport y el comportamiento de "mover padre arrastra a los hijos relativos" ya existente (los offsets siguen siendo relativos al padre).
 
-### 3. Login: recuperar contraseña + Google Sign-In
-En `src/pages/Auth.tsx`:
-- Añadir botón **"¿Olvidaste tu contraseña?"** que pida email y llame a `supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset-password' })`.
-- Crear página `src/pages/ResetPassword.tsx` con formulario de nueva contraseña (`supabase.auth.updateUser({ password })`), y registrarla como ruta pública en `src/App.tsx`.
-- Añadir botón **"Continuar con Google"** usando `lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin })`. Se configurará el provider Google vía `supabase--configure_social_auth` (managed, sin claves).
+### 2. Zoom a subárbol al desplegar (doble clic)
+- Añadir estado `focusedNodeId: string | null` en `GraphView`.
+- Al hacer doble clic sobre un nodo nota (el que ya alterna `is_collapsed`):
+  - Si pasa de colapsado → expandido: setear `focusedNodeId = noteId`.
+  - Si se vuelve a colapsar: limpiar `focusedNodeId`.
+- Calcular bounding box de la nota foco + todos sus descendientes visibles, con padding. Aplicar transform (translate + scale) al `<g>` del SVG para encajar ese bbox en el viewport con animación suave (transición CSS de 300ms sobre `transform`).
+- Mientras hay foco, el resto del árbol sigue renderizándose pero queda fuera del viewport visible (no se oculta para no romper enlaces). Opcionalmente bajar su opacidad a 0.15.
 
-### Archivos a tocar
-- `src/components/GraphView.tsx` — escalonado vertical + visibilidad sub-notas
-- `src/pages/Auth.tsx` — botón Google + enlace olvidé contraseña
-- `src/pages/ResetPassword.tsx` *(nuevo)*
-- `src/App.tsx` — ruta `/reset-password`
-- Configuración: habilitar Google OAuth gestionado
+### 3. Botón "Vista completa del árbol"
+- Añadir un botón flotante en la esquina (junto al menú de perfil ya existente) con icono `TreePine` o `Trees` de `lucide-react`.
+- Al pulsarlo: `setFocusedNodeId(null)` y resetear transform para mostrar todo el árbol (fit-to-screen del bbox global, ya calculado por el clamping actual).
+- Tooltip: "Ver árbol completo".
 
-### Notas
-- No se modifica la BD; `is_collapsed` ya existe en `notes` y `categories`.
-- El reset de contraseña usa email (ya activo). Sin auto-confirm.
+## Detalles técnicos
+- Sin cambios en DB ni en `NotesContext`.
+- Reutilizar la función existente `buildNoteSubtree` para obtener descendientes visibles (filtrando por `is_collapsed`).
+- Helper nuevo `computeRadialPositions(parentPos, grandparentPos, count, radius, spread)` → array de `{x,y}`.
+- Helper nuevo `computeSubtreeBBox(noteId)` → `{minX,minY,maxX,maxY}` recorriendo descendientes.
+- Transición: `<g style={{ transform, transition: 'transform 300ms ease' }}>`.
+- El arrastre manual de un nodo sigue guardando posición absoluta; al haber posición manual se respeta sobre el cálculo radial (igual que hoy).
