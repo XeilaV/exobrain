@@ -473,6 +473,15 @@ const GraphView = () => {
         </div>
       )}
 
+      {/* Zoomable world: SVG branches + nodes */}
+      <div
+        className="absolute inset-0"
+        style={{
+          transform: viewTransform.transform,
+          transformOrigin: "0 0",
+          transition: "transform 450ms cubic-bezier(0.22, 1, 0.36, 1)",
+        }}
+      >
       {/* SVG branches */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
         {edges.map((edge, idx) => {
