@@ -609,6 +609,7 @@ const GraphView = () => {
           );
         })}
       </AnimatePresence>
+      </div>
 
       {/* Context menu */}
       <AnimatePresence>
