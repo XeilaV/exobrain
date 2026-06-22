@@ -96,172 +96,148 @@ const GraphView = () => {
     if (!loading && !onboarded) setShowBrainDialog(true);
   }, [loading, onboarded]);
 
-  // Build hierarchical tree positions + parent map (for drag propagation)
+  // Build radial tree positions + parent map (for drag propagation)
   const { positions, edges, parentMap } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
     const parent: Record<string, string> = {}; // childId -> parentId
     const W = size.w;
     const H = size.h;
+    const isMobile = W < 640;
 
     if (categories.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
-    // Vertical stagger for siblings to avoid label overlap, larger on mobile.
-    const STAGGER = W < 640 ? 20 : 12;
-    // 3-step staggering pattern (0, -1, +1) cycles through siblings.
-    const staggerOffset = (i: number) => {
-      const m = i % 3;
-      return m === 0 ? 0 : m === 1 ? -STAGGER : STAGGER;
+    // Radii per depth (distance from parent)
+    const radiusForDepth = (depth: number) => {
+      const base = depth === 0 ? 130 : depth === 1 ? 100 : depth === 2 ? 85 : 75;
+      return base * (isMobile ? 0.78 : 1);
     };
 
-    // Recursive note tree builder. Tree grows UPWARD (smaller y).
-    const buildNoteSubtree = (
-      note: Note, color: string, depth: number, currentX: number, y: number,
-    ): { width: number; centerX: number } => {
+    // Recursive note placement. `outwardAngle` is the direction (in radians,
+    // screen coords with y-down) from the parent to this note. The note's own
+    // children spread in a semicircle continuing outward along that angle.
+    const placeNoteSubtree = (
+      note: Note,
+      color: string,
+      parentX: number,
+      parentY: number,
+      outwardAngle: number,
+      depth: number,
+    ) => {
+      const R = radiusForDepth(depth);
+      const x = parentX + R * Math.cos(outwardAngle);
+      const y = parentY + R * Math.sin(outwardAngle);
+
       const children = notes.filter(n => n.parentNoteId === note.id);
       const expanded = !note.isCollapsed && children.length > 0;
 
-      if (!expanded) {
-        const w = SIBLING_GAP;
-        pos.push({
-          id: `note-${note.id}`,
-          x: currentX + w / 2, y,
-          type: "note", label: note.title, color,
-          categoryId: note.categoryId, noteId: note.id,
-          parentNoteId: note.parentNoteId,
-          noteType: note.noteType,
-          hasChildren: children.length > 0,
-          isCollapsed: true,
-          depth,
-        });
-        return { width: w, centerX: currentX + w / 2 };
-      }
-
-      let childX = currentX;
-      const childCenters: number[] = [];
-      const baseChildY = y - LEVEL_GAP;
-      children.forEach((child, i) => {
-        const cy = baseChildY + staggerOffset(i);
-        const r = buildNoteSubtree(child, color, depth + 1, childX, cy);
-        childCenters.push(r.centerX);
-        childX += r.width;
-        parent[`note-${child.id}`] = `note-${note.id}`;
-      });
-      const totalW = Math.max(SIBLING_GAP, childX - currentX);
-      const myCenter = childCenters.length
-        ? (childCenters[0] + childCenters[childCenters.length - 1]) / 2
-        : currentX + totalW / 2;
-
       pos.push({
         id: `note-${note.id}`,
-        x: myCenter, y,
+        x, y,
         type: "note", label: note.title, color,
         categoryId: note.categoryId, noteId: note.id,
         parentNoteId: note.parentNoteId,
         noteType: note.noteType,
-        hasChildren: true,
-        isCollapsed: false,
+        hasChildren: children.length > 0,
+        isCollapsed: !expanded,
         depth,
       });
-      children.forEach(child => eds.push({ from: `note-${note.id}`, to: `note-${child.id}` }));
-      return { width: totalW, centerX: myCenter };
+
+      if (!expanded) return;
+
+      const count = children.length;
+      // Spread grows with child count, capped at ~160°.
+      const spread = Math.min(Math.PI * 0.9, Math.PI * 0.35 + count * 0.18);
+      children.forEach((child, i) => {
+        const t = count === 1 ? 0 : (i / (count - 1)) - 0.5; // -0.5..0.5
+        const angle = outwardAngle + t * spread;
+        eds.push({ from: `note-${note.id}`, to: `note-${child.id}` });
+        parent[`note-${child.id}`] = `note-${note.id}`;
+        placeNoteSubtree(child, color, x, y, angle, depth + 1);
+      });
     };
 
-    // Layout INVERTED: root at bottom, hub above as the "trunk top".
-    const rootY = H - 70;
-    const hubY = rootY - 80;          // trunk length
-    const catY = hubY - LEVEL_GAP;
-    const noteStartY = catY - LEVEL_GAP;
+    // Hub at bottom-center; categories spread in a semicircle above hub.
+    const hubX = W / 2;
+    const hubY = H - (isMobile ? 90 : 110);
+    const rootY = H - (isMobile ? 36 : 44);
 
-    let catCursorX = 0;
-    const catCenters: number[] = [];
+    const catRadius = (isMobile ? 110 : 150);
+    const catCount = visibleCategories.length;
 
-    visibleCategories.forEach((cat) => {
+    visibleCategories.forEach((cat, i) => {
+      // Angle range: -PI (left) to 0 (right), passing through -PI/2 (up).
+      const t = catCount === 1 ? 0.5 : i / (catCount - 1);
+      const catAngle = -Math.PI + t * Math.PI;
+      const cx = hubX + catRadius * Math.cos(catAngle);
+      const cy = hubY + catRadius * Math.sin(catAngle);
+
       const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
       const catExpanded = !cat.isCollapsed && rootNotes.length > 0;
 
-      let subtreeWidth: number;
-      let catCenter: number;
-
-      if (catExpanded) {
-        let noteCursorX = catCursorX;
-        const noteCenters: number[] = [];
-        rootNotes.forEach((rn, i) => {
-          const ry = noteStartY + staggerOffset(i);
-          const r = buildNoteSubtree(rn, cat.color, 0, noteCursorX, ry);
-          noteCenters.push(r.centerX);
-          noteCursorX += r.width;
-          parent[`note-${rn.id}`] = `cat-${cat.id}`;
-        });
-        subtreeWidth = Math.max(SIBLING_GAP * 1.5, noteCursorX - catCursorX);
-        catCenter = noteCenters.length
-          ? (noteCenters[0] + noteCenters[noteCenters.length - 1]) / 2
-          : catCursorX + subtreeWidth / 2;
-        rootNotes.forEach(rn => eds.push({ from: `cat-${cat.id}`, to: `note-${rn.id}` }));
-      } else {
-        subtreeWidth = SIBLING_GAP * 1.5;
-        catCenter = catCursorX + subtreeWidth / 2;
-      }
-
       pos.push({
         id: `cat-${cat.id}`,
-        x: catCenter, y: catY,
+        x: cx, y: cy,
         type: "category", label: cat.name, color: cat.color,
         categoryId: cat.id, depth: 0,
         hasChildren: rootNotes.length > 0,
         isCollapsed: cat.isCollapsed,
       });
       parent[`cat-${cat.id}`] = "hub";
+      eds.push({ from: "hub", to: `cat-${cat.id}` });
 
-      catCenters.push(catCenter);
-      catCursorX += subtreeWidth + 20;
+      if (catExpanded) {
+        const rnCount = rootNotes.length;
+        const spread = Math.min(Math.PI * 0.95, Math.PI * 0.4 + rnCount * 0.18);
+        rootNotes.forEach((rn, i2) => {
+          const t2 = rnCount === 1 ? 0 : (i2 / (rnCount - 1)) - 0.5;
+          const angle = catAngle + t2 * spread;
+          eds.push({ from: `cat-${cat.id}`, to: `note-${rn.id}` });
+          parent[`note-${rn.id}`] = `cat-${cat.id}`;
+          placeNoteSubtree(rn, cat.color, cx, cy, angle, 0);
+        });
+      }
     });
 
-    const totalW = catCursorX - 20;
-    // Fit horizontally: scale x coordinates so the tree fits the viewport with margin.
-    const margin = 40;
-    const available = Math.max(200, W - margin * 2);
-    const scale = totalW > available ? available / totalW : 1;
-    const scaledTotalW = totalW * scale;
-    const offsetX = (W - scaledTotalW) / 2;
-    pos.forEach(p => { p.x = p.x * scale + offsetX; });
-
-    // Fit vertically: compress upward levels so nothing overflows the top.
-    const topMargin = 30;
-    const minY = pos.length ? Math.min(...pos.map(p => p.y)) : hubY;
-    if (minY < topMargin) {
-      // anchor: hubY stays constant; scale distances above hub.
-      const range = hubY - minY;
-      const maxRange = hubY - topMargin;
-      const yScale = maxRange / range;
-      pos.forEach(p => {
-        if (p.y < hubY) p.y = hubY - (hubY - p.y) * yScale;
-      });
-    }
-
-    const rootCenterX = catCenters.length
-      ? ((catCenters[0] + catCenters[catCenters.length - 1]) / 2) * scale + offsetX
-      : W / 2;
-
-    // Hub node: the "centro" where branches diverge.
+    // Hub node
     pos.push({
       id: "hub",
-      x: rootCenterX, y: hubY,
+      x: hubX, y: hubY,
       type: "category", label: "", color: "30 8% 30%", depth: -1,
     });
     parent["hub"] = "root";
-    visibleCategories.forEach(cat => eds.push({ from: "hub", to: `cat-${cat.id}` }));
 
     pos.push({
       id: "root",
-      x: rootCenterX, y: rootY,
+      x: hubX, y: rootY,
       type: "root", label: brainName || "ExoBrain",
       color: "30 8% 25%", depth: -1,
     });
     eds.push({ from: "root", to: "hub" });
 
+    // Fit-to-viewport: scale all positions around the hub so nothing overflows.
+    const topMargin = isMobile ? 50 : 60;
+    const sideMargin = isMobile ? 30 : 40;
+    const minX = Math.min(...pos.map(p => p.x));
+    const maxX = Math.max(...pos.map(p => p.x));
+    const minY = Math.min(...pos.map(p => p.y));
+
+    const upScale = (hubY - topMargin) / Math.max(1, hubY - minY);
+    const leftScale = (hubX - sideMargin) / Math.max(1, hubX - minX);
+    const rightScale = (W - hubX - sideMargin) / Math.max(1, maxX - hubX);
+    const scale = Math.min(1, upScale, leftScale, rightScale);
+
+    if (scale < 1) {
+      pos.forEach(p => {
+        if (p.id === "root") return; // keep trunk anchored at the bottom
+        p.x = hubX + (p.x - hubX) * scale;
+        p.y = hubY + (p.y - hubY) * scale;
+      });
+    }
+
     return { positions: pos, edges: eds, parentMap: parent };
   }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
+
 
   // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
   // node moves its whole subtree along with it.
