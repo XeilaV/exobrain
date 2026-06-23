@@ -246,7 +246,10 @@ const GraphView = () => {
     const downScale = (H - bottomMargin - hubY) / Math.max(1, maxY - hubY);
     const leftScale = (hubX - sideMargin) / Math.max(1, hubX - minX);
     const rightScale = (W - hubX - sideMargin) / Math.max(1, maxX - hubX);
-    const scale = Math.min(1, upScale, downScale, leftScale, rightScale);
+    const rawScale = Math.min(1, upScale, downScale, leftScale, rightScale);
+    // Don't shrink so much that category nodes start overlapping.
+    const minScaleForCanopy = catRadius > 0 ? minCatRadius / catRadius : 0;
+    const scale = Math.max(rawScale, Math.min(1, minScaleForCanopy));
 
     if (scale < 1) {
       pos.forEach(p => {
