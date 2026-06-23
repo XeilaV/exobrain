@@ -158,10 +158,12 @@ const GraphView = () => {
       });
     };
 
-    // Hub at bottom-center; categories spread in a semicircle above hub.
+    // Hub in upper-middle area; root (MyBrain) sits below with a long trunk
+    // so the whole tree reads as centered on screen.
     const hubX = W / 2;
-    const hubY = H - (isMobile ? 90 : 110);
-    const rootY = H - (isMobile ? 36 : 44);
+    const trunkLength = isMobile ? 260 : 220;
+    const hubY = isMobile ? Math.round(H * 0.44) : Math.round(H * 0.48);
+    const rootY = hubY + trunkLength;
 
     const catRadius = (isMobile ? 110 : 150);
     const catCount = visibleCategories.length;
@@ -216,24 +218,40 @@ const GraphView = () => {
     });
     eds.push({ from: "root", to: "hub" });
 
-    // Fit-to-viewport: scale all positions around the hub so nothing overflows.
+    // Fit-to-viewport: scale around the hub if the tree overflows, then
+    // shift vertically so the full bounding box is centered on screen.
     const topMargin = isMobile ? 50 : 60;
+    const bottomMargin = isMobile ? 110 : 80; // reserve space for floating chat
     const sideMargin = isMobile ? 30 : 40;
     const minX = Math.min(...pos.map(p => p.x));
     const maxX = Math.max(...pos.map(p => p.x));
     const minY = Math.min(...pos.map(p => p.y));
+    const maxY = Math.max(...pos.map(p => p.y));
 
     const upScale = (hubY - topMargin) / Math.max(1, hubY - minY);
+    const downScale = (H - bottomMargin - hubY) / Math.max(1, maxY - hubY);
     const leftScale = (hubX - sideMargin) / Math.max(1, hubX - minX);
     const rightScale = (W - hubX - sideMargin) / Math.max(1, maxX - hubX);
-    const scale = Math.min(1, upScale, leftScale, rightScale);
+    const scale = Math.min(1, upScale, downScale, leftScale, rightScale);
 
     if (scale < 1) {
       pos.forEach(p => {
-        if (p.id === "root") return; // keep trunk anchored at the bottom
         p.x = hubX + (p.x - hubX) * scale;
         p.y = hubY + (p.y - hubY) * scale;
       });
+    }
+
+    // Vertical centering: shift everything so the bbox is centered between
+    // topMargin and (H - bottomMargin).
+    const finalMinY = Math.min(...pos.map(p => p.y));
+    const finalMaxY = Math.max(...pos.map(p => p.y));
+    const availableTop = topMargin;
+    const availableBottom = H - bottomMargin;
+    const desiredCenter = (availableTop + availableBottom) / 2;
+    const currentCenter = (finalMinY + finalMaxY) / 2;
+    const shiftY = desiredCenter - currentCenter;
+    if (Math.abs(shiftY) > 0.5) {
+      pos.forEach(p => { p.y += shiftY; });
     }
 
     return { positions: pos, edges: eds, parentMap: parent };
