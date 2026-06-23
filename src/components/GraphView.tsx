@@ -165,8 +165,22 @@ const GraphView = () => {
     const hubY = isMobile ? Math.round(H * 0.44) : Math.round(H * 0.48);
     const rootY = hubY + trunkLength;
 
-    const catRadius = (isMobile ? 110 : 150);
     const catCount = visibleCategories.length;
+    // Minimum center-to-center distance between adjacent category nodes so
+    // circles + labels don't overlap. Canopy radius grows with category count.
+    const minCatSpacing = isMobile ? 72 : 86;
+    const baseCatRadius = isMobile ? 110 : 150;
+    let catRadius = baseCatRadius;
+    if (catCount >= 2) {
+      // Adjacent step on a semicircle (angles span PI across catCount-1 gaps).
+      const step = Math.PI / (catCount - 1);
+      const requiredRadius = minCatSpacing / (2 * Math.sin(step / 2));
+      catRadius = Math.max(baseCatRadius, requiredRadius);
+    }
+    // Required radius to preserve in fit-to-viewport scaling (avoid overlap).
+    const minCatRadius = catCount >= 2
+      ? minCatSpacing / (2 * Math.sin((Math.PI / (catCount - 1)) / 2))
+      : 0;
 
     visibleCategories.forEach((cat, i) => {
       // Angle range: -PI (left) to 0 (right), passing through -PI/2 (up).
