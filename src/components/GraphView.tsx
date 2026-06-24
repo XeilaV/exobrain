@@ -114,6 +114,13 @@ const GraphView = () => {
       return base * (isMobile ? 0.78 : 1);
     };
 
+    // Offset radial aplicado a un nodo cuando se expande, para separarlo
+    // del resto de la copa y dar aire a sus hijas.
+    const expansionOffset = (childCount: number) => {
+      const base = isMobile ? 28 : 36;
+      return base + Math.min(40, childCount * 6);
+    };
+
     // Recursive note placement. `outwardAngle` is the direction (in radians,
     // screen coords with y-down) from the parent to this note. The note's own
     // children spread in a semicircle continuing outward along that angle.
@@ -126,11 +133,13 @@ const GraphView = () => {
       depth: number,
     ) => {
       const R = radiusForDepth(depth);
-      const x = parentX + R * Math.cos(outwardAngle);
-      const y = parentY + R * Math.sin(outwardAngle);
-
       const children = notes.filter(n => n.parentNoteId === note.id);
       const expanded = !note.isCollapsed && children.length > 0;
+
+      // Si la nota está expandida, alejarla un poco extra del padre.
+      const extra = expanded ? expansionOffset(children.length) : 0;
+      const x = parentX + (R + extra) * Math.cos(outwardAngle);
+      const y = parentY + (R + extra) * Math.sin(outwardAngle);
 
       pos.push({
         id: `note-${note.id}`,
@@ -148,7 +157,8 @@ const GraphView = () => {
 
       const count = children.length;
       // Spread grows with child count, capped at ~160°.
-      const spread = Math.min(Math.PI * 0.9, Math.PI * 0.35 + count * 0.18);
+      let spread = Math.min(Math.PI * 0.9, Math.PI * 0.35 + count * 0.18);
+      if (count >= 4) spread = Math.max(spread, Math.PI * 0.7);
       children.forEach((child, i) => {
         const t = count === 1 ? 0 : (i / (count - 1)) - 0.5; // -0.5..0.5
         const angle = outwardAngle + t * spread;
@@ -165,18 +175,31 @@ const GraphView = () => {
     const hubY = isMobile ? Math.round(H * 0.44) : Math.round(H * 0.48);
     const rootY = hubY + trunkLength;
 
-    const catRadius = (isMobile ? 110 : 150);
+    const baseCatRadius = isMobile ? 110 : 150;
     const catCount = visibleCategories.length;
+
+    // Radio adaptativo: garantizar separación mínima entre categorías vecinas
+    // sobre el arco de 180°.
+    let catRadius = baseCatRadius;
+    if (catCount >= 2) {
+      const arcStep = Math.PI / (catCount - 1);
+      const minSpacing = 2 * CAT_R + (isMobile ? 28 : 36);
+      const requiredRadius = minSpacing / (2 * Math.sin(arcStep / 2));
+      catRadius = Math.max(baseCatRadius, requiredRadius);
+    }
 
     visibleCategories.forEach((cat, i) => {
       // Angle range: -PI (left) to 0 (right), passing through -PI/2 (up).
       const t = catCount === 1 ? 0.5 : i / (catCount - 1);
       const catAngle = -Math.PI + t * Math.PI;
-      const cx = hubX + catRadius * Math.cos(catAngle);
-      const cy = hubY + catRadius * Math.sin(catAngle);
 
       const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
       const catExpanded = !cat.isCollapsed && rootNotes.length > 0;
+
+      // Empuje radial cuando la categoría está expandida.
+      const extra = catExpanded ? expansionOffset(rootNotes.length) : 0;
+      const cx = hubX + (catRadius + extra) * Math.cos(catAngle);
+      const cy = hubY + (catRadius + extra) * Math.sin(catAngle);
 
       pos.push({
         id: `cat-${cat.id}`,
@@ -191,7 +214,8 @@ const GraphView = () => {
 
       if (catExpanded) {
         const rnCount = rootNotes.length;
-        const spread = Math.min(Math.PI * 0.95, Math.PI * 0.4 + rnCount * 0.18);
+        let spread = Math.min(Math.PI * 0.95, Math.PI * 0.4 + rnCount * 0.18);
+        if (rnCount >= 4) spread = Math.max(spread, Math.PI * 0.75);
         rootNotes.forEach((rn, i2) => {
           const t2 = rnCount === 1 ? 0 : (i2 / (rnCount - 1)) - 0.5;
           const angle = catAngle + t2 * spread;
@@ -201,6 +225,7 @@ const GraphView = () => {
         });
       }
     });
+
 
     // Hub node
     pos.push({
