@@ -479,18 +479,23 @@ const GraphView = () => {
     collect(focusedNodeId);
     const pts = positionsWithOffsets.filter(p => subtree.has(p.id));
     if (pts.length < 2) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
-    const pad = size.w < 640 ? 70 : 90;
+    const isMobile = size.w < 640;
+    const pad = isMobile ? 12 : 20;
     const minX = Math.min(...pts.map(p => p.x)) - pad;
     const maxX = Math.max(...pts.map(p => p.x)) + pad;
     const minY = Math.min(...pts.map(p => p.y)) - pad;
     const maxY = Math.max(...pts.map(p => p.y)) + pad;
     const bw = Math.max(1, maxX - minX);
     const bh = Math.max(1, maxY - minY);
-    const scale = Math.min(size.w / bw, size.h / bh, 2.6);
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    const tx = size.w / 2 - cx * scale;
-    const ty = size.h / 2 - cy * scale;
+    const marginTop = 48; // top toolbar buttons
+    const marginBottom = isMobile ? 90 : 70; // floating chat button
+    const marginLeft = pad;
+    const marginRight = pad;
+    const availW = Math.max(1, size.w - marginLeft - marginRight);
+    const availH = Math.max(1, size.h - marginTop - marginBottom);
+    const scale = Math.min(availW / bw, availH / bh, 2.6);
+    const tx = marginLeft + (availW - bw * scale) / 2 - minX * scale;
+    const ty = marginTop + (availH - bh * scale) / 2 - minY * scale;
     return { transform: `translate(${tx}px, ${ty}px) scale(${scale})`, scale };
   }, [focusedNodeId, positionsWithOffsets, parentMap, size.w, size.h]);
 
