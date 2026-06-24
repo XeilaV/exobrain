@@ -1,28 +1,49 @@
+## Objetivo
 
-# Centrar el árbol y alargar el tronco en mobile
-
-Ahora la captura sí se ve correctamente. El nodo "MyBrain" (raíz) queda demasiado abajo y se corta visualmente. Voy a reposicionar el layout para que el conjunto quede centrado verticalmente y el tronco entre raíz y hub sea más largo, como en la imagen de referencia.
+Evitar solapamientos en la copa del árbol cuando hay muchas categorías (sobre todo en mobile) y, al desplegar las hijas de una nota, separar ligeramente esa nota madre del resto de la copa para que sus hijas se vean sin pisar otras categorías.
 
 ## Cambios en `src/components/GraphView.tsx`
 
-1. **Posición vertical del hub (punto central donde nacen las categorías):**
-   - En mobile, mover el hub desde ~50% a ~42% del alto de la pantalla para dejar espacio al tronco inferior y a las categorías superiores.
-   - En desktop mantener centrado.
+### 1. Radio de la copa adaptativo al número de categorías
 
-2. **Posición del nodo raíz "MyBrain":**
-   - Aumentar la distancia vertical entre hub y raíz: pasar de ~`trunkLength` actual (~180px) a ~260px en mobile.
-   - Asegurar que `rootY = hubY + trunkLength` quede dentro del viewport con un margen inferior mínimo de 80px (clamp).
+Hoy `catRadius` es un valor fijo (110 mobile / 150 desktop), por lo que con muchas categorías los círculos se solapan.
 
-3. **Radio de las categorías:**
-   - Reducir ligeramente el radio en mobile (de ~190px a ~170px) para que las categorías superiores no se salgan por arriba al subir el hub.
+- Calcular el radio mínimo necesario para que dos categorías vecinas no se toquen, en función del ángulo entre ellas y del tamaño del nodo + padding:
+  - `arcStep = Math.PI / Math.max(1, catCount - 1)` (la copa cubre 180°).
+  - `minSpacing = 2 * CAT_R + (isMobile ? 28 : 36)` (incluye margen para la etiqueta).
+  - `requiredRadius = minSpacing / (2 * Math.sin(arcStep / 2))` cuando `catCount >= 2`.
+  - `catRadius = Math.max(baseRadius, requiredRadius)` con `baseRadius = isMobile ? 110 : 150`.
+- Resultado: con 2-4 categorías el radio no cambia; a partir de ~5 crece automáticamente y el `fit-to-viewport` existente se encarga de escalar si rebasa la pantalla.
 
-4. **Clamping del viewport:**
-   - Recalcular bounding box del árbol completo (raíz + hub + categorías + hijos visibles) y, si excede la pantalla, aplicar un offset vertical que centre el bbox en el viewport disponible (descontando header móvil).
+### 2. Empuje radial de la categoría/nota madre al expandirse
 
-5. **Sin cambios** en lógica de expansión, semicírculo de hijas, zoom-to-subtree ni en el resto de interacciones.
+Para reproducir el efecto de la segunda imagen, cuando un nodo se expande se desplaza un poco hacia fuera respecto a su padre, separándose del resto de la copa.
 
-## Notas técnicas
+- Nuevo helper `expansionOffset(depth, childCount)`:
+  - `base = isMobile ? 28 : 36`.
+  - Crece suavemente con hijos: `base + Math.min(40, childCount * 6)`.
+- Aplicarlo en dos sitios:
+  - **Categorías expandidas:** sumar el offset a lo largo del vector `(cos catAngle, sin catAngle)` antes de colocar la categoría y sus hijas, para que toda la sub-copa se aleje del hub.
+  - **Notas expandidas (`placeNoteSubtree`):** sumar el mismo tipo de offset en la dirección `outwardAngle` antes de colocar la nota madre cuando `expanded === true`.
+- Las hijas se siguen calculando relativas a la posición ya desplazada, así que el grupo madre+hijas se aleja en bloque y deja de pisar a las categorías vecinas.
 
-- Constantes a tocar: `HUB_Y_RATIO_MOBILE`, `TRUNK_LENGTH_MOBILE`, `CATEGORY_RADIUS_MOBILE` (nombres aproximados según el código actual; los identificaré al editar).
-- Mantener el margen seguro contra el `ChatPanel` flotante inferior (~120px reservados).
-- No tocar `NotesContext`, ni rutas, ni estilos globales.
+### 3. Aumentar `spread` de las hijas cuando hay vecinas próximas
+
+Pequeño ajuste en `placeNoteSubtree` y en el bloque de `rootNotes`: si `count >= 4`, usar un spread mínimo mayor para que las hijas no se peguen al nodo madre. Solo afecta a casos densos.
+
+### 4. Verificación anti-solape en el `fit-to-viewport`
+
+El bloque actual ya escala si la copa rebasa el viewport. Tras aplicar los puntos 1-3 sigue siendo válido; solo se asegura que `bottomMargin` y `topMargin` actuales se respeten. No se cambia la lógica de centrado vertical.
+
+## Lo que NO se toca
+
+- Lógica de doble-click, zoom-to-subtree, botón de árbol para reset.
+- Posición del hub, longitud del tronco, ni el centrado vertical.
+- Estilos, tipografía, edición de notas, drag&drop, ChatPanel.
+- `NotesContext`, rutas, Supabase.
+
+## Verificación
+
+- Preview en mobile (390px) con 9-10 categorías como en la primera captura: ninguna debe solaparse con su vecina ni con la etiqueta.
+- Expandir "Ideas escribir" con varias hijas: la categoría se separa visiblemente del resto y las hijas quedan en semicírculo sin pisar las categorías vecinas.
+- Desktop sin cambios visibles cuando hay pocas categorías.
