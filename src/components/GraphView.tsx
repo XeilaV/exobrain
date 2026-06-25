@@ -117,8 +117,8 @@ const GraphView = () => {
     // Offset radial aplicado a un nodo cuando se expande, para separarlo
     // del resto de la copa y dar aire a sus hijas.
     const expansionOffset = (childCount: number) => {
-      const base = isMobile ? 28 : 36;
-      return base + Math.min(40, childCount * 6);
+      const base = isMobile ? 70 : 80;
+      return base + Math.min(60, childCount * 8);
     };
 
     // Recursive note placement. `outwardAngle` is the direction (in radians,
@@ -480,7 +480,7 @@ const GraphView = () => {
     const pts = positionsWithOffsets.filter(p => subtree.has(p.id));
     if (pts.length < 2) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
     const isMobile = size.w < 640;
-    const pad = isMobile ? 12 : 20;
+    const pad = isMobile ? 4 : 12;
     const minX = Math.min(...pts.map(p => p.x)) - pad;
     const maxX = Math.max(...pts.map(p => p.x)) + pad;
     const minY = Math.min(...pts.map(p => p.y)) - pad;
@@ -493,7 +493,8 @@ const GraphView = () => {
     const marginRight = pad;
     const availW = Math.max(1, size.w - marginLeft - marginRight);
     const availH = Math.max(1, size.h - marginTop - marginBottom);
-    const scale = Math.min(availW / bw, availH / bh, 2.6);
+    const rawScale = Math.min(availW / bw, availH / bh);
+    const scale = Math.min(rawScale * 0.9, 1.9);
     const tx = marginLeft + (availW - bw * scale) / 2 - minX * scale;
     const ty = marginTop + (availH - bh * scale) / 2 - minY * scale;
     return { transform: `translate(${tx}px, ${ty}px) scale(${scale})`, scale };
