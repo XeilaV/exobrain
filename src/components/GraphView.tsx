@@ -489,13 +489,15 @@ const GraphView = () => {
     const bh = Math.max(1, maxY - minY);
     const marginTop = 48; // top toolbar buttons
     const marginBottom = isMobile ? 90 : 70; // floating chat button
-    const marginLeft = pad;
-    const marginRight = pad;
+    const marginLeft = isMobile ? 0 : pad;
+    const marginRight = isMobile ? 0 : pad;
     const availW = Math.max(1, size.w - marginLeft - marginRight);
     const availH = Math.max(1, size.h - marginTop - marginBottom);
     const rawScale = Math.min(availW / bw, availH / bh);
     const scale = Math.min(rawScale * 0.9, 1.9);
-    const tx = marginLeft + (availW - bw * scale) / 2 - minX * scale;
+    // On mobile, bias content to the left to reduce empty left margin
+    const xBias = isMobile ? 0 : 0.5;
+    const tx = marginLeft + (availW - bw * scale) * xBias - minX * scale;
     const ty = marginTop + (availH - bh * scale) / 2 - minY * scale;
     return { transform: `translate(${tx}px, ${ty}px) scale(${scale})`, scale };
   }, [focusedNodeId, positionsWithOffsets, parentMap, size.w, size.h]);
