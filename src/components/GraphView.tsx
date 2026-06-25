@@ -480,7 +480,7 @@ const GraphView = () => {
     const pts = positionsWithOffsets.filter(p => subtree.has(p.id));
     if (pts.length < 2) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
     const isMobile = size.w < 640;
-    const pad = isMobile ? 4 : 12;
+    const pad = isMobile ? 10 : 12;
     const minX = Math.min(...pts.map(p => p.x)) - pad;
     const maxX = Math.max(...pts.map(p => p.x)) + pad;
     const minY = Math.min(...pts.map(p => p.y)) - pad;
@@ -489,14 +489,14 @@ const GraphView = () => {
     const bh = Math.max(1, maxY - minY);
     const marginTop = 48; // top toolbar buttons
     const marginBottom = isMobile ? 90 : 70; // floating chat button
-    const marginLeft = isMobile ? 0 : pad;
-    const marginRight = isMobile ? 0 : pad;
+    const marginLeft = pad;
+    const marginRight = pad;
     const availW = Math.max(1, size.w - marginLeft - marginRight);
     const availH = Math.max(1, size.h - marginTop - marginBottom);
     const rawScale = Math.min(availW / bw, availH / bh);
     const scale = Math.min(rawScale * 0.9, 1.9);
-    // On mobile, bias content to the left to reduce empty left margin
-    const xBias = isMobile ? 0 : 0.5;
+    // On mobile, keep a small safety margin while still reducing empty space.
+    const xBias = isMobile ? 0.08 : 0.5;
     const tx = marginLeft + (availW - bw * scale) * xBias - minX * scale;
     const ty = marginTop + (availH - bh * scale) / 2 - minY * scale;
     return { transform: `translate(${tx}px, ${ty}px) scale(${scale})`, scale };
