@@ -117,8 +117,8 @@ const GraphView = () => {
     // Offset radial aplicado a un nodo cuando se expande, para separarlo
     // del resto de la copa y dar aire a sus hijas.
     const expansionOffset = (childCount: number) => {
-      const base = isMobile ? 70 : 80;
-      return base + Math.min(60, childCount * 8);
+      const base = isMobile ? 130 : 140;
+      return base + Math.min(80, childCount * 10);
     };
 
     // Recursive note placement. `outwardAngle` is the direction (in radians,
