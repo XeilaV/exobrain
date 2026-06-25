@@ -494,7 +494,7 @@ const GraphView = () => {
     const availW = Math.max(1, size.w - marginLeft - marginRight);
     const availH = Math.max(1, size.h - marginTop - marginBottom);
     const rawScale = Math.min(availW / bw, availH / bh);
-    const scale = Math.min(rawScale * 0.9, 1.9);
+    const scale = Math.min(rawScale * 0.7, 1.35);
     // On mobile, keep a small safety margin while still reducing empty space.
     const xBias = isMobile ? 0.08 : 0.5;
     const tx = marginLeft + (availW - bw * scale) * xBias - minX * scale;
