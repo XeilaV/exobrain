@@ -465,7 +465,7 @@ const GraphView = () => {
     return out;
   }, [notes, positions]);
 
-  // Compute zoom-to-subtree transform when a node is focused.
+  // Pan (and gentle zoom) toward the focused subtree without resizing the whole tree.
   const viewTransform = useMemo(() => {
     if (!focusedNodeId) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
     const subtree = new Set<string>();
@@ -480,25 +480,16 @@ const GraphView = () => {
     const pts = positionsWithOffsets.filter(p => subtree.has(p.id));
     if (pts.length < 2) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
     const isMobile = size.w < 640;
-    const pad = isMobile ? 10 : 12;
-    const minX = Math.min(...pts.map(p => p.x)) - pad;
-    const maxX = Math.max(...pts.map(p => p.x)) + pad;
-    const minY = Math.min(...pts.map(p => p.y)) - pad;
-    const maxY = Math.max(...pts.map(p => p.y)) + pad;
-    const bw = Math.max(1, maxX - minX);
-    const bh = Math.max(1, maxY - minY);
-    const marginTop = 48; // top toolbar buttons
-    const marginBottom = isMobile ? 90 : 70; // floating chat button
-    const marginLeft = pad;
-    const marginRight = pad;
-    const availW = Math.max(1, size.w - marginLeft - marginRight);
-    const availH = Math.max(1, size.h - marginTop - marginBottom);
-    const rawScale = Math.min(availW / bw, availH / bh);
-    const scale = Math.min(rawScale * 0.7, 1.35);
-    // On mobile, keep a small safety margin while still reducing empty space.
-    const xBias = isMobile ? 0.08 : 0.5;
-    const tx = marginLeft + (availW - bw * scale) * xBias - minX * scale;
-    const ty = marginTop + (availH - bh * scale) / 2 - minY * scale;
+    // Gentle, fixed zoom — keep the tree's size, just get a little closer.
+    const scale = isMobile ? 1.15 : 1.2;
+    const cx = (Math.min(...pts.map(p => p.x)) + Math.max(...pts.map(p => p.x))) / 2;
+    const cy = (Math.min(...pts.map(p => p.y)) + Math.max(...pts.map(p => p.y))) / 2;
+    const marginTop = 48;
+    const marginBottom = isMobile ? 90 : 70;
+    const screenCx = size.w / 2;
+    const screenCy = marginTop + (size.h - marginTop - marginBottom) / 2;
+    const tx = screenCx - cx * scale;
+    const ty = screenCy - cy * scale;
     return { transform: `translate(${tx}px, ${ty}px) scale(${scale})`, scale };
   }, [focusedNodeId, positionsWithOffsets, parentMap, size.w, size.h]);
 
