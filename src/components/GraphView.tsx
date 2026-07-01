@@ -117,8 +117,8 @@ const GraphView = () => {
     // Offset radial aplicado a un nodo cuando se expande, para separarlo
     // del resto de la copa y dar aire a sus hijas.
     const expansionOffset = (childCount: number) => {
-      const base = isMobile ? 130 : 140;
-      return base + Math.min(80, childCount * 10);
+      const base = isMobile ? 28 : 36;
+      return base + Math.min(40, childCount * 6);
     };
 
     // Recursive note placement. `outwardAngle` is the direction (in radians,
@@ -465,7 +465,7 @@ const GraphView = () => {
     return out;
   }, [notes, positions]);
 
-  // Pan (and gentle zoom) toward the focused subtree without resizing the whole tree.
+  // Compute zoom-to-subtree transform when a node is focused.
   const viewTransform = useMemo(() => {
     if (!focusedNodeId) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
     const subtree = new Set<string>();
@@ -478,33 +478,24 @@ const GraphView = () => {
     };
     collect(focusedNodeId);
     const pts = positionsWithOffsets.filter(p => subtree.has(p.id));
-
     if (pts.length < 2) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
     const isMobile = size.w < 640;
-    const margin = isMobile ? 1 : 12;
-    const maxScale = isMobile ? 1.15 : 1.2;
-    const marginTop = 48;
-    const marginBottom = isMobile ? 90 : 70;
-
-    const minX = Math.min(...pts.map(p => p.x));
-    const maxX = Math.max(...pts.map(p => p.x));
-    const minY = Math.min(...pts.map(p => p.y));
-    const maxY = Math.max(...pts.map(p => p.y));
-
-    const availW = Math.max(1, size.w - 2 * margin);
+    const pad = isMobile ? 12 : 20;
+    const minX = Math.min(...pts.map(p => p.x)) - pad;
+    const maxX = Math.max(...pts.map(p => p.x)) + pad;
+    const minY = Math.min(...pts.map(p => p.y)) - pad;
+    const maxY = Math.max(...pts.map(p => p.y)) + pad;
+    const bw = Math.max(1, maxX - minX);
+    const bh = Math.max(1, maxY - minY);
+    const marginTop = 48; // top toolbar buttons
+    const marginBottom = isMobile ? 90 : 70; // floating chat button
+    const marginLeft = pad;
+    const marginRight = pad;
+    const availW = Math.max(1, size.w - marginLeft - marginRight);
     const availH = Math.max(1, size.h - marginTop - marginBottom);
-    const subtreeW = Math.max(1, maxX - minX);
-    const subtreeH = Math.max(1, maxY - minY);
-
-    const fitScale = Math.min(availW / subtreeW, availH / subtreeH);
-    const scale = Math.min(maxScale, fitScale);
-
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    const screenCx = margin + availW / 2;
-    const screenCy = marginTop + availH / 2;
-    const tx = screenCx - cx * scale;
-    const ty = screenCy - cy * scale;
+    const scale = Math.min(availW / bw, availH / bh, 2.6);
+    const tx = marginLeft + (availW - bw * scale) / 2 - minX * scale;
+    const ty = marginTop + (availH - bh * scale) / 2 - minY * scale;
     return { transform: `translate(${tx}px, ${ty}px) scale(${scale})`, scale };
   }, [focusedNodeId, positionsWithOffsets, parentMap, size.w, size.h]);
 
