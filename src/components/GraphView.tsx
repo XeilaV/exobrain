@@ -478,16 +478,31 @@ const GraphView = () => {
     };
     collect(focusedNodeId);
     const pts = positionsWithOffsets.filter(p => subtree.has(p.id));
+
     if (pts.length < 2) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
     const isMobile = size.w < 640;
-    // Gentle, fixed zoom — keep the tree's size, just get a little closer.
-    const scale = isMobile ? 1.15 : 1.2;
-    const cx = (Math.min(...pts.map(p => p.x)) + Math.max(...pts.map(p => p.x))) / 2;
-    const cy = (Math.min(...pts.map(p => p.y)) + Math.max(...pts.map(p => p.y))) / 2;
+    const margin = isMobile ? 1 : 12;
+    const maxScale = isMobile ? 1.15 : 1.2;
     const marginTop = 48;
     const marginBottom = isMobile ? 90 : 70;
-    const screenCx = size.w / 2;
-    const screenCy = marginTop + (size.h - marginTop - marginBottom) / 2;
+
+    const minX = Math.min(...pts.map(p => p.x));
+    const maxX = Math.max(...pts.map(p => p.x));
+    const minY = Math.min(...pts.map(p => p.y));
+    const maxY = Math.max(...pts.map(p => p.y));
+
+    const availW = Math.max(1, size.w - 2 * margin);
+    const availH = Math.max(1, size.h - marginTop - marginBottom);
+    const subtreeW = Math.max(1, maxX - minX);
+    const subtreeH = Math.max(1, maxY - minY);
+
+    const fitScale = Math.min(availW / subtreeW, availH / subtreeH);
+    const scale = Math.min(maxScale, fitScale);
+
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const screenCx = margin + availW / 2;
+    const screenCy = marginTop + availH / 2;
     const tx = screenCx - cx * scale;
     const ty = screenCy - cy * scale;
     return { transform: `translate(${tx}px, ${ty}px) scale(${scale})`, scale };
