@@ -478,8 +478,6 @@ const GraphView = () => {
     };
     collect(focusedNodeId);
     const pts = positionsWithOffsets.filter(p => subtree.has(p.id));
-    console.log("SUBTREE ids", Array.from(subtree), "parentMap", Object.fromEntries(Object.entries(parentMap).filter(([k]) => subtree.has(k) || k === focusedNodeId)));
-    pts.forEach(p => console.log("PT", p.id, Math.round(p.x), Math.round(p.y)));
 
     if (pts.length < 2) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
     const isMobile = size.w < 640;
