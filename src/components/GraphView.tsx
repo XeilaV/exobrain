@@ -504,6 +504,7 @@ const GraphView = () => {
     const screenCy = marginTop + availH / 2;
     const tx = screenCx - cx * scale;
     const ty = screenCy - cy * scale;
+    console.log("ZOOM", { focusedNodeId, count: pts.length, minX, maxX, minY, maxY, cx, cy, scale, tx, ty });
     return { transform: `translate(${tx}px, ${ty}px) scale(${scale})`, scale };
   }, [focusedNodeId, positionsWithOffsets, parentMap, size.w, size.h]);
 
