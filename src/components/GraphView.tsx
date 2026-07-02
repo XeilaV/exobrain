@@ -2,7 +2,7 @@ import { useNotes } from "@/contexts/NotesContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine } from "lucide-react";
+import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain } from "lucide-react";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
 import ColorPicker from "./ColorPicker";
@@ -61,7 +61,7 @@ const GraphView = () => {
   const [showBrainDialog, setShowBrainDialog] = useState(false);
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
-  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
+  
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
@@ -358,9 +358,8 @@ const GraphView = () => {
         cancelLongPress();
       }
       if (didDrag.current) {
-        const s = viewScaleRef.current || 1;
-        const dx = rawDx / s;
-        const dy = rawDy / s;
+        const dx = rawDx;
+        const dy = rawDy;
         setOffsets(prev => ({
           ...prev,
           [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
@@ -390,24 +389,19 @@ const GraphView = () => {
         const nId = nodeId.replace("note-", "");
         const note = notes.find(n => n.id === nId);
         const hasChildren = notes.some(n => n.parentNoteId === nId);
-        if (hasChildren && note) {
-          const wasCollapsed = note.isCollapsed;
-          toggleNoteCollapsed(nId);
-          // If we are EXPANDING, zoom into this subtree. If collapsing, clear focus.
-          setFocusedNodeId(wasCollapsed ? nodeId : null);
+          if (hasChildren && note) {
+            toggleNoteCollapsed(nId);
+          }
+        } else if (nodeId.startsWith("cat-")) {
+          const cId = nodeId.replace("cat-", "");
+          const cat = categories.find(c => c.id === cId);
+          const hasChildren = notes.some(n => n.categoryId === cId && !n.parentNoteId);
+          if (hasChildren && cat) {
+            toggleCategoryCollapsed(cId);
+          }
+        } else if (nodeId === "root") {
+          setShowBrainDialog(true);
         }
-      } else if (nodeId.startsWith("cat-")) {
-        const cId = nodeId.replace("cat-", "");
-        const cat = categories.find(c => c.id === cId);
-        const hasChildren = notes.some(n => n.categoryId === cId && !n.parentNoteId);
-        if (hasChildren && cat) {
-          const wasCollapsed = cat.isCollapsed;
-          toggleCategoryCollapsed(cId);
-          setFocusedNodeId(wasCollapsed ? nodeId : null);
-        }
-      } else if (nodeId === "root") {
-        setShowBrainDialog(true);
-      }
       return;
     }
     clickTimer.current = setTimeout(() => {
@@ -465,44 +459,6 @@ const GraphView = () => {
     return out;
   }, [notes, positions]);
 
-  // Compute zoom-to-subtree transform when a node is focused.
-  const viewTransform = useMemo(() => {
-    if (!focusedNodeId) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
-    const subtree = new Set<string>();
-    const collect = (id: string) => {
-      if (subtree.has(id)) return;
-      subtree.add(id);
-      positionsWithOffsets.forEach(p => {
-        if (parentMap[p.id] === id) collect(p.id);
-      });
-    };
-    collect(focusedNodeId);
-    const pts = positionsWithOffsets.filter(p => subtree.has(p.id));
-    if (pts.length < 2) return { transform: "translate(0px, 0px) scale(1)", scale: 1 };
-    const isMobile = size.w < 640;
-    const pad = isMobile ? 12 : 20;
-    const minX = Math.min(...pts.map(p => p.x)) - pad;
-    const maxX = Math.max(...pts.map(p => p.x)) + pad;
-    const minY = Math.min(...pts.map(p => p.y)) - pad;
-    const maxY = Math.max(...pts.map(p => p.y)) + pad;
-    const bw = Math.max(1, maxX - minX);
-    const bh = Math.max(1, maxY - minY);
-    const marginTop = 48; // top toolbar buttons
-    const marginBottom = isMobile ? 90 : 70; // floating chat button
-    const marginLeft = pad;
-    const marginRight = pad;
-    const availW = Math.max(1, size.w - marginLeft - marginRight);
-    const availH = Math.max(1, size.h - marginTop - marginBottom);
-    const scale = Math.min(availW / bw, availH / bh, 2.6);
-    const tx = marginLeft + (availW - bw * scale) / 2 - minX * scale;
-    const ty = marginTop + (availH - bh * scale) / 2 - minY * scale;
-    return { transform: `translate(${tx}px, ${ty}px) scale(${scale})`, scale };
-  }, [focusedNodeId, positionsWithOffsets, parentMap, size.w, size.h]);
-
-  const viewScaleRef = useRef(1);
-  useEffect(() => { viewScaleRef.current = viewTransform.scale; }, [viewTransform.scale]);
-
-
   return (
     <div
       ref={containerRef}
@@ -521,14 +477,9 @@ const GraphView = () => {
         </div>
       )}
 
-      {/* Zoomable world: SVG branches + nodes */}
+      {/* Tree world: SVG branches + nodes */}
       <div
         className="absolute inset-0"
-        style={{
-          transform: viewTransform.transform,
-          transformOrigin: "0 0",
-          transition: "transform 450ms cubic-bezier(0.22, 1, 0.36, 1)",
-        }}
       >
       {/* SVG branches */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
@@ -861,15 +812,6 @@ const GraphView = () => {
           )}
         </div>
 
-        {focusedNodeId && (
-          <button
-            onClick={(e) => { e.stopPropagation(); setFocusedNodeId(null); }}
-            className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-primary transition-all animate-in fade-in"
-            title="Ver árbol completo"
-          >
-            <TreePine size={16} />
-          </button>
-        )}
 
 
         <button
