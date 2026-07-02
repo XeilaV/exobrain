@@ -861,15 +861,6 @@ const GraphView = () => {
           )}
         </div>
 
-        {focusedNodeId && (
-          <button
-            onClick={(e) => { e.stopPropagation(); setFocusedNodeId(null); }}
-            className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-primary transition-all animate-in fade-in"
-            title="Ver árbol completo"
-          >
-            <TreePine size={16} />
-          </button>
-        )}
 
 
         <button
