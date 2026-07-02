@@ -390,24 +390,19 @@ const GraphView = () => {
         const nId = nodeId.replace("note-", "");
         const note = notes.find(n => n.id === nId);
         const hasChildren = notes.some(n => n.parentNoteId === nId);
-        if (hasChildren && note) {
-          const wasCollapsed = note.isCollapsed;
-          toggleNoteCollapsed(nId);
-          // If we are EXPANDING, zoom into this subtree. If collapsing, clear focus.
-          setFocusedNodeId(wasCollapsed ? nodeId : null);
+          if (hasChildren && note) {
+            toggleNoteCollapsed(nId);
+          }
+        } else if (nodeId.startsWith("cat-")) {
+          const cId = nodeId.replace("cat-", "");
+          const cat = categories.find(c => c.id === cId);
+          const hasChildren = notes.some(n => n.categoryId === cId && !n.parentNoteId);
+          if (hasChildren && cat) {
+            toggleCategoryCollapsed(cId);
+          }
+        } else if (nodeId === "root") {
+          setShowBrainDialog(true);
         }
-      } else if (nodeId.startsWith("cat-")) {
-        const cId = nodeId.replace("cat-", "");
-        const cat = categories.find(c => c.id === cId);
-        const hasChildren = notes.some(n => n.categoryId === cId && !n.parentNoteId);
-        if (hasChildren && cat) {
-          const wasCollapsed = cat.isCollapsed;
-          toggleCategoryCollapsed(cId);
-          setFocusedNodeId(wasCollapsed ? nodeId : null);
-        }
-      } else if (nodeId === "root") {
-        setShowBrainDialog(true);
-      }
       return;
     }
     clickTimer.current = setTimeout(() => {
