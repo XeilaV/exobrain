@@ -358,9 +358,8 @@ const GraphView = () => {
         cancelLongPress();
       }
       if (didDrag.current) {
-        const s = viewScaleRef.current || 1;
-        const dx = rawDx / s;
-        const dy = rawDy / s;
+        const dx = rawDx;
+        const dy = rawDy;
         setOffsets(prev => ({
           ...prev,
           [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
