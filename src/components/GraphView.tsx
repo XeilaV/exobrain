@@ -409,24 +409,27 @@ const GraphView = () => {
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       const ds = dragState.current;
-      if (!ds) return;
-      const rawDx = e.clientX - ds.startX;
-      const rawDy = e.clientY - ds.startY;
-      if (!didDrag.current && Math.hypot(rawDx, rawDy) > 5) {
-        didDrag.current = true;
-        cancelLongPress();
-      }
-      if (didDrag.current) {
-        const zoom = viewZoomRef.current || 1;
-        const dx = rawDx / zoom;
-        const dy = rawDy / zoom;
-        setOffsets(prev => ({
-          ...prev,
-          [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
-        }));
+      if (ds) {
+        const rawDx = e.clientX - ds.startX;
+        const rawDy = e.clientY - ds.startY;
+        if (!didDrag.current && Math.hypot(rawDx, rawDy) > 5) {
+          didDrag.current = true;
+          cancelLongPress();
+        }
+        if (didDrag.current) {
+          const zoom = viewZoomRef.current || 1;
+          const dx = rawDx / zoom;
+          const dy = rawDy / zoom;
+          setOffsets(prev => ({
+            ...prev,
+            [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
+          }));
+        }
       }
       const ps = panState.current;
       if (!ps) return;
+      const rawDx = e.clientX - ps.startX;
+      const rawDy = e.clientY - ps.startY;
       if (!didPan.current && Math.hypot(rawDx, rawDy) > 5) didPan.current = true;
       if (didPan.current) {
         setViewZoom(1);
@@ -563,7 +566,7 @@ const GraphView = () => {
       <div
         className="absolute inset-0"
         style={{
-          transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${viewZoom})`,
+          transform: `matrix(${viewZoom}, 0, 0, ${viewZoom}, ${pan.x}, ${pan.y})`,
           transformOrigin: "0 0",
           transition: isPanning ? "none" : "transform 400ms cubic-bezier(.2,.7,.2,1)",
           willChange: "transform",
