@@ -111,6 +111,7 @@ const GraphView = () => {
     const eds: Edge[] = [];
     const parent: Record<string, string> = {}; // childId -> parentId
     const W = size.w;
+    const H = size.h;
     const isMobile = W < 640;
 
     if (categories.length === 0) return { positions: pos, edges: eds, parentMap: parent };
