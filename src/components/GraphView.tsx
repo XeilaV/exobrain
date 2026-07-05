@@ -540,7 +540,18 @@ const GraphView = () => {
         if (e.button !== 0) return;
         const target = e.target as HTMLElement;
         if (target.closest("[data-graph-node], button, input, textarea, [role='dialog'], [data-no-pan]")) return;
-        panState.current = { startX: e.clientX, startY: e.clientY, baseX: pan.x, baseY: pan.y };
+        const currentZoom = viewZoomRef.current || 1;
+        let baseX = pan.x;
+        let baseY = pan.y;
+        if (currentZoom !== 1) {
+          const centerWorldX = (size.w / 2 - pan.x) / currentZoom;
+          const centerWorldY = (size.h / 2 - pan.y) / currentZoom;
+          baseX = size.w / 2 - centerWorldX;
+          baseY = size.h / 2 - centerWorldY;
+          setViewZoom(1);
+          setPan({ x: baseX, y: baseY });
+        }
+        panState.current = { startX: e.clientX, startY: e.clientY, baseX, baseY };
         didPan.current = false;
         setIsPanning(true);
       }}
