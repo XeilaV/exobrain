@@ -34,9 +34,6 @@ interface Edge { from: string; to: string }
 const ROOT_R = 30;
 const CAT_R = 22;
 const NOTE_R = 12;
-const LEVEL_GAP = 80;     // vertical gap between levels
-const SIBLING_GAP = 60;   // horizontal gap between siblings (min)
-const EDGE_MARGIN = 24;   // min distance from viewport edges
 
 const GraphView = () => {
   const {
@@ -114,7 +111,6 @@ const GraphView = () => {
     const eds: Edge[] = [];
     const parent: Record<string, string> = {}; // childId -> parentId
     const W = size.w;
-    const H = size.h;
     const isMobile = W < 640;
 
     if (categories.length === 0) return { positions: pos, edges: eds, parentMap: parent };
@@ -186,7 +182,7 @@ const GraphView = () => {
     const hubY = isMobile ? Math.round(H * 0.44) : Math.round(H * 0.48);
     const rootY = hubY + trunkLength;
 
-    const baseCatRadius = isMobile ? 110 : 150;
+    const baseCatRadius = isMobile ? 150 : 170;
     const catCount = visibleCategories.length;
 
     // Radio adaptativo: garantizar separación mínima entre categorías vecinas
