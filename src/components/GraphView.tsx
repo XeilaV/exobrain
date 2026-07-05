@@ -2,7 +2,7 @@ import { useNotes } from "@/contexts/NotesContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain } from "lucide-react";
+import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine } from "lucide-react";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
 import ColorPicker from "./ColorPicker";
@@ -34,9 +34,6 @@ interface Edge { from: string; to: string }
 const ROOT_R = 30;
 const CAT_R = 22;
 const NOTE_R = 12;
-const LEVEL_GAP = 80;     // vertical gap between levels
-const SIBLING_GAP = 60;   // horizontal gap between siblings (min)
-const EDGE_MARGIN = 24;   // min distance from viewport edges
 
 const GraphView = () => {
   const {
@@ -61,16 +58,23 @@ const GraphView = () => {
   const [showBrainDialog, setShowBrainDialog] = useState(false);
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [viewZoom, setViewZoom] = useState(1);
+  const [isPanning, setIsPanning] = useState(false);
   
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
   const didDrag = useRef(false);
+  const didPan = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastExpandedRef = useRef<string | null>(null);
+  const viewZoomRef = useRef(1);
 
   // Drag offsets per node id (session-local)
   const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
   const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(null);
+  const panState = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
 
   // Hidden category filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
@@ -92,6 +96,10 @@ const GraphView = () => {
     return () => ro.disconnect();
   }, []);
 
+  useEffect(() => {
+    viewZoomRef.current = viewZoom;
+  }, [viewZoom]);
+
   // First-time onboarding modal
   useEffect(() => {
     if (!loading && !onboarded) setShowBrainDialog(true);
@@ -110,15 +118,15 @@ const GraphView = () => {
 
     // Radii per depth (distance from parent)
     const radiusForDepth = (depth: number) => {
-      const base = depth === 0 ? 130 : depth === 1 ? 100 : depth === 2 ? 85 : 75;
-      return base * (isMobile ? 0.78 : 1);
+      const base = depth === 0 ? 150 : depth === 1 ? 115 : depth === 2 ? 95 : 85;
+      return base;
     };
 
     // Offset radial aplicado a un nodo cuando se expande, para separarlo
     // del resto de la copa y dar aire a sus hijas.
     const expansionOffset = (childCount: number) => {
-      const base = isMobile ? 28 : 36;
-      return base + Math.min(40, childCount * 6);
+      const base = isMobile ? 40 : 44;
+      return base + Math.min(60, childCount * 8);
     };
 
     // Recursive note placement. `outwardAngle` is the direction (in radians,
@@ -156,9 +164,9 @@ const GraphView = () => {
       if (!expanded) return;
 
       const count = children.length;
-      // Spread grows with child count, capped at ~160°.
-      let spread = Math.min(Math.PI * 0.9, Math.PI * 0.35 + count * 0.18);
-      if (count >= 4) spread = Math.max(spread, Math.PI * 0.7);
+      // Spread grows with child count so opened branches keep breathing room.
+      let spread = Math.min(Math.PI, Math.PI * 0.5 + count * 0.22);
+      if (count >= 4) spread = Math.max(spread, Math.PI * 0.82);
       children.forEach((child, i) => {
         const t = count === 1 ? 0 : (i / (count - 1)) - 0.5; // -0.5..0.5
         const angle = outwardAngle + t * spread;
@@ -175,7 +183,7 @@ const GraphView = () => {
     const hubY = isMobile ? Math.round(H * 0.44) : Math.round(H * 0.48);
     const rootY = hubY + trunkLength;
 
-    const baseCatRadius = isMobile ? 110 : 150;
+    const baseCatRadius = isMobile ? 150 : 170;
     const catCount = visibleCategories.length;
 
     // Radio adaptativo: garantizar separación mínima entre categorías vecinas
@@ -183,7 +191,7 @@ const GraphView = () => {
     let catRadius = baseCatRadius;
     if (catCount >= 2) {
       const arcStep = Math.PI / (catCount - 1);
-      const minSpacing = 2 * CAT_R + (isMobile ? 28 : 36);
+      const minSpacing = 2 * CAT_R + (isMobile ? 60 : 70);
       const requiredRadius = minSpacing / (2 * Math.sin(arcStep / 2));
       catRadius = Math.max(baseCatRadius, requiredRadius);
     }
@@ -214,8 +222,8 @@ const GraphView = () => {
 
       if (catExpanded) {
         const rnCount = rootNotes.length;
-        let spread = Math.min(Math.PI * 0.95, Math.PI * 0.4 + rnCount * 0.18);
-        if (rnCount >= 4) spread = Math.max(spread, Math.PI * 0.75);
+        let spread = Math.min(Math.PI, Math.PI * 0.5 + rnCount * 0.22);
+        if (rnCount >= 4) spread = Math.max(spread, Math.PI * 0.82);
         rootNotes.forEach((rn, i2) => {
           const t2 = rnCount === 1 ? 0 : (i2 / (rnCount - 1)) - 0.5;
           const angle = catAngle + t2 * spread;
@@ -242,43 +250,6 @@ const GraphView = () => {
       color: "30 8% 25%", depth: -1,
     });
     eds.push({ from: "root", to: "hub" });
-
-    // Fit-to-viewport: scale around the hub if the tree overflows, then
-    // shift vertically so the full bounding box is centered on screen.
-    const topMargin = isMobile ? 50 : 60;
-    const bottomMargin = isMobile ? 110 : 80; // reserve space for floating chat
-    const sideMargin = isMobile ? 30 : 40;
-    const minX = Math.min(...pos.map(p => p.x));
-    const maxX = Math.max(...pos.map(p => p.x));
-    const minY = Math.min(...pos.map(p => p.y));
-    const maxY = Math.max(...pos.map(p => p.y));
-
-    const upScale = (hubY - topMargin) / Math.max(1, hubY - minY);
-    const downScale = (H - bottomMargin - hubY) / Math.max(1, maxY - hubY);
-    const leftScale = (hubX - sideMargin) / Math.max(1, hubX - minX);
-    const rightScale = (W - hubX - sideMargin) / Math.max(1, maxX - hubX);
-    const scale = Math.min(1, upScale, downScale, leftScale, rightScale);
-
-    if (scale < 1) {
-      pos.forEach(p => {
-        p.x = hubX + (p.x - hubX) * scale;
-        p.y = hubY + (p.y - hubY) * scale;
-      });
-    }
-
-    // Vertical centering: shift everything so the bbox is centered between
-    // topMargin and (H - bottomMargin).
-    const finalMinY = Math.min(...pos.map(p => p.y));
-    const finalMaxY = Math.max(...pos.map(p => p.y));
-    const availableTop = topMargin;
-    const availableBottom = H - bottomMargin;
-    const desiredCenter = (availableTop + availableBottom) / 2;
-    const currentCenter = (finalMinY + finalMaxY) / 2;
-    const shiftY = desiredCenter - currentCenter;
-    if (Math.abs(shiftY) > 0.5) {
-      pos.forEach(p => { p.y += shiftY; });
-    }
-
     return { positions: pos, edges: eds, parentMap: parent };
   }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
 
@@ -302,20 +273,105 @@ const GraphView = () => {
     };
     return positions.map(p => {
       const off = compute(p.id);
-      const r = p.type === "root" ? ROOT_R : p.id === "hub" ? 6 : p.type === "category" ? CAT_R : NOTE_R;
-      // Clamp so the node circle never leaves the viewport.
-      const minX = r + EDGE_MARGIN;
-      const maxX = size.w - r - EDGE_MARGIN;
-      const minY = r + EDGE_MARGIN;
-      const maxY = size.h - r - EDGE_MARGIN;
-      const nx = Math.min(maxX, Math.max(minX, p.x + off.dx));
-      const ny = Math.min(maxY, Math.max(minY, p.y + off.dy));
-      return nx !== p.x || ny !== p.y ? { ...p, x: nx, y: ny } : p;
+      const nx = p.x + off.dx;
+      const ny = p.y + off.dy;
+      return off.dx !== 0 || off.dy !== 0 ? { ...p, x: nx, y: ny } : p;
     });
-  }, [positions, offsets, parentMap, size.w, size.h]);
+  }, [positions, offsets, parentMap]);
 
 
   const getPos = (id: string) => positionsWithOffsets.find(p => p.id === id);
+
+  const getNodeRadius = useCallback((node: NodePos) => {
+    if (node.type === "root") return ROOT_R;
+    if (node.id === "hub") return 6;
+    if (node.type === "category") return CAT_R;
+    return NOTE_R;
+  }, []);
+
+  const getSubtreeIds = useCallback((nodeId: string) => {
+    const ids = new Set<string>();
+    const visitNote = (noteId: string) => {
+      ids.add(`note-${noteId}`);
+      notes.filter(n => n.parentNoteId === noteId).forEach(child => visitNote(child.id));
+    };
+
+    if (nodeId.startsWith("note-")) {
+      visitNote(nodeId.replace("note-", ""));
+    } else if (nodeId.startsWith("cat-")) {
+      const categoryId = nodeId.replace("cat-", "");
+      ids.add(nodeId);
+      notes.filter(n => n.categoryId === categoryId && !n.parentNoteId).forEach(note => visitNote(note.id));
+    } else {
+      positionsWithOffsets.forEach(node => ids.add(node.id));
+    }
+
+    return ids;
+  }, [notes, positionsWithOffsets]);
+
+  const getNodesBounds = useCallback((nodes: NodePos[]) => {
+    if (nodes.length === 0) return null;
+    return nodes.reduce((bounds, node) => {
+      const r = getNodeRadius(node);
+      const labelPadX = node.type === "note" ? 34 : node.type === "category" ? 54 : 72;
+      const labelPadTop = node.type === "note" ? 16 : 0;
+      const labelPadBottom = node.type === "note" ? 0 : 22;
+      return {
+        minX: Math.min(bounds.minX, node.x - Math.max(r, labelPadX)),
+        maxX: Math.max(bounds.maxX, node.x + Math.max(r, labelPadX)),
+        minY: Math.min(bounds.minY, node.y - r - labelPadTop),
+        maxY: Math.max(bounds.maxY, node.y + r + labelPadBottom),
+      };
+    }, { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
+  }, [getNodeRadius]);
+
+  const focusBranch = useCallback((nodeId: string) => {
+    const subtreeIds = getSubtreeIds(nodeId);
+    const branchNodes = positionsWithOffsets.filter(node => subtreeIds.has(node.id));
+    const bounds = getNodesBounds(branchNodes);
+    if (!bounds) return;
+
+    const isMobile = size.w < 640;
+    const topMargin = 48;
+    const bottomMargin = isMobile ? 100 : 80;
+    const targetX = size.w / 2;
+    const targetY = (topMargin + (size.h - bottomMargin)) / 2;
+    const branchCenterX = (bounds.minX + bounds.maxX) / 2;
+    const branchCenterY = (bounds.minY + bounds.maxY) / 2;
+
+    setViewZoom(1);
+    setPan({ x: targetX - branchCenterX, y: targetY - branchCenterY });
+  }, [getNodesBounds, getSubtreeIds, positionsWithOffsets, size.w, size.h]);
+
+  const fitFullTree = useCallback(() => {
+    const bounds = getNodesBounds(positionsWithOffsets);
+    if (!bounds) return;
+
+    const isMobile = size.w < 640;
+    const sideMargin = isMobile ? 24 : 36;
+    const topMargin = 48;
+    const bottomMargin = isMobile ? 100 : 80;
+    const availableW = Math.max(1, size.w - sideMargin * 2);
+    const availableH = Math.max(1, size.h - topMargin - bottomMargin);
+    const treeW = Math.max(1, bounds.maxX - bounds.minX);
+    const treeH = Math.max(1, bounds.maxY - bounds.minY);
+    const zoom = Math.min(1, Math.max(0.4, Math.min(availableW / treeW, availableH / treeH)));
+    const treeCenterX = (bounds.minX + bounds.maxX) / 2;
+    const treeCenterY = (bounds.minY + bounds.maxY) / 2;
+    const targetX = size.w / 2;
+    const targetY = (topMargin + (size.h - bottomMargin)) / 2;
+
+    setViewZoom(zoom);
+    setPan({ x: targetX - treeCenterX * zoom, y: targetY - treeCenterY * zoom });
+  }, [getNodesBounds, positionsWithOffsets, size.w, size.h]);
+
+  useEffect(() => {
+    const nodeId = lastExpandedRef.current;
+    if (!nodeId) return;
+    if (!positionsWithOffsets.some(node => node.id === nodeId)) return;
+    focusBranch(nodeId);
+    lastExpandedRef.current = null;
+  }, [focusBranch, positionsWithOffsets]);
 
   // Long-press handlers
   const startLongPress = useCallback((nodeId: string, clientX: number, clientY: number) => {
@@ -350,23 +406,38 @@ const GraphView = () => {
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       const ds = dragState.current;
-      if (!ds) return;
-      const rawDx = e.clientX - ds.startX;
-      const rawDy = e.clientY - ds.startY;
-      if (!didDrag.current && Math.hypot(rawDx, rawDy) > 5) {
-        didDrag.current = true;
-        cancelLongPress();
+      if (ds) {
+        const rawDx = e.clientX - ds.startX;
+        const rawDy = e.clientY - ds.startY;
+        if (!didDrag.current && Math.hypot(rawDx, rawDy) > 5) {
+          didDrag.current = true;
+          cancelLongPress();
+        }
+        if (didDrag.current) {
+          const zoom = viewZoomRef.current || 1;
+          const dx = rawDx / zoom;
+          const dy = rawDy / zoom;
+          setOffsets(prev => ({
+            ...prev,
+            [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
+          }));
+        }
       }
-      if (didDrag.current) {
-        const dx = rawDx;
-        const dy = rawDy;
-        setOffsets(prev => ({
-          ...prev,
-          [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
-        }));
+      const ps = panState.current;
+      if (!ps) return;
+      const rawDx = e.clientX - ps.startX;
+      const rawDy = e.clientY - ps.startY;
+      if (!didPan.current && Math.hypot(rawDx, rawDy) > 5) didPan.current = true;
+      if (didPan.current) {
+        setViewZoom(1);
+        setPan({ x: ps.baseX + rawDx, y: ps.baseY + rawDy });
       }
     };
-    const onUp = () => { dragState.current = null; };
+    const onUp = () => {
+      dragState.current = null;
+      panState.current = null;
+      setIsPanning(false);
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     return () => {
@@ -390,6 +461,7 @@ const GraphView = () => {
         const note = notes.find(n => n.id === nId);
         const hasChildren = notes.some(n => n.parentNoteId === nId);
           if (hasChildren && note) {
+            lastExpandedRef.current = note.isCollapsed ? nodeId : null;
             toggleNoteCollapsed(nId);
           }
         } else if (nodeId.startsWith("cat-")) {
@@ -397,6 +469,7 @@ const GraphView = () => {
           const cat = categories.find(c => c.id === cId);
           const hasChildren = notes.some(n => n.categoryId === cId && !n.parentNoteId);
           if (hasChildren && cat) {
+            lastExpandedRef.current = cat.isCollapsed ? nodeId : null;
             toggleCategoryCollapsed(cId);
           }
         } else if (nodeId === "root") {
@@ -463,7 +536,27 @@ const GraphView = () => {
     <div
       ref={containerRef}
       className="flex-1 h-full w-full bg-background overflow-hidden relative select-none"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        const target = e.target as HTMLElement;
+        if (target.closest("[data-graph-node], button, input, textarea, [role='dialog'], [data-no-pan]")) return;
+        const currentZoom = viewZoomRef.current || 1;
+        let baseX = pan.x;
+        let baseY = pan.y;
+        if (currentZoom !== 1) {
+          const centerWorldX = (size.w / 2 - pan.x) / currentZoom;
+          const centerWorldY = (size.h / 2 - pan.y) / currentZoom;
+          baseX = size.w / 2 - centerWorldX;
+          baseY = size.h / 2 - centerWorldY;
+          setViewZoom(1);
+          setPan({ x: baseX, y: baseY });
+        }
+        panState.current = { startX: e.clientX, startY: e.clientY, baseX, baseY };
+        didPan.current = false;
+        setIsPanning(true);
+      }}
       onClick={() => {
+        if (didPan.current) { didPan.current = false; return; }
         if (openPostIt) setOpenPostIt(null);
         if (contextMenu) setContextMenu(null);
         if (colorPickerCat) setColorPickerCat(null);
@@ -480,9 +573,15 @@ const GraphView = () => {
       {/* Tree world: SVG branches + nodes */}
       <div
         className="absolute inset-0"
+        style={{
+          transform: `matrix(${viewZoom}, 0, 0, ${viewZoom}, ${pan.x}, ${pan.y})`,
+          transformOrigin: "0 0",
+          transition: isPanning ? "none" : "transform 400ms cubic-bezier(.2,.7,.2,1)",
+          willChange: "transform",
+        }}
       >
       {/* SVG branches */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
+      <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0, overflow: "visible" }}>
         {edges.map((edge, idx) => {
           const from = getPos(edge.from);
           const to = getPos(edge.to);
@@ -541,6 +640,7 @@ const GraphView = () => {
                   : { type: "spring", stiffness: 300, damping: 25 }
               }
               className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing touch-none"
+              data-graph-node
               style={{ width: r * 2, zIndex: isRoot ? 6 : isCat ? 4 : 2 }}
               onPointerDown={e => {
                 e.stopPropagation();
@@ -813,6 +913,14 @@ const GraphView = () => {
         </div>
 
 
+
+        <button
+          onClick={(e) => { e.stopPropagation(); fitFullTree(); setShowFilterPanel(false); setIsAddingCat(false); }}
+          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+          title="Ver árbol completo"
+        >
+          <TreePine size={16} />
+        </button>
 
         <button
           onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); setIsAddingCat(false); }}
