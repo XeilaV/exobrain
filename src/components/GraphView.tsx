@@ -643,22 +643,44 @@ const GraphView = () => {
     <div
       ref={containerRef}
       className="flex-1 h-full w-full bg-background overflow-hidden relative select-none"
+      style={{ touchAction: "none" }}
       onPointerDown={(e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 && e.pointerType === "mouse") return;
         const target = e.target as HTMLElement;
-        if (target.closest("[data-graph-node], button, input, textarea, [role='dialog'], [data-no-pan]")) return;
-        const currentZoom = viewZoomRef.current || 1;
-        let baseX = pan.x;
-        let baseY = pan.y;
-        if (currentZoom !== 1) {
-          const centerWorldX = (size.w / 2 - pan.x) / currentZoom;
-          const centerWorldY = (size.h / 2 - pan.y) / currentZoom;
-          baseX = size.w / 2 - centerWorldX;
-          baseY = size.h / 2 - centerWorldY;
-          setViewZoom(1);
-          setPan({ x: baseX, y: baseY });
+        const onBackground = !target.closest("[data-graph-node], button, input, textarea, [role='dialog'], [data-no-pan]");
+
+        // Always track pointer for pinch detection
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        // Second pointer -> start pinch (cancel any in-flight pan or node drag)
+        if (pointersRef.current.size >= 2) {
+          const pts = Array.from(pointersRef.current.values());
+          const [p1, p2] = pts;
+          const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+          pinchState.current = {
+            startDist: dist,
+            startZoom: viewZoomRef.current || 1,
+            startPanX: pan.x,
+            startPanY: pan.y,
+            centerX: (p1.x + p2.x) / 2,
+            centerY: (p1.y + p2.y) / 2,
+          };
+          panState.current = null;
+          dragState.current = null;
+          cancelLongPress();
+          didPan.current = true;
+          setIsPanning(true);
+          return;
         }
-        panState.current = { startX: e.clientX, startY: e.clientY, baseX, baseY };
+
+        if (!onBackground) return;
+
+        panState.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+          baseX: pan.x,
+          baseY: pan.y,
+        };
         didPan.current = false;
         setIsPanning(true);
       }}
