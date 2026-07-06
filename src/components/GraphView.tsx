@@ -69,6 +69,9 @@ const GraphView = () => {
   const didPan = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastExpandedRef = useRef<string | null>(null);
+  const lastCollapsedRef = useRef<string | null>(null);
+  const didInitialFitRef = useRef(false);
+  const previousHasOpenBranchRef = useRef(false);
   const viewZoomRef = useRef(1);
 
   // Drag offsets per node id (session-local)
@@ -118,6 +121,9 @@ const GraphView = () => {
 
     // Radii per depth (distance from parent)
     const radiusForDepth = (depth: number) => {
+      if (isMobile) {
+        return depth === 0 ? 92 : depth === 1 ? 84 : depth === 2 ? 76 : 70;
+      }
       const base = depth === 0 ? 150 : depth === 1 ? 115 : depth === 2 ? 95 : 85;
       return base;
     };
@@ -125,8 +131,8 @@ const GraphView = () => {
     // Offset radial aplicado a un nodo cuando se expande, para separarlo
     // del resto de la copa y dar aire a sus hijas.
     const expansionOffset = (childCount: number) => {
-      const base = isMobile ? 40 : 44;
-      return base + Math.min(60, childCount * 8);
+      const base = isMobile ? 44 : 44;
+      return base + Math.min(isMobile ? 84 : 60, childCount * (isMobile ? 10 : 8));
     };
 
     // Recursive note placement. `outwardAngle` is the direction (in radians,
@@ -179,11 +185,11 @@ const GraphView = () => {
     // Hub in upper-middle area; root (MyBrain) sits below with a long trunk
     // so the whole tree reads as centered on screen.
     const hubX = W / 2;
-    const trunkLength = isMobile ? 260 : 220;
-    const hubY = isMobile ? Math.round(H * 0.44) : Math.round(H * 0.48);
+    const trunkLength = isMobile ? 210 : 220;
+    const hubY = isMobile ? Math.round(H * 0.42) : Math.round(H * 0.48);
     const rootY = hubY + trunkLength;
 
-    const baseCatRadius = isMobile ? 150 : 170;
+    const baseCatRadius = isMobile ? Math.max(96, Math.min(118, W * 0.29)) : 170;
     const catCount = visibleCategories.length;
 
     // Radio adaptativo: garantizar separación mínima entre categorías vecinas
@@ -191,7 +197,7 @@ const GraphView = () => {
     let catRadius = baseCatRadius;
     if (catCount >= 2) {
       const arcStep = Math.PI / (catCount - 1);
-      const minSpacing = 2 * CAT_R + (isMobile ? 60 : 70);
+      const minSpacing = 2 * CAT_R + (isMobile ? 32 : 70);
       const requiredRadius = minSpacing / (2 * Math.sin(arcStep / 2));
       catRadius = Math.max(baseCatRadius, requiredRadius);
     }
@@ -348,9 +354,9 @@ const GraphView = () => {
     if (!bounds) return;
 
     const isMobile = size.w < 640;
-    const sideMargin = isMobile ? 24 : 36;
-    const topMargin = 48;
-    const bottomMargin = isMobile ? 100 : 80;
+    const sideMargin = isMobile ? 12 : 36;
+    const topMargin = isMobile ? 36 : 48;
+    const bottomMargin = isMobile ? 88 : 80;
     const availableW = Math.max(1, size.w - sideMargin * 2);
     const availableH = Math.max(1, size.h - topMargin - bottomMargin);
     const treeW = Math.max(1, bounds.maxX - bounds.minX);
@@ -365,13 +371,49 @@ const GraphView = () => {
     setPan({ x: targetX - treeCenterX * zoom, y: targetY - treeCenterY * zoom });
   }, [getNodesBounds, positionsWithOffsets, size.w, size.h]);
 
+  const hasOpenVisibleBranch = useMemo(() => {
+    return positionsWithOffsets.some(node =>
+      node.id !== "hub" &&
+      (node.type === "note" || node.type === "category") &&
+      node.hasChildren &&
+      node.isCollapsed === false
+    );
+  }, [positionsWithOffsets]);
+
+  const layoutSignature = useMemo(() => {
+    return positions
+      .map(node => `${node.id}:${Math.round(node.x)}:${Math.round(node.y)}:${node.isCollapsed ? 1 : 0}`)
+      .join("|");
+  }, [positions]);
+
   useEffect(() => {
-    const nodeId = lastExpandedRef.current;
-    if (!nodeId) return;
-    if (!positionsWithOffsets.some(node => node.id === nodeId)) return;
-    focusBranch(nodeId);
-    lastExpandedRef.current = null;
-  }, [focusBranch, positionsWithOffsets]);
+    if (positionsWithOffsets.length === 0) return;
+
+    const expandedNodeId = lastExpandedRef.current;
+    if (expandedNodeId) {
+      if (!positionsWithOffsets.some(node => node.id === expandedNodeId)) return;
+      focusBranch(expandedNodeId);
+      lastExpandedRef.current = null;
+      didInitialFitRef.current = true;
+      previousHasOpenBranchRef.current = hasOpenVisibleBranch;
+      return;
+    }
+
+    if (lastCollapsedRef.current) {
+      fitFullTree();
+      lastCollapsedRef.current = null;
+      didInitialFitRef.current = true;
+      previousHasOpenBranchRef.current = hasOpenVisibleBranch;
+      return;
+    }
+
+    if (!didInitialFitRef.current || (!hasOpenVisibleBranch && previousHasOpenBranchRef.current)) {
+      fitFullTree();
+      didInitialFitRef.current = true;
+    }
+
+    previousHasOpenBranchRef.current = hasOpenVisibleBranch;
+  }, [layoutSignature, size.w, size.h, hasOpenVisibleBranch]);
 
   // Long-press handlers
   const startLongPress = useCallback((nodeId: string, clientX: number, clientY: number) => {
@@ -462,6 +504,7 @@ const GraphView = () => {
         const hasChildren = notes.some(n => n.parentNoteId === nId);
           if (hasChildren && note) {
             lastExpandedRef.current = note.isCollapsed ? nodeId : null;
+            lastCollapsedRef.current = note.isCollapsed ? null : nodeId;
             toggleNoteCollapsed(nId);
           }
         } else if (nodeId.startsWith("cat-")) {
@@ -470,6 +513,7 @@ const GraphView = () => {
           const hasChildren = notes.some(n => n.categoryId === cId && !n.parentNoteId);
           if (hasChildren && cat) {
             lastExpandedRef.current = cat.isCollapsed ? nodeId : null;
+            lastCollapsedRef.current = cat.isCollapsed ? null : nodeId;
             toggleCategoryCollapsed(cId);
           }
         } else if (nodeId === "root") {
