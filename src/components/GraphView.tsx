@@ -453,9 +453,33 @@ const GraphView = () => {
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   }, []);
 
-  // Drag pointer handlers (window-level)
+  // Drag / pan / pinch pointer handlers (window-level)
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
+      // Update tracked pointer position
+      if (pointersRef.current.has(e.pointerId)) {
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+
+      // Pinch (two active pointers on background)
+      if (pinchState.current && pointersRef.current.size >= 2) {
+        const pts = Array.from(pointersRef.current.values());
+        const [p1, p2] = pts;
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const ps = pinchState.current;
+        if (ps.startDist > 0) {
+          const scale = dist / ps.startDist;
+          const newZoom = Math.max(0.3, Math.min(3, ps.startZoom * scale));
+          const worldX = (ps.centerX - ps.startPanX) / ps.startZoom;
+          const worldY = (ps.centerY - ps.startPanY) / ps.startZoom;
+          const newPanX = ps.centerX - worldX * newZoom;
+          const newPanY = ps.centerY - worldY * newZoom;
+          setViewZoom(newZoom);
+          setPan({ x: newPanX, y: newPanY });
+        }
+        return;
+      }
+
       const ds = dragState.current;
       if (ds) {
         const rawDx = e.clientX - ds.startX;
@@ -480,20 +504,50 @@ const GraphView = () => {
       const rawDy = e.clientY - ps.startY;
       if (!didPan.current && Math.hypot(rawDx, rawDy) > 5) didPan.current = true;
       if (didPan.current) {
-        setViewZoom(1);
         setPan({ x: ps.baseX + rawDx, y: ps.baseY + rawDy });
       }
     };
-    const onUp = () => {
+    const onUp = (e: PointerEvent) => {
+      pointersRef.current.delete(e.pointerId);
       dragState.current = null;
-      panState.current = null;
-      setIsPanning(false);
+
+      // End pinch when going below 2 pointers; if one remains, seamlessly continue as pan
+      if (pinchState.current && pointersRef.current.size < 2) {
+        pinchState.current = null;
+        const remaining = Array.from(pointersRef.current.values())[0];
+        if (remaining) {
+          panState.current = {
+            startX: remaining.x,
+            startY: remaining.y,
+            baseX: 0,
+            baseY: 0,
+          };
+          // Use functional update to capture latest pan
+          setPan(p => {
+            if (panState.current) {
+              panState.current.baseX = p.x;
+              panState.current.baseY = p.y;
+            }
+            return p;
+          });
+          didPan.current = true;
+          setIsPanning(true);
+          return;
+        }
+      }
+
+      if (pointersRef.current.size === 0) {
+        panState.current = null;
+        setIsPanning(false);
+      }
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, [cancelLongPress]);
 
