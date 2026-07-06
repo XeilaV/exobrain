@@ -78,6 +78,15 @@ const GraphView = () => {
   const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
   const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(null);
   const panState = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchState = useRef<{
+    startDist: number;
+    startZoom: number;
+    startPanX: number;
+    startPanY: number;
+    centerX: number;
+    centerY: number;
+  } | null>(null);
 
   // Hidden category filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
