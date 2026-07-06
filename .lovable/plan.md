@@ -1,68 +1,66 @@
 ## Objetivo
 
-En móvil el árbol no debe comprimirse hasta solapar nodos. En su lugar:
+Hacer que en móvil se pueda navegar por el mapa con el dedo de forma fluida y hacer zoom con pinza (dos dedos), sin saltos ni resets inesperados.
 
-- Las ramas tendrán más separación aunque el árbol salga de la pantalla.
-- Al abrir una rama, la vista se desplazará automáticamente hacia esa rama.
-- El usuario podrá arrastrar el fondo para navegar libremente por todo el árbol.
-- Habrá un botón de árbol para volver a ver el árbol completo.
+## Problemas actuales
+
+En `src/components/GraphView.tsx`:
+
+- El pan usa `onPointerDown` de React + `pointermove` en `window`, y **fuerza `setViewZoom(1)` en cada movimiento** (línea 474). Esto provoca saltos si el usuario había hecho zoom con el botón 🌳, y hace que `pan.x/y` se actualicen contra un zoom que cambia, generando un movimiento no lineal.
+- No existe **pinch-to-zoom**: no hay manejo de dos punteros simultáneos. En móvil solo se puede hacer zoom pulsando el botón de árbol.
+- El umbral de 5px se aplica sobre coordenadas de pantalla sin tener en cuenta `touch-action`, así que el navegador puede interpretar el gesto como scroll y "robar" eventos.
+- El contenedor raíz no fija `touch-action`, por lo que el gesto de pinza dispara zoom nativo del navegador en lugar del nuestro.
 
 ## Cambios propuestos
 
-### 1. Hacer que el árbol pueda salir de la pantalla
+### 1. Fijar `touch-action` en el contenedor del grafo
 
-En `src/components/GraphView.tsx` quitaré la lógica que ahora fuerza el árbol a caber en el viewport:
+Añadir `touch-action: none` al `div` raíz de `GraphView` para que el navegador no interprete ni scroll ni pinch nativo. Los nodos ya usan `touch-none`.
 
-- Eliminar el auto-escalado global que reduce todo el árbol cuando crece.
-- Eliminar el clamp que obliga a cada nodo a quedarse dentro de los bordes de la pantalla.
+### 2. Registrar los punteros activos
 
-Esto permite que las ramas mantengan su separación real en mobile, aunque algunas queden fuera de pantalla.
+Añadir un `pointersRef = useRef<Map<pointerId, { x, y }>>()` que se actualice en `pointerdown`, `pointermove`, `pointerup` y `pointercancel`. Esto permite distinguir un dedo (pan) de dos dedos (pinch).
 
-### 2. Aumentar separación entre ramas y nodos
+### 3. Pan de un dedo sin resetear el zoom
 
-Ajustaré el layout radial para móvil:
+Reescribir el flujo de pan:
 
-- Más distancia entre categorías.
-- Más distancia entre nodo madre e hijas cuando se despliegan.
-- Mayor abanico angular para hijas cuando una rama tiene varias notas.
-- Radios por profundidad menos comprimidos en móvil.
+- En `pointerdown` sobre el fondo con **un solo puntero activo**: guardar `panState = { startX, startY, baseX: pan.x, baseY: pan.y }`. **No** tocar `viewZoom`.
+- En `pointermove` con un solo puntero: actualizar `pan = { baseX + dx, baseY + dy }` directamente. Sin dividir por zoom (el pan es en coordenadas de pantalla, coherente con `matrix(z,0,0,z,pan.x,pan.y)`).
+- Eliminar el bloque que hacía `setViewZoom(1)` durante el pan y la reconversión de coordenadas en `onPointerDown`.
 
-La prioridad será evitar solapes visuales entre nodos y etiquetas.
+Resultado: el pan es fluido y respeta el zoom actual.
 
-### 3. Añadir navegación libre por el mapa
+### 4. Pinch-to-zoom con dos dedos
 
-Añadiré un estado de desplazamiento del lienzo completo (`pan`) y aplicaré el desplazamiento al contenedor del árbol.
+Cuando se detecte un **segundo puntero** activo sobre el fondo:
 
-- Arrastrar el fondo moverá todo el árbol.
-- Arrastrar un nodo seguirá moviendo ese nodo/subárbol como hasta ahora.
-- El gesto de pan no interferirá con long-press, edición, enlaces ni post-it.
+- Cancelar `panState` y `dragState`.
+- Guardar `pinchState = { startDist, startZoom: viewZoom, startPan: {...pan}, center: puntoMedioPantalla }`.
+- En `pointermove` con dos punteros:
+  - `newDist = distancia(p1, p2)`
+  - `scale = newDist / startDist`
+  - `newZoom = clamp(startZoom * scale, 0.3, 3)`
+  - Ajustar `pan` para que el punto en pantalla `center` permanezca sobre el mismo punto del mundo:
+    - `worldX = (center.x - startPan.x) / startZoom`
+    - `pan.x = center.x - worldX * newZoom` (idem `y`)
+  - `setViewZoom(newZoom); setPan(...)`.
+- Al soltar cualquiera de los dos dedos, cerrar `pinchState`. Si aún queda un dedo, iniciar un nuevo `panState` desde su posición actual (para no dar saltos al volver de pinch a pan).
 
-### 4. Foco automático al abrir una rama
+### 5. Cancelar long-press y drag durante gestos multi-touch
 
-Cuando el usuario haga doble click para desplegar una categoría o nota con hijas:
+En cuanto haya dos punteros o comience `pinchState`, llamar a `cancelLongPress()` y limpiar `dragState.current`, para que no se abra un menú contextual ni se arrastre un nodo por accidente mientras se hace pinch.
 
-- Se detectará cuál fue el nodo abierto.
-- Se calculará el área ocupada por esa rama y sus descendientes.
-- El lienzo se desplazará para centrar esa rama en pantalla, respetando el espacio de los controles superiores y del chat inferior.
-- No habrá zoom automático al abrir ramas; solo desplazamiento.
+### 6. Ajustar `fitFullTree` y foco
 
-### 5. Botón para ver árbol completo
+Mantener el comportamiento actual (fit al colapsar, focus a rama al expandir). No se pierden porque solo se disparan por cambios de layout, no por gestos.
 
-Añadiré un botón con icono de árbol en los controles superiores.
+### 7. Verificación
 
-Al pulsarlo:
+En móvil 390×844 con Playwright emulando eventos táctiles:
 
-- Se calculará el bounding box de todo el árbol.
-- El lienzo se recentrará.
-- Si el árbol completo no cabe, se aplicará solo aquí un zoom-out temporal para verlo entero.
-- Al volver a hacer pan manual o abrir una rama, el zoom volverá a `1`.
-
-### 6. Verificación
-
-Comprobaré especialmente en móvil:
-
-- Abrir ramas con muchas hijas no genera solapes importantes.
-- La rama abierta queda enfocada aunque el resto del árbol salga de pantalla.
-- Se puede arrastrar el fondo hasta llegar a cualquier rama.
-- El botón de árbol recupera la vista completa.
-- No se rompen post-it, drag de nodos, long-press, filtros, creación de notas ni edición.
+- Un dedo arrastrando el fondo mueve todo el mapa con zoom actual sin saltos.
+- Dos dedos separándose amplían centrados en el punto medio; juntándose reducen.
+- Combinar pinch y luego soltar un dedo continúa como pan sin salto.
+- Long-press sobre categoría sigue abriendo menú; drag de nodo sigue funcionando; doble-click sigue expandiendo/colapsando.
+- El botón 🌳 sigue recentrando y su zoom no se resetea al iniciar un pan.

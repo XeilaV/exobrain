@@ -78,6 +78,15 @@ const GraphView = () => {
   const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
   const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(null);
   const panState = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchState = useRef<{
+    startDist: number;
+    startZoom: number;
+    startPanX: number;
+    startPanY: number;
+    centerX: number;
+    centerY: number;
+  } | null>(null);
 
   // Hidden category filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
@@ -444,9 +453,64 @@ const GraphView = () => {
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   }, []);
 
-  // Drag pointer handlers (window-level)
+  // Drag / pan / pinch pointer handlers (window-level)
   useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      // Track any pointer that we haven't seen. If it becomes the 2nd active pointer
+      // and we don't yet have a pinch, initiate one from current pan/zoom state.
+      if (pointersRef.current.has(e.pointerId)) return;
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointersRef.current.size >= 2 && !pinchState.current) {
+        const pts = Array.from(pointersRef.current.values());
+        const [p1, p2] = pts;
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        pinchState.current = {
+          startDist: dist,
+          startZoom: viewZoomRef.current || 1,
+          startPanX: 0,
+          startPanY: 0,
+          centerX: (p1.x + p2.x) / 2,
+          centerY: (p1.y + p2.y) / 2,
+        };
+        setPan(p => {
+          if (pinchState.current) {
+            pinchState.current.startPanX = p.x;
+            pinchState.current.startPanY = p.y;
+          }
+          return p;
+        });
+        panState.current = null;
+        dragState.current = null;
+        cancelLongPress();
+        didPan.current = true;
+        setIsPanning(true);
+      }
+    };
     const onMove = (e: PointerEvent) => {
+      // Update tracked pointer position
+      if (pointersRef.current.has(e.pointerId)) {
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+
+      // Pinch (two active pointers on background)
+      if (pinchState.current && pointersRef.current.size >= 2) {
+        const pts = Array.from(pointersRef.current.values());
+        const [p1, p2] = pts;
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const ps = pinchState.current;
+        if (ps.startDist > 0) {
+          const scale = dist / ps.startDist;
+          const newZoom = Math.max(0.3, Math.min(3, ps.startZoom * scale));
+          const worldX = (ps.centerX - ps.startPanX) / ps.startZoom;
+          const worldY = (ps.centerY - ps.startPanY) / ps.startZoom;
+          const newPanX = ps.centerX - worldX * newZoom;
+          const newPanY = ps.centerY - worldY * newZoom;
+          setViewZoom(newZoom);
+          setPan({ x: newPanX, y: newPanY });
+        }
+        return;
+      }
+
       const ds = dragState.current;
       if (ds) {
         const rawDx = e.clientX - ds.startX;
@@ -471,20 +535,52 @@ const GraphView = () => {
       const rawDy = e.clientY - ps.startY;
       if (!didPan.current && Math.hypot(rawDx, rawDy) > 5) didPan.current = true;
       if (didPan.current) {
-        setViewZoom(1);
         setPan({ x: ps.baseX + rawDx, y: ps.baseY + rawDy });
       }
     };
-    const onUp = () => {
+    const onUp = (e: PointerEvent) => {
+      pointersRef.current.delete(e.pointerId);
       dragState.current = null;
-      panState.current = null;
-      setIsPanning(false);
+
+      // End pinch when going below 2 pointers; if one remains, seamlessly continue as pan
+      if (pinchState.current && pointersRef.current.size < 2) {
+        pinchState.current = null;
+        const remaining = Array.from(pointersRef.current.values())[0];
+        if (remaining) {
+          panState.current = {
+            startX: remaining.x,
+            startY: remaining.y,
+            baseX: 0,
+            baseY: 0,
+          };
+          // Use functional update to capture latest pan
+          setPan(p => {
+            if (panState.current) {
+              panState.current.baseX = p.x;
+              panState.current.baseY = p.y;
+            }
+            return p;
+          });
+          didPan.current = true;
+          setIsPanning(true);
+          return;
+        }
+      }
+
+      if (pointersRef.current.size === 0) {
+        panState.current = null;
+        setIsPanning(false);
+      }
     };
+    window.addEventListener("pointerdown", onDown);
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
+      window.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, [cancelLongPress]);
 
@@ -580,22 +676,44 @@ const GraphView = () => {
     <div
       ref={containerRef}
       className="flex-1 h-full w-full bg-background overflow-hidden relative select-none"
+      style={{ touchAction: "none" }}
       onPointerDown={(e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 && e.pointerType === "mouse") return;
         const target = e.target as HTMLElement;
-        if (target.closest("[data-graph-node], button, input, textarea, [role='dialog'], [data-no-pan]")) return;
-        const currentZoom = viewZoomRef.current || 1;
-        let baseX = pan.x;
-        let baseY = pan.y;
-        if (currentZoom !== 1) {
-          const centerWorldX = (size.w / 2 - pan.x) / currentZoom;
-          const centerWorldY = (size.h / 2 - pan.y) / currentZoom;
-          baseX = size.w / 2 - centerWorldX;
-          baseY = size.h / 2 - centerWorldY;
-          setViewZoom(1);
-          setPan({ x: baseX, y: baseY });
+        const onBackground = !target.closest("[data-graph-node], button, input, textarea, [role='dialog'], [data-no-pan]");
+
+        // Always track pointer for pinch detection
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        // Second pointer -> start pinch (cancel any in-flight pan or node drag)
+        if (pointersRef.current.size >= 2) {
+          const pts = Array.from(pointersRef.current.values());
+          const [p1, p2] = pts;
+          const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+          pinchState.current = {
+            startDist: dist,
+            startZoom: viewZoomRef.current || 1,
+            startPanX: pan.x,
+            startPanY: pan.y,
+            centerX: (p1.x + p2.x) / 2,
+            centerY: (p1.y + p2.y) / 2,
+          };
+          panState.current = null;
+          dragState.current = null;
+          cancelLongPress();
+          didPan.current = true;
+          setIsPanning(true);
+          return;
         }
-        panState.current = { startX: e.clientX, startY: e.clientY, baseX, baseY };
+
+        if (!onBackground) return;
+
+        panState.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+          baseX: pan.x,
+          baseY: pan.y,
+        };
         didPan.current = false;
         setIsPanning(true);
       }}
