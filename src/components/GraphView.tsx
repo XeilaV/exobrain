@@ -455,6 +455,37 @@ const GraphView = () => {
 
   // Drag / pan / pinch pointer handlers (window-level)
   useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      // Track any pointer that we haven't seen. If it becomes the 2nd active pointer
+      // and we don't yet have a pinch, initiate one from current pan/zoom state.
+      if (pointersRef.current.has(e.pointerId)) return;
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointersRef.current.size >= 2 && !pinchState.current) {
+        const pts = Array.from(pointersRef.current.values());
+        const [p1, p2] = pts;
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        pinchState.current = {
+          startDist: dist,
+          startZoom: viewZoomRef.current || 1,
+          startPanX: 0,
+          startPanY: 0,
+          centerX: (p1.x + p2.x) / 2,
+          centerY: (p1.y + p2.y) / 2,
+        };
+        setPan(p => {
+          if (pinchState.current) {
+            pinchState.current.startPanX = p.x;
+            pinchState.current.startPanY = p.y;
+          }
+          return p;
+        });
+        panState.current = null;
+        dragState.current = null;
+        cancelLongPress();
+        didPan.current = true;
+        setIsPanning(true);
+      }
+    };
     const onMove = (e: PointerEvent) => {
       // Update tracked pointer position
       if (pointersRef.current.has(e.pointerId)) {
