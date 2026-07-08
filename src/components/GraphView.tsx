@@ -2,7 +2,8 @@ import { useNotes } from "@/contexts/NotesContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine } from "lucide-react";
+import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/hooks/useTheme";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
 import ColorPicker from "./ColorPicker";
@@ -44,6 +45,7 @@ const GraphView = () => {
 
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 1200, h: 800 });
@@ -1056,6 +1058,13 @@ const GraphView = () => {
                     <Brain size={12} />Renombrar tu brain
                   </button>
                   <button
+                    onClick={toggleTheme}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    {theme === "dark" ? <Sun size={12} /> : <Moon size={12} />}
+                    {theme === "dark" ? "Modo claro" : "Modo oscuro"}
+                  </button>
+                  <button
                     onClick={async () => { setShowProfileMenu(false); await signOut(); navigate("/auth"); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
                   >
@@ -1063,12 +1072,21 @@ const GraphView = () => {
                   </button>
                 </>
               ) : (
-                <button
-                  onClick={() => { setShowProfileMenu(false); navigate("/auth"); }}
-                  className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                >
-                  <LogIn size={12} />Iniciar sesión
-                </button>
+                <>
+                  <button
+                    onClick={toggleTheme}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    {theme === "dark" ? <Sun size={12} /> : <Moon size={12} />}
+                    {theme === "dark" ? "Modo claro" : "Modo oscuro"}
+                  </button>
+                  <button
+                    onClick={() => { setShowProfileMenu(false); navigate("/auth"); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <LogIn size={12} />Iniciar sesión
+                  </button>
+                </>
               )}
             </div>
           )}

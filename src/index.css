@@ -52,6 +52,49 @@
     --font-display: 'Playfair Display', serif;
     --font-body: 'Inter', sans-serif;
   }
+
+  .dark {
+    --background: 30 12% 8%;
+    --foreground: 40 25% 92%;
+
+    --card: 30 10% 12%;
+    --card-foreground: 40 25% 92%;
+
+    --popover: 30 12% 10%;
+    --popover-foreground: 40 25% 92%;
+
+    --primary: 30 80% 58%;
+    --primary-foreground: 30 15% 10%;
+
+    --secondary: 30 8% 18%;
+    --secondary-foreground: 40 20% 88%;
+
+    --muted: 30 8% 16%;
+    --muted-foreground: 35 12% 62%;
+
+    --accent: 30 60% 55%;
+    --accent-foreground: 30 15% 10%;
+
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 40 25% 95%;
+
+    --border: 30 8% 22%;
+    --input: 30 8% 22%;
+    --ring: 30 80% 58%;
+
+    --sidebar-background: 30 10% 11%;
+    --sidebar-foreground: 40 20% 88%;
+    --sidebar-primary: 30 80% 58%;
+    --sidebar-primary-foreground: 30 15% 10%;
+    --sidebar-accent: 30 10% 18%;
+    --sidebar-accent-foreground: 40 20% 88%;
+    --sidebar-border: 30 8% 22%;
+    --sidebar-ring: 30 80% 58%;
+
+    --chat-bg: 30 10% 13%;
+    --chat-user: 30 80% 55%;
+    --chat-ai: 30 10% 18%;
+  }
 }
 
 @layer base {
