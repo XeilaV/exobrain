@@ -693,6 +693,9 @@ const GraphView = () => {
 
         if (!onBackground) return;
 
+        // Touch: 1-finger canvas pan is disabled (use 2 fingers). Only mouse/pen pans with one pointer.
+        if (e.pointerType === "touch") return;
+
         panState.current = {
           startX: e.clientX,
           startY: e.clientY,
