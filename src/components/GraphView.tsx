@@ -494,19 +494,22 @@ const GraphView = () => {
         pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       }
 
-      // Pinch (two active pointers on background)
+      // Pinch (two active pointers): zoom + pan following centroid
       if (pinchState.current && pointersRef.current.size >= 2) {
         const pts = Array.from(pointersRef.current.values());
         const [p1, p2] = pts;
         const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const cx = (p1.x + p2.x) / 2;
+        const cy = (p1.y + p2.y) / 2;
         const ps = pinchState.current;
         if (ps.startDist > 0) {
           const scale = dist / ps.startDist;
           const newZoom = Math.max(0.3, Math.min(3, ps.startZoom * scale));
+          // World point under original centroid should stay under current centroid
           const worldX = (ps.centerX - ps.startPanX) / ps.startZoom;
           const worldY = (ps.centerY - ps.startPanY) / ps.startZoom;
-          const newPanX = ps.centerX - worldX * newZoom;
-          const newPanY = ps.centerY - worldY * newZoom;
+          const newPanX = cx - worldX * newZoom;
+          const newPanY = cy - worldY * newZoom;
           setViewZoom(newZoom);
           setPan({ x: newPanX, y: newPanY });
         }
