@@ -45,6 +45,7 @@ const GraphView = () => {
 
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 1200, h: 800 });
