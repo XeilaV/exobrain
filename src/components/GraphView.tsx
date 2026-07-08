@@ -1032,6 +1032,14 @@ const GraphView = () => {
 
       {/* Top-right controls */}
       <div className="fixed top-3 right-3 z-30 flex gap-2">
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
+          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+          title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
+          aria-label="Alternar modo oscuro"
+        >
+          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShowProfileMenu(v => !v); setShowFilterPanel(false); setIsAddingCat(false); }}
@@ -1058,13 +1066,6 @@ const GraphView = () => {
                     <Brain size={12} />Renombrar tu brain
                   </button>
                   <button
-                    onClick={toggleTheme}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    {theme === "dark" ? <Sun size={12} /> : <Moon size={12} />}
-                    {theme === "dark" ? "Modo claro" : "Modo oscuro"}
-                  </button>
-                  <button
                     onClick={async () => { setShowProfileMenu(false); await signOut(); navigate("/auth"); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
                   >
@@ -1072,21 +1073,12 @@ const GraphView = () => {
                   </button>
                 </>
               ) : (
-                <>
-                  <button
-                    onClick={toggleTheme}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    {theme === "dark" ? <Sun size={12} /> : <Moon size={12} />}
-                    {theme === "dark" ? "Modo claro" : "Modo oscuro"}
-                  </button>
-                  <button
-                    onClick={() => { setShowProfileMenu(false); navigate("/auth"); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    <LogIn size={12} />Iniciar sesión
-                  </button>
-                </>
+                <button
+                  onClick={() => { setShowProfileMenu(false); navigate("/auth"); }}
+                  className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                >
+                  <LogIn size={12} />Iniciar sesión
+                </button>
               )}
             </div>
           )}
