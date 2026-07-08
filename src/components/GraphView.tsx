@@ -494,19 +494,22 @@ const GraphView = () => {
         pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       }
 
-      // Pinch (two active pointers on background)
+      // Pinch (two active pointers): zoom + pan following centroid
       if (pinchState.current && pointersRef.current.size >= 2) {
         const pts = Array.from(pointersRef.current.values());
         const [p1, p2] = pts;
         const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const cx = (p1.x + p2.x) / 2;
+        const cy = (p1.y + p2.y) / 2;
         const ps = pinchState.current;
         if (ps.startDist > 0) {
           const scale = dist / ps.startDist;
           const newZoom = Math.max(0.3, Math.min(3, ps.startZoom * scale));
+          // World point under original centroid should stay under current centroid
           const worldX = (ps.centerX - ps.startPanX) / ps.startZoom;
           const worldY = (ps.centerY - ps.startPanY) / ps.startZoom;
-          const newPanX = ps.centerX - worldX * newZoom;
-          const newPanY = ps.centerY - worldY * newZoom;
+          const newPanX = cx - worldX * newZoom;
+          const newPanY = cy - worldY * newZoom;
           setViewZoom(newZoom);
           setPan({ x: newPanX, y: newPanY });
         }
@@ -544,29 +547,9 @@ const GraphView = () => {
       pointersRef.current.delete(e.pointerId);
       dragState.current = null;
 
-      // End pinch when going below 2 pointers; if one remains, seamlessly continue as pan
+      // End pinch when going below 2 pointers; do NOT continue as pan (1-finger canvas pan disabled on touch)
       if (pinchState.current && pointersRef.current.size < 2) {
         pinchState.current = null;
-        const remaining = Array.from(pointersRef.current.values())[0];
-        if (remaining) {
-          panState.current = {
-            startX: remaining.x,
-            startY: remaining.y,
-            baseX: 0,
-            baseY: 0,
-          };
-          // Use functional update to capture latest pan
-          setPan(p => {
-            if (panState.current) {
-              panState.current.baseX = p.x;
-              panState.current.baseY = p.y;
-            }
-            return p;
-          });
-          didPan.current = true;
-          setIsPanning(true);
-          return;
-        }
       }
 
       if (pointersRef.current.size === 0) {
@@ -709,6 +692,9 @@ const GraphView = () => {
         }
 
         if (!onBackground) return;
+
+        // Touch: 1-finger canvas pan is disabled (use 2 fingers). Only mouse/pen pans with one pointer.
+        if (e.pointerType === "touch") return;
 
         panState.current = {
           startX: e.clientX,
@@ -1032,6 +1018,14 @@ const GraphView = () => {
 
       {/* Top-right controls */}
       <div className="fixed top-3 right-3 z-30 flex gap-2">
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
+          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+          title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
+          aria-label="Alternar modo oscuro"
+        >
+          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShowProfileMenu(v => !v); setShowFilterPanel(false); setIsAddingCat(false); }}
@@ -1058,13 +1052,6 @@ const GraphView = () => {
                     <Brain size={12} />Renombrar tu brain
                   </button>
                   <button
-                    onClick={toggleTheme}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    {theme === "dark" ? <Sun size={12} /> : <Moon size={12} />}
-                    {theme === "dark" ? "Modo claro" : "Modo oscuro"}
-                  </button>
-                  <button
                     onClick={async () => { setShowProfileMenu(false); await signOut(); navigate("/auth"); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
                   >
@@ -1072,21 +1059,12 @@ const GraphView = () => {
                   </button>
                 </>
               ) : (
-                <>
-                  <button
-                    onClick={toggleTheme}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    {theme === "dark" ? <Sun size={12} /> : <Moon size={12} />}
-                    {theme === "dark" ? "Modo claro" : "Modo oscuro"}
-                  </button>
-                  <button
-                    onClick={() => { setShowProfileMenu(false); navigate("/auth"); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    <LogIn size={12} />Iniciar sesión
-                  </button>
-                </>
+                <button
+                  onClick={() => { setShowProfileMenu(false); navigate("/auth"); }}
+                  className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                >
+                  <LogIn size={12} />Iniciar sesión
+                </button>
               )}
             </div>
           )}
