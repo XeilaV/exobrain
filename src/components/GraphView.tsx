@@ -1058,6 +1058,13 @@ const GraphView = () => {
                     <Brain size={12} />Renombrar tu brain
                   </button>
                   <button
+                    onClick={toggleTheme}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    {theme === "dark" ? <Sun size={12} /> : <Moon size={12} />}
+                    {theme === "dark" ? "Modo claro" : "Modo oscuro"}
+                  </button>
+                  <button
                     onClick={async () => { setShowProfileMenu(false); await signOut(); navigate("/auth"); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
                   >
@@ -1065,12 +1072,21 @@ const GraphView = () => {
                   </button>
                 </>
               ) : (
-                <button
-                  onClick={() => { setShowProfileMenu(false); navigate("/auth"); }}
-                  className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                >
-                  <LogIn size={12} />Iniciar sesión
-                </button>
+                <>
+                  <button
+                    onClick={toggleTheme}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    {theme === "dark" ? <Sun size={12} /> : <Moon size={12} />}
+                    {theme === "dark" ? "Modo claro" : "Modo oscuro"}
+                  </button>
+                  <button
+                    onClick={() => { setShowProfileMenu(false); navigate("/auth"); }}
+                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <LogIn size={12} />Iniciar sesión
+                  </button>
+                </>
               )}
             </div>
           )}
