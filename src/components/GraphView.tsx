@@ -547,29 +547,9 @@ const GraphView = () => {
       pointersRef.current.delete(e.pointerId);
       dragState.current = null;
 
-      // End pinch when going below 2 pointers; if one remains, seamlessly continue as pan
+      // End pinch when going below 2 pointers; do NOT continue as pan (1-finger canvas pan disabled on touch)
       if (pinchState.current && pointersRef.current.size < 2) {
         pinchState.current = null;
-        const remaining = Array.from(pointersRef.current.values())[0];
-        if (remaining) {
-          panState.current = {
-            startX: remaining.x,
-            startY: remaining.y,
-            baseX: 0,
-            baseY: 0,
-          };
-          // Use functional update to capture latest pan
-          setPan(p => {
-            if (panState.current) {
-              panState.current.baseX = p.x;
-              panState.current.baseY = p.y;
-            }
-            return p;
-          });
-          didPan.current = true;
-          setIsPanning(true);
-          return;
-        }
       }
 
       if (pointersRef.current.size === 0) {
