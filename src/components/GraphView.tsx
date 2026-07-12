@@ -40,7 +40,7 @@ const GraphView = () => {
   const {
     notes, categories, addNote, addCategory, deleteNote, deleteCategory,
     updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
-    setSelectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
+    setSelectedNoteId, selectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
   } = useNotes();
 
   const { user, signOut } = useAuth();
@@ -118,6 +118,15 @@ const GraphView = () => {
   useEffect(() => {
     if (!loading && !onboarded) setShowBrainDialog(true);
   }, [loading, onboarded]);
+
+  // Sync open post-it with selectedNoteId (navigation via links inside post-it)
+  useEffect(() => {
+    if (!openPostIt) return;
+    if (selectedNoteId && selectedNoteId !== openPostIt.noteId) {
+      setOpenPostIt(prev => prev ? { ...prev, noteId: selectedNoteId } : prev);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNoteId]);
 
   // Build radial tree positions + parent map (for drag propagation)
   const { positions, edges, parentMap } = useMemo(() => {
@@ -809,13 +818,13 @@ const GraphView = () => {
               onPointerLeave={cancelLongPress}
               onClick={e => { e.stopPropagation(); handleNodeClick(node.id, e.clientX, e.clientY); }}
             >
-              {/* Label below circle for root + category (tree is inverted) */}
-              {(isRoot || isCat) && (
+              {/* Label below circle for category (tree is inverted) */}
+              {isCat && (
                 <span
-                  className={`absolute whitespace-nowrap ${isRoot ? "font-display text-base font-bold" : "font-display text-xs font-semibold"} text-foreground`}
+                  className="absolute whitespace-nowrap font-display text-xs font-semibold text-foreground"
                   style={{ top: r * 2 + 6, left: '50%', transform: 'translateX(-50%)' }}
                 >
-                  {isCat && cat ? `${cat.icon} ` : ""}{node.label}
+                  {cat ? `${cat.icon} ` : ""}{node.label}
                 </span>
               )}
 
@@ -831,7 +840,14 @@ const GraphView = () => {
                   borderColor: isRoot ? `hsl(var(--foreground))` : `hsl(${node.color})`,
                 }}
               >
-                {isRoot && <span className="text-2xl">🌳</span>}
+                {isRoot && (
+                  <span
+                    className="font-display font-bold text-foreground text-center px-2 leading-tight"
+                    style={{ fontSize: node.label.length > 10 ? 11 : 14 }}
+                  >
+                    {node.label}
+                  </span>
+                )}
                 {showCollapsedDot && (
                   <span
                     className="rounded-full"
