@@ -119,6 +119,15 @@ const GraphView = () => {
     if (!loading && !onboarded) setShowBrainDialog(true);
   }, [loading, onboarded]);
 
+  // Sync open post-it with selectedNoteId (navigation via links inside post-it)
+  useEffect(() => {
+    if (!openPostIt) return;
+    if (selectedNoteId && selectedNoteId !== openPostIt.noteId) {
+      setOpenPostIt(prev => prev ? { ...prev, noteId: selectedNoteId } : prev);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNoteId]);
+
   // Build radial tree positions + parent map (for drag propagation)
   const { positions, edges, parentMap } = useMemo(() => {
     const pos: NodePos[] = [];
