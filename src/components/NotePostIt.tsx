@@ -242,12 +242,17 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
                 <PostItChecklistItem key={item.id} item={item} noteId={noteId} />
               ))}
             </Reorder.Group>
-            <div className="flex items-center gap-1.5 mt-2">
-              <textarea value={newItemText} onChange={e => setNewItemText(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddItem(); } }}
+            <div className="flex items-end gap-1.5 mt-2">
+              <textarea value={newItemText}
+                onChange={e => {
+                  setNewItemText(e.target.value);
+                  e.currentTarget.style.height = "auto";
+                  e.currentTarget.style.height = e.currentTarget.scrollHeight + "px";
+                }}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddItem(); (e.currentTarget as HTMLTextAreaElement).style.height = "auto"; } }}
                 placeholder="Añadir tarea..." rows={1}
-                className="flex-1 text-sm bg-muted rounded px-2 py-1.5 outline-none text-foreground placeholder:text-muted-foreground font-body resize-none" />
-              <button onClick={handleAddItem} className="p-1.5 rounded bg-primary text-primary-foreground hover:opacity-90">
+                className="flex-1 text-sm bg-muted rounded px-2 py-1.5 outline-none text-foreground placeholder:text-muted-foreground font-body resize-none overflow-hidden leading-snug max-h-40" />
+              <button onClick={handleAddItem} className="p-1.5 rounded bg-primary text-primary-foreground hover:opacity-90 shrink-0">
                 <Plus size={14} />
               </button>
             </div>
