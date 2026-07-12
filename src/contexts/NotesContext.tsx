@@ -202,33 +202,44 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await supabase.from("categories").delete().eq("id", id);
   }, []);
 
-  const addChecklistItem = useCallback((noteId: string, text: string) => {
-    setNotes(prev => prev.map(n => {
-      if (n.id !== noteId) return n;
-      const newChecklist = [...n.checklist, { id: crypto.randomUUID(), text, completed: false }];
-      // Save to DB
-      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
-      return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
-    }));
+  const persistChecklist = useCallback((noteId: string, newChecklist: ChecklistItem[]) => {
+    // Cancel any pending debounced updateNote that might overwrite checklist with stale data
+    clearTimeout(updateTimers.current[noteId]);
+    supabase.from("notes")
+      .update({ checklist: newChecklist as any, updated_at: new Date().toISOString() })
+      .eq("id", noteId)
+      .then(({ error }) => { if (error) toast.error("No se pudo guardar la lista"); });
   }, []);
+
+  const addChecklistItem = useCallback((noteId: string, text: string) => {
+    setNotes(prev => {
+      const target = prev.find(n => n.id === noteId);
+      if (!target) return prev;
+      const newChecklist = [...target.checklist, { id: crypto.randomUUID(), text, completed: false }];
+      persistChecklist(noteId, newChecklist);
+      return prev.map(n => n.id === noteId ? { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() } : n);
+    });
+  }, [persistChecklist]);
 
   const toggleChecklistItem = useCallback((noteId: string, itemId: string) => {
-    setNotes(prev => prev.map(n => {
-      if (n.id !== noteId) return n;
-      const newChecklist = n.checklist.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
-      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
-      return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
-    }));
-  }, []);
+    setNotes(prev => {
+      const target = prev.find(n => n.id === noteId);
+      if (!target) return prev;
+      const newChecklist = target.checklist.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
+      persistChecklist(noteId, newChecklist);
+      return prev.map(n => n.id === noteId ? { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() } : n);
+    });
+  }, [persistChecklist]);
 
   const deleteChecklistItem = useCallback((noteId: string, itemId: string) => {
-    setNotes(prev => prev.map(n => {
-      if (n.id !== noteId) return n;
-      const newChecklist = n.checklist.filter(i => i.id !== itemId);
-      supabase.from("notes").update({ checklist: newChecklist as any, updated_at: new Date().toISOString() }).eq("id", noteId);
-      return { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() };
-    }));
-  }, []);
+    setNotes(prev => {
+      const target = prev.find(n => n.id === noteId);
+      if (!target) return prev;
+      const newChecklist = target.checklist.filter(i => i.id !== itemId);
+      persistChecklist(noteId, newChecklist);
+      return prev.map(n => n.id === noteId ? { ...n, checklist: newChecklist, updatedAt: new Date().toISOString() } : n);
+    });
+  }, [persistChecklist]);
 
   const toggleNoteCollapsed = useCallback((noteId: string) => {
     setNotes(prev => prev.map(n => {

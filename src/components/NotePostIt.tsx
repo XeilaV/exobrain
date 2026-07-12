@@ -15,10 +15,16 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
   const { toggleChecklistItem, deleteChecklistItem, updateNote, selectedNote } = useNotes();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { if (isEditing) inputRef.current?.focus(); }, [isEditing]);
+  const autoGrow = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  };
+
+  useEffect(() => { if (isEditing) { inputRef.current?.focus(); autoGrow(inputRef.current); } }, [isEditing]);
 
   const saveEdit = () => {
     if (!selectedNote) return;
@@ -36,9 +42,10 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
         {item.completed ? <CheckSquare size={16} /> : <Square size={16} />}
       </button>
       {isEditing ? (
-        <input ref={inputRef} value={editText} onChange={e => setEditText(e.target.value)}
-          onBlur={saveEdit} onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); } }}
-          className="flex-1 text-sm font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring" />
+        <textarea ref={inputRef} value={editText} onChange={e => { setEditText(e.target.value); autoGrow(e.currentTarget); }}
+          onBlur={saveEdit} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); } }}
+          rows={1}
+          className="flex-1 text-sm font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring resize-none overflow-hidden leading-snug" />
       ) : (
         <span
           onDoubleClick={() => { setIsEditing(true); setEditText(item.text); }}
@@ -235,12 +242,17 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
                 <PostItChecklistItem key={item.id} item={item} noteId={noteId} />
               ))}
             </Reorder.Group>
-            <div className="flex items-center gap-1.5 mt-2">
-              <textarea value={newItemText} onChange={e => setNewItemText(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddItem(); } }}
+            <div className="flex items-end gap-1.5 mt-2">
+              <textarea value={newItemText}
+                onChange={e => {
+                  setNewItemText(e.target.value);
+                  e.currentTarget.style.height = "auto";
+                  e.currentTarget.style.height = e.currentTarget.scrollHeight + "px";
+                }}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddItem(); (e.currentTarget as HTMLTextAreaElement).style.height = "auto"; } }}
                 placeholder="Añadir tarea..." rows={1}
-                className="flex-1 text-sm bg-muted rounded px-2 py-1.5 outline-none text-foreground placeholder:text-muted-foreground font-body resize-none" />
-              <button onClick={handleAddItem} className="p-1.5 rounded bg-primary text-primary-foreground hover:opacity-90">
+                className="flex-1 text-sm bg-muted rounded px-2 py-1.5 outline-none text-foreground placeholder:text-muted-foreground font-body resize-none overflow-hidden leading-snug max-h-40" />
+              <button onClick={handleAddItem} className="p-1.5 rounded bg-primary text-primary-foreground hover:opacity-90 shrink-0">
                 <Plus size={14} />
               </button>
             </div>
