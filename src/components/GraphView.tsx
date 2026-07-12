@@ -40,7 +40,7 @@ const GraphView = () => {
   const {
     notes, categories, addNote, addCategory, deleteNote, deleteCategory,
     updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
-    setSelectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
+    setSelectedNoteId, selectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
   } = useNotes();
 
   const { user, signOut } = useAuth();
