@@ -15,10 +15,16 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
   const { toggleChecklistItem, deleteChecklistItem, updateNote, selectedNote } = useNotes();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { if (isEditing) inputRef.current?.focus(); }, [isEditing]);
+  const autoGrow = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  };
+
+  useEffect(() => { if (isEditing) { inputRef.current?.focus(); autoGrow(inputRef.current); } }, [isEditing]);
 
   const saveEdit = () => {
     if (!selectedNote) return;
