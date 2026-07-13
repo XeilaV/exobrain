@@ -366,6 +366,19 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
       <div className="px-3 py-1.5 border-t border-border text-[9px] text-muted-foreground font-body shrink-0">
         {new Date(note.updatedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
       </div>
+
+      <NameInputDialog
+        open={newChildDialog !== null}
+        title={newChildDialog === "checklist" ? "Nueva lista hija" : "Nueva nota hija"}
+        placeholder={newChildDialog === "checklist" ? "Nombre de la lista..." : "Nombre de la nota..."}
+        onSubmit={async (name) => {
+          const type = newChildDialog!;
+          setNewChildDialog(null);
+          const created = await addNote(note.categoryId, noteId, type);
+          if (created) updateNote(created.id, { title: name });
+        }}
+        onCancel={() => setNewChildDialog(null)}
+      />
     </motion.div>
   );
 };
