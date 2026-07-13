@@ -953,13 +953,13 @@ const GraphView = () => {
               return (
                 <>
                   <button
-                    onClick={async () => { await addNote(note.categoryId, nId, "text"); setContextMenu(null); }}
+                    onClick={() => { setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "text" }); setContextMenu(null); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <FileText size={12} />Añadir hija (texto)
                   </button>
                   <button
-                    onClick={async () => { await addNote(note.categoryId, nId, "checklist"); setContextMenu(null); }}
+                    onClick={() => { setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "checklist" }); setContextMenu(null); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <ListChecks size={12} />Añadir hija (lista)
