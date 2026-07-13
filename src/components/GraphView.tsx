@@ -60,6 +60,7 @@ const GraphView = () => {
   const [showBrainDialog, setShowBrainDialog] = useState(false);
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const [newNoteDialog, setNewNoteDialog] = useState<{ categoryId: string; parentNoteId: string | null; type: "text" | "checklist" } | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [viewZoom, setViewZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
