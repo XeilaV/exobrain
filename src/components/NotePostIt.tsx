@@ -199,11 +199,11 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
             <Link2 size={10} />Enlazar
           </button>
-          <button onClick={() => addNote(note.categoryId, noteId, "text")}
+          <button onClick={() => setNewChildDialog("text")}
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body" title="Añadir nota hija de texto">
             <Type size={10} />Hija
           </button>
-          <button onClick={() => addNote(note.categoryId, noteId, "checklist")}
+          <button onClick={() => setNewChildDialog("checklist")}
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body" title="Añadir lista hija">
             <ListChecks size={10} />Lista
           </button>
