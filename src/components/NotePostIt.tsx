@@ -276,8 +276,17 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
           />
         )}
 
-        {(childNotes.length > 0 || linkedNotes.length > 0) && (
+        {(parentNote || childNotes.length > 0 || linkedNotes.length > 0) && (
           <div className="border-t border-border pt-2 space-y-2">
+            {parentNote && (
+              <div>
+                <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-1 font-body">Madre</p>
+                <button onClick={() => setSelectedNoteId(parentNote.id)}
+                  className="flex items-center gap-1 text-[10px] bg-muted hover:bg-muted/80 text-foreground rounded px-2 py-1 font-body">
+                  <ArrowUp size={8} />{parentNote.noteType === "checklist" ? <ListChecks size={8} /> : <FileText size={8} />}{parentNote.title}
+                </button>
+              </div>
+            )}
             {childNotes.length > 0 && (
               <div>
                 <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-1 font-body">Hijas</p>
