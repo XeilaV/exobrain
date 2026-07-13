@@ -5,6 +5,7 @@ import { useNoteAttachments } from "@/hooks/useNoteAttachments";
 import { motion, Reorder } from "framer-motion";
 import { toast } from "sonner";
 import RichTextEditor from "./RichTextEditor";
+import NameInputDialog from "./NameInputDialog";
 
 interface PostItChecklistItemProps {
   item: { id: string; text: string; completed: boolean };
