@@ -16,7 +16,8 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const draggedRef = useRef(false);
 
   const autoGrow = (el: HTMLTextAreaElement | null) => {
     if (!el) return;
@@ -36,8 +37,8 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
   };
 
   return (
-    <Reorder.Item value={item} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1" id={item.id}>
-      <GripVertical size={14} className="text-muted-foreground/40 cursor-grab shrink-0 touch-none" style={{ touchAction: "none" }} />
+    <Reorder.Item value={item} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1 touch-none" id={item.id} style={{ touchAction: "none" }}>
+      <GripVertical size={14} className="text-muted-foreground/40 shrink-0 pointer-events-none" />
       <button onClick={() => toggleChecklistItem(noteId, item.id)} className="text-primary shrink-0">
         {item.completed ? <CheckSquare size={16} /> : <Square size={16} />}
       </button>
@@ -48,11 +49,18 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
           className="flex-1 text-sm font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring resize-none overflow-hidden leading-snug" />
       ) : (
         <span
-          onDoubleClick={() => { setIsEditing(true); setEditText(item.text); }}
-          onPointerDown={() => { longPressRef.current = setTimeout(() => { setIsEditing(true); setEditText(item.text); }, 500); }}
-          onPointerUp={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
-          onPointerCancel={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
-          className={`flex-1 text-sm font-body cursor-default select-none ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
+          onPointerDown={e => { dragStartRef.current = { x: e.clientX, y: e.clientY }; draggedRef.current = false; }}
+          onPointerMove={e => {
+            if (!dragStartRef.current) return;
+            const dx = e.clientX - dragStartRef.current.x;
+            const dy = e.clientY - dragStartRef.current.y;
+            if (Math.hypot(dx, dy) > 5) draggedRef.current = true;
+          }}
+          onPointerUp={() => {
+            if (!draggedRef.current) { setIsEditing(true); setEditText(item.text); }
+            dragStartRef.current = null;
+          }}
+          className={`flex-1 text-sm font-body select-none ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
         >{item.text}</span>
       )}
       <button onClick={() => { navigator.clipboard.writeText(item.text); toast.success("Copiado"); }}
@@ -62,6 +70,7 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
     </Reorder.Item>
   );
 };
+
 
 interface NotePostItProps {
   noteId: string;
