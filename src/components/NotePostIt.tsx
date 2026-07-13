@@ -5,6 +5,7 @@ import { useNoteAttachments } from "@/hooks/useNoteAttachments";
 import { motion, Reorder } from "framer-motion";
 import { toast } from "sonner";
 import RichTextEditor from "./RichTextEditor";
+import NameInputDialog from "./NameInputDialog";
 
 interface PostItChecklistItemProps {
   item: { id: string; text: string; completed: boolean };
@@ -16,7 +17,8 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const draggedRef = useRef(false);
 
   const autoGrow = (el: HTMLTextAreaElement | null) => {
     if (!el) return;
@@ -36,8 +38,8 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
   };
 
   return (
-    <Reorder.Item value={item} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1" id={item.id}>
-      <GripVertical size={14} className="text-muted-foreground/40 cursor-grab shrink-0 touch-none" style={{ touchAction: "none" }} />
+    <Reorder.Item value={item} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1 touch-none" id={item.id} style={{ touchAction: "none" }}>
+      <GripVertical size={14} className="text-muted-foreground/40 shrink-0 pointer-events-none" />
       <button onClick={() => toggleChecklistItem(noteId, item.id)} className="text-primary shrink-0">
         {item.completed ? <CheckSquare size={16} /> : <Square size={16} />}
       </button>
@@ -48,11 +50,18 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
           className="flex-1 text-sm font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring resize-none overflow-hidden leading-snug" />
       ) : (
         <span
-          onDoubleClick={() => { setIsEditing(true); setEditText(item.text); }}
-          onPointerDown={() => { longPressRef.current = setTimeout(() => { setIsEditing(true); setEditText(item.text); }, 500); }}
-          onPointerUp={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
-          onPointerCancel={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
-          className={`flex-1 text-sm font-body cursor-default select-none ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
+          onPointerDown={e => { dragStartRef.current = { x: e.clientX, y: e.clientY }; draggedRef.current = false; }}
+          onPointerMove={e => {
+            if (!dragStartRef.current) return;
+            const dx = e.clientX - dragStartRef.current.x;
+            const dy = e.clientY - dragStartRef.current.y;
+            if (Math.hypot(dx, dy) > 5) draggedRef.current = true;
+          }}
+          onPointerUp={() => {
+            if (!draggedRef.current) { setIsEditing(true); setEditText(item.text); }
+            dragStartRef.current = null;
+          }}
+          className={`flex-1 text-sm font-body select-none ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
         >{item.text}</span>
       )}
       <button onClick={() => { navigator.clipboard.writeText(item.text); toast.success("Copiado"); }}
@@ -62,6 +71,7 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
     </Reorder.Item>
   );
 };
+
 
 interface NotePostItProps {
   noteId: string;
@@ -83,6 +93,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const [maximized, setMaximized] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { attachments, uploading, uploadFile, deleteAttachment } = useNoteAttachments(noteId);
+  const [newChildDialog, setNewChildDialog] = useState<null | "text" | "checklist">(null);
 
   useEffect(() => { setSelectedNoteId(noteId); }, [noteId, setSelectedNoteId]);
 
@@ -188,11 +199,11 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
             <Link2 size={10} />Enlazar
           </button>
-          <button onClick={() => addNote(note.categoryId, noteId, "text")}
+          <button onClick={() => setNewChildDialog("text")}
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body" title="Añadir nota hija de texto">
             <Type size={10} />Hija
           </button>
-          <button onClick={() => addNote(note.categoryId, noteId, "checklist")}
+          <button onClick={() => setNewChildDialog("checklist")}
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body" title="Añadir lista hija">
             <ListChecks size={10} />Lista
           </button>
@@ -265,8 +276,17 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
           />
         )}
 
-        {(childNotes.length > 0 || linkedNotes.length > 0) && (
+        {(parentNote || childNotes.length > 0 || linkedNotes.length > 0) && (
           <div className="border-t border-border pt-2 space-y-2">
+            {parentNote && (
+              <div>
+                <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-1 font-body">Madre</p>
+                <button onClick={() => setSelectedNoteId(parentNote.id)}
+                  className="flex items-center gap-1 text-[10px] bg-muted hover:bg-muted/80 text-foreground rounded px-2 py-1 font-body">
+                  <ArrowUp size={8} />{parentNote.noteType === "checklist" ? <ListChecks size={8} /> : <FileText size={8} />}{parentNote.title}
+                </button>
+              </div>
+            )}
             {childNotes.length > 0 && (
               <div>
                 <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-1 font-body">Hijas</p>
@@ -346,6 +366,19 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
       <div className="px-3 py-1.5 border-t border-border text-[9px] text-muted-foreground font-body shrink-0">
         {new Date(note.updatedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
       </div>
+
+      <NameInputDialog
+        open={newChildDialog !== null}
+        title={newChildDialog === "checklist" ? "Nueva lista hija" : "Nueva nota hija"}
+        placeholder={newChildDialog === "checklist" ? "Nombre de la lista..." : "Nombre de la nota..."}
+        onSubmit={async (name) => {
+          const type = newChildDialog!;
+          setNewChildDialog(null);
+          const created = await addNote(note.categoryId, noteId, type);
+          if (created) updateNote(created.id, { title: name });
+        }}
+        onCancel={() => setNewChildDialog(null)}
+      />
     </motion.div>
   );
 };

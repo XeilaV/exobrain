@@ -6,6 +6,7 @@ import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, 
 import { useTheme } from "@/hooks/useTheme";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
+import NameInputDialog from "./NameInputDialog";
 import ColorPicker from "./ColorPicker";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
@@ -39,7 +40,7 @@ const NOTE_R = 12;
 const GraphView = () => {
   const {
     notes, categories, addNote, addCategory, deleteNote, deleteCategory,
-    updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
+    updateCategory, updateNote, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
     setSelectedNoteId, selectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
   } = useNotes();
 
@@ -60,6 +61,7 @@ const GraphView = () => {
   const [showBrainDialog, setShowBrainDialog] = useState(false);
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const [newNoteDialog, setNewNoteDialog] = useState<{ categoryId: string; parentNoteId: string | null; type: "text" | "checklist" } | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [viewZoom, setViewZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
@@ -901,13 +903,13 @@ const GraphView = () => {
               return (
                 <>
                   <button
-                    onClick={async () => { await addNote(catId, null, "text"); setContextMenu(null); }}
+                    onClick={() => { setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "text" }); setContextMenu(null); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <FileText size={12} />Añadir nota
                   </button>
                   <button
-                    onClick={async () => { await addNote(catId, null, "checklist"); setContextMenu(null); }}
+                    onClick={() => { setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "checklist" }); setContextMenu(null); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <ListChecks size={12} />Añadir lista
@@ -951,13 +953,13 @@ const GraphView = () => {
               return (
                 <>
                   <button
-                    onClick={async () => { await addNote(note.categoryId, nId, "text"); setContextMenu(null); }}
+                    onClick={() => { setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "text" }); setContextMenu(null); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <FileText size={12} />Añadir hija (texto)
                   </button>
                   <button
-                    onClick={async () => { await addNote(note.categoryId, nId, "checklist"); setContextMenu(null); }}
+                    onClick={() => { setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "checklist" }); setContextMenu(null); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <ListChecks size={12} />Añadir hija (lista)
@@ -1265,6 +1267,22 @@ const GraphView = () => {
           />
         )}
       </AnimatePresence>
+
+      <NameInputDialog
+        open={newNoteDialog !== null}
+        title={newNoteDialog?.type === "checklist"
+          ? (newNoteDialog?.parentNoteId ? "Nueva lista hija" : "Nueva lista")
+          : (newNoteDialog?.parentNoteId ? "Nueva nota hija" : "Nueva nota")}
+        placeholder={newNoteDialog?.type === "checklist" ? "Nombre de la lista..." : "Nombre de la nota..."}
+        onSubmit={async (name) => {
+          if (!newNoteDialog) return;
+          const { categoryId, parentNoteId, type } = newNoteDialog;
+          setNewNoteDialog(null);
+          const created = await addNote(categoryId, parentNoteId, type);
+          if (created) updateNote(created.id, { title: name });
+        }}
+        onCancel={() => setNewNoteDialog(null)}
+      />
     </div>
   );
 };
