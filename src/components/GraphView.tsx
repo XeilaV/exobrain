@@ -6,6 +6,7 @@ import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, 
 import { useTheme } from "@/hooks/useTheme";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
+import NameInputDialog from "./NameInputDialog";
 import ColorPicker from "./ColorPicker";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
