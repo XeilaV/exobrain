@@ -40,7 +40,7 @@ const NOTE_R = 12;
 const GraphView = () => {
   const {
     notes, categories, addNote, addCategory, deleteNote, deleteCategory,
-    updateCategory, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
+    updateCategory, updateNote, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
     setSelectedNoteId, selectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
   } = useNotes();
 
