@@ -1267,6 +1267,22 @@ const GraphView = () => {
           />
         )}
       </AnimatePresence>
+
+      <NameInputDialog
+        open={newNoteDialog !== null}
+        title={newNoteDialog?.type === "checklist"
+          ? (newNoteDialog?.parentNoteId ? "Nueva lista hija" : "Nueva lista")
+          : (newNoteDialog?.parentNoteId ? "Nueva nota hija" : "Nueva nota")}
+        placeholder={newNoteDialog?.type === "checklist" ? "Nombre de la lista..." : "Nombre de la nota..."}
+        onSubmit={async (name) => {
+          if (!newNoteDialog) return;
+          const { categoryId, parentNoteId, type } = newNoteDialog;
+          setNewNoteDialog(null);
+          const created = await addNote(categoryId, parentNoteId, type);
+          if (created) updateNote(created.id, { title: name });
+        }}
+        onCancel={() => setNewNoteDialog(null)}
+      />
     </div>
   );
 };
