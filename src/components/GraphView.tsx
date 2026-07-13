@@ -903,13 +903,13 @@ const GraphView = () => {
               return (
                 <>
                   <button
-                    onClick={async () => { await addNote(catId, null, "text"); setContextMenu(null); }}
+                    onClick={() => { setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "text" }); setContextMenu(null); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <FileText size={12} />Añadir nota
                   </button>
                   <button
-                    onClick={async () => { await addNote(catId, null, "checklist"); setContextMenu(null); }}
+                    onClick={() => { setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "checklist" }); setContextMenu(null); }}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <ListChecks size={12} />Añadir lista
