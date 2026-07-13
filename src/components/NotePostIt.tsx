@@ -93,6 +93,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const [maximized, setMaximized] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { attachments, uploading, uploadFile, deleteAttachment } = useNoteAttachments(noteId);
+  const [newChildDialog, setNewChildDialog] = useState<null | "text" | "checklist">(null);
 
   useEffect(() => { setSelectedNoteId(noteId); }, [noteId, setSelectedNoteId]);
 
