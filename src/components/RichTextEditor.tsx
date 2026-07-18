@@ -83,6 +83,10 @@ const RichTextEditor = ({ content, onChange, placeholder }: RichTextEditorProps)
           onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Lista numerada">
           <ListOrdered size={18} className="md:size-3.5" />
         </ToolbarBtn>
+        <ToolbarBtn active={editor.isActive("taskList")}
+          onClick={() => editor.chain().focus().toggleTaskList().run()} title="Lista de tareas">
+          <ListChecks size={18} className="md:size-3.5" />
+        </ToolbarBtn>
         <ToolbarBtn active={editor.isActive("blockquote")}
           onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Cita">
           <Quote size={18} className="md:size-3.5" />
