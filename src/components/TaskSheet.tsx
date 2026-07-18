@@ -158,7 +158,8 @@ const TaskSheet = ({
                 />
               </div>
 
-              {/* Date + time */}
+              {/* Date + time (task style only) */}
+              {task.style !== "bullet" && (
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider font-body">Fecha</label>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
