@@ -1124,18 +1124,18 @@ const GraphView = () => {
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-display font-semibold text-foreground">Mostrar temas</p>
+            <p className="text-sm md:text-xs font-display font-semibold text-foreground">Mostrar temas</p>
             {hiddenCategoryIds.size > 0 && (
               <button
                 onClick={() => setHiddenCategoryIds(new Set())}
-                className="text-[10px] font-body text-primary hover:underline"
+                className="text-xs md:text-[10px] font-body text-primary hover:underline min-h-11 md:min-h-0 px-2 md:px-0"
               >
                 Mostrar todos
               </button>
             )}
           </div>
           {categories.length === 0 && (
-            <p className="text-[11px] font-body text-muted-foreground">No hay temas aún.</p>
+            <p className="text-sm md:text-[11px] font-body text-muted-foreground">No hay temas aún.</p>
           )}
           {categories.map(cat => {
             const hidden = hiddenCategoryIds.has(cat.id);
@@ -1150,16 +1150,16 @@ const GraphView = () => {
                     return next;
                   });
                 }}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-body text-left transition-colors ${
+                className={`w-full flex items-center gap-2 px-2 py-2.5 md:py-1.5 min-h-11 md:min-h-0 rounded-md text-sm md:text-xs font-body text-left transition-colors ${
                   hidden ? "opacity-40 hover:opacity-70" : "hover:bg-muted"
                 }`}
               >
                 <span
-                  className="w-3 h-3 rounded-full border"
+                  className="w-3.5 h-3.5 md:w-3 md:h-3 rounded-full border"
                   style={{ backgroundColor: `hsl(${cat.color})`, borderColor: `hsl(${cat.color})` }}
                 />
                 <span className="flex-1 truncate text-foreground">{cat.icon} {cat.name}</span>
-                <span className="text-[10px] text-muted-foreground">{hidden ? "oculto" : "visible"}</span>
+                <span className="text-xs md:text-[10px] text-muted-foreground">{hidden ? "oculto" : "visible"}</span>
               </button>
             );
           })}
