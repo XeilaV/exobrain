@@ -37,6 +37,8 @@
         "@supabase/supabase-js": "^2.99.3",
         "@tanstack/react-query": "^5.83.0",
         "@tiptap/extension-placeholder": "^3.22.4",
+        "@tiptap/extension-task-item": "^3.28.0",
+        "@tiptap/extension-task-list": "^3.28.0",
         "@tiptap/react": "^3.22.4",
         "@tiptap/starter-kit": "^3.22.4",
         "class-variance-authority": "^0.7.1",
@@ -452,6 +454,10 @@
     "@tiptap/extension-placeholder": ["@tiptap/extension-placeholder@3.22.4", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@tiptap/extension-placeholder/-/extension-placeholder-3.22.4.tgz", { "peerDependencies": { "@tiptap/extensions": "3.22.4" } }, "sha512-Z3wtWL+KufwkC7CkJge5enAxx4q8C3oOYixme02snY9zfjX3V/1pjAmEfP4wxScgM5GIuTEJ83B9Yz3wRzPA6Q=="],
 
     "@tiptap/extension-strike": ["@tiptap/extension-strike@3.22.4", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@tiptap/extension-strike/-/extension-strike-3.22.4.tgz", { "peerDependencies": { "@tiptap/core": "3.22.4" } }, "sha512-aRHWQj42HiailXSC9LkKYM3jWMcSeGwOjbqM4PiuxQZmHVDRFmeHkfJItOdn2cSHaO0vuEVK+TvrWUWsBFi3pg=="],
+
+    "@tiptap/extension-task-item": ["@tiptap/extension-task-item@3.28.0", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@tiptap/extension-task-item/-/extension-task-item-3.28.0.tgz", { "peerDependencies": { "@tiptap/extension-list": "3.28.0" } }, "sha512-jLOk+CaPR8DzTFe+qdB78OxCPyb2TLISNWGL3zZvDSvngwCuQYYibcAa2L6yYN3bpooNKc3nY+kCfdevI/v21w=="],
+
+    "@tiptap/extension-task-list": ["@tiptap/extension-task-list@3.28.0", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@tiptap/extension-task-list/-/extension-task-list-3.28.0.tgz", { "peerDependencies": { "@tiptap/extension-list": "3.28.0" } }, "sha512-j13v2WoGVOGrkM5sXibos/ojUPila+yLQwduqI3+bFstsOXied224atL/76db5Y4vGnwwc4V5Kiqj7DMV7Ypiw=="],
 
     "@tiptap/extension-text": ["@tiptap/extension-text@3.22.4", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@tiptap/extension-text/-/extension-text-3.22.4.tgz", { "peerDependencies": { "@tiptap/core": "3.22.4" } }, "sha512-mM69uUW5cSxIhyEpWXi/YcfyupcJMDLCPEfYi62awH0iOP/LRoCv/nHjJq4Hyj/KxRJbe8HKwIUnqaCUf7m5Pg=="],
 
