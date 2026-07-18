@@ -378,8 +378,8 @@ const GraphView = () => {
 
     const isMobile = size.w < 640;
     const sideMargin = isMobile ? 12 : 36;
-    const topMargin = isMobile ? 36 : 48;
-    const bottomMargin = isMobile ? 88 : 80;
+    const topMargin = isMobile ? 48 : 56;
+    const bottomMargin = isMobile ? 48 : 56;
     const availableW = Math.max(1, size.w - sideMargin * 2);
     const availableH = Math.max(1, size.h - topMargin - bottomMargin);
     const treeW = Math.max(1, bounds.maxX - bounds.minX);
