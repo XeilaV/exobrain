@@ -1100,7 +1100,7 @@ const GraphView = () => {
 
         <button
           onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); setIsAddingCat(false); }}
-          className={`p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all ${
+          className={`p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all flex items-center justify-center ${
             hiddenCategoryIds.size > 0 ? "text-primary" : "text-muted-foreground"
           }`}
           title="Filtrar temas"
