@@ -8,6 +8,7 @@ import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
 import NameInputDialog from "./NameInputDialog";
 import ColorPicker from "./ColorPicker";
+import GoogleCalendarMenuItem from "./GoogleCalendarMenuItem";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
