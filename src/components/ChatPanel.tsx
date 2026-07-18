@@ -27,6 +27,7 @@ const ChatPanel = () => {
   const chunksRef = useRef<Blob[]>([]);
   const { notes, categories } = useNotes();
   const isMobile = useIsMobile();
+  const dragControls = useDragControls();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
