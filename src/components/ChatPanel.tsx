@@ -63,7 +63,6 @@ const ChatPanel = () => {
     sendMessage,
     status,
     error,
-    setMessages,
   } = useChat({
     transport,
     onError: (err) => {
