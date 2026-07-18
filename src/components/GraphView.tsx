@@ -750,10 +750,13 @@ const GraphView = () => {
           if (!from || !to) return null;
           // Use child color for the branch
           const stroke = `hsl(${to.color})`;
+          // If terminating at the root text node, stop above the text so the
+          // trunk visibly ends where the label begins (no line crossing text).
+          const toY = edge.to === "root" ? to.y - ROOT_R : to.y;
           return (
             <path
               key={`be-${idx}`}
-              d={pathBetween(from.x, from.y, to.x, to.y)}
+              d={pathBetween(from.x, from.y, to.x, toY)}
               stroke={stroke}
               strokeWidth={2}
               strokeOpacity={0.5}
