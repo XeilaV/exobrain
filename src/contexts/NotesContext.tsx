@@ -7,6 +7,7 @@ import { toast } from "sonner";
 export interface AiActionPayload {
   action: "create_note" | "update_note" | "create_category";
   title?: string;
+  name?: string;
   content?: string;
   noteType?: NoteType;
   categoryId?: string | null;
