@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useNotes } from "@/contexts/NotesContext";
 import { History, RotateCcw, FileText, ListChecks, ChevronDown, ChevronRight, Trash2, Undo2 } from "lucide-react";
@@ -166,6 +166,9 @@ export default function HistoryDialog({ open, onOpenChange }: Props) {
           <DialogTitle className="flex items-center gap-2 font-heading">
             <History size={18} /> Historial real
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Historial de versiones reales para restaurar notas activas o recuperar notas borradas.
+          </DialogDescription>
         </DialogHeader>
         <div className="overflow-y-auto flex-1 -mx-2 px-2">
           {loading && (
