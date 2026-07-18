@@ -329,7 +329,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const createNoteFromChat = useCallback((title: string, content: string, categoryId?: string) => {
-    // Kept for interface compatibility but chat is conversational-only
     const catId = categoryId || categories[0]?.id || "";
     const note: Note = {
       id: crypto.randomUUID(), title, content, categoryId: catId,
@@ -339,6 +338,112 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
     return note;
   }, [categories]);
+
+  const applyAiAction = useCallback(async (payload: AiActionPayload): Promise<Note | Category | null> => {
+    if (!user) return null;
+    try {
+      if (payload.action === "create_note") {
+        const title = payload.title || "Nueva nota";
+        const noteType = payload.noteType || "text";
+        let catId = payload.categoryId || categories[0]?.id || "";
+        if (payload.parentNoteId) {
+          const parent = notes.find(n => n.id === payload.parentNoteId);
+          if (parent) catId = parent.categoryId;
+        }
+        const { data, error } = await supabase.from("notes").insert({
+          user_id: user.id,
+          category_id: catId,
+          parent_note_id: payload.parentNoteId ?? null,
+          title,
+          content: payload.content || "",
+          checklist: [],
+          linked_note_ids: [],
+          note_type: noteType,
+        }).select().single();
+        if (error) throw error;
+        const note = dbToNote(data);
+        setNotes(prev => [note, ...prev]);
+        setSelectedNoteId(note.id);
+        return note;
+      }
+
+      if (payload.action === "update_note") {
+        const note = notes.find(n => n.id === payload.noteId);
+        if (!note || !payload.noteId) return null;
+        const updates: Partial<Note> = {};
+        if (payload.title !== undefined) updates.title = payload.title;
+        if (payload.replaceContent !== undefined) updates.content = payload.replaceContent;
+        else if (payload.appendContent !== undefined) updates.content = note.content + "\n\n" + payload.appendContent;
+        if (payload.addChecklistItems && payload.addChecklistItems.length > 0) {
+          const newItems = payload.addChecklistItems.map(text => ({
+            id: crypto.randomUUID(),
+            text,
+            completed: false,
+            style: "task" as const,
+          }));
+          updates.checklist = [...note.checklist, ...newItems];
+        }
+        updateNote(payload.noteId, updates);
+        return note;
+      }
+
+      if (payload.action === "create_category") {
+        const name = payload.name || "Nuevo tema";
+        const { data, error } = await supabase.from("categories").insert({
+          user_id: user.id,
+          name,
+          icon: payload.icon || "📌",
+          color: payload.color || "30 50% 55%",
+        }).select().single();
+        if (error) throw error;
+        const category = dbToCategory(data);
+        setCategories(prev => [...prev, category]);
+        return category;
+      }
+      return null;
+    } catch (error) {
+      console.error("applyAiAction error:", error);
+      toast.error("No se pudo aplicar la acción del asistente");
+      return null;
+    }
+  }, [user, notes, categories, updateNote]);
+
+  const getNoteVersions = useCallback(async (noteId: string): Promise<NoteVersion[]> => {
+    const { data, error } = await supabase.from("note_versions")
+      .select("id, note_id, content, checklist, source, created_at")
+      .eq("note_id", noteId)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("getNoteVersions error:", error);
+      return [];
+    }
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      noteId: row.note_id,
+      content: row.content,
+      checklist: row.checklist as ChecklistItem[],
+      source: row.source,
+      createdAt: row.created_at,
+    }));
+  }, []);
+
+  const restoreVersion = useCallback(async (noteId: string, versionId: string): Promise<boolean> => {
+    const { data, error } = await supabase.from("note_versions")
+      .select("content, checklist")
+      .eq("id", versionId)
+      .single();
+    if (error || !data) {
+      console.error("restoreVersion error:", error);
+      toast.error("No se pudo cargar la versión");
+      return false;
+    }
+    updateNote(noteId, {
+      content: data.content,
+      checklist: data.checklist as ChecklistItem[],
+    });
+    toast.success("Versión restaurada");
+    return true;
+  }, [updateNote]);
 
   const getChildNotes = useCallback((noteId: string) => notes.filter(n => n.parentNoteId === noteId), [notes]);
   const getLinkedNotes = useCallback((noteId: string) => {
