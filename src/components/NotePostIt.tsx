@@ -1,6 +1,6 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2 } from "lucide-react";
+import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight } from "lucide-react";
 
 import { useNoteAttachments } from "@/hooks/useNoteAttachments";
 import { motion, Reorder } from "framer-motion";
@@ -12,18 +12,24 @@ interface PostItChecklistItemProps {
   item: { id: string; text: string; completed: boolean };
   noteId: string;
   mobile: boolean;
+  index?: number;
   isFirst?: boolean;
   isLast?: boolean;
   onMove?: (dir: -1 | 1) => void;
+  onDuplicate?: () => void;
+  onAddSubtask?: () => void;
 }
 
-const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove }: PostItChecklistItemProps) => {
+const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, onDuplicate, onAddSubtask }: PostItChecklistItemProps) => {
   const { toggleChecklistItem, deleteChecklistItem, updateNote, selectedNote } = useNotes();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
+  const [showActions, setShowActions] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const draggedRef = useRef(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressedRef = useRef(false);
 
   const autoGrow = (el: HTMLTextAreaElement | null) => {
     if (!el) return;
