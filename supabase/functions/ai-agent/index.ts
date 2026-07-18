@@ -91,28 +91,30 @@ ${notesContextText}
 
 Cuando llames a una herramienta de propuesta, recuerda que aún no se ha realizado el cambio. El usuario debe confirmar.`;
 
-    // Build the last user message with multimodal content if image/audio provided.
+    // Attach image/audio to the last user message as v4 file parts.
     const processedMessages = [...messages];
     if (image || audio) {
       const lastMsg = processedMessages[processedMessages.length - 1];
       if (lastMsg && lastMsg.role === "user") {
-        const contentParts: any[] = [];
-        if (lastMsg.content) {
-          contentParts.push({ type: "text", text: lastMsg.content });
-        }
+        const extraParts: any[] = [];
         if (image) {
-          contentParts.push({ type: "image_url", image_url: { url: image } });
+          extraParts.push({
+            type: "file",
+            mediaType: image.match(/^data:audio\//) ? "audio" : "image",
+            url: image,
+          });
         }
         if (audio) {
-          contentParts.push({
-            type: "input_audio",
-            input_audio: { data: audio.split(",")[1] || audio, format: "webm" },
+          extraParts.push({
+            type: "file",
+            mediaType: "audio",
+            url: audio,
           });
         }
         processedMessages[processedMessages.length - 1] = {
           ...lastMsg,
-          content: contentParts,
-        };
+          parts: [...lastMsg.parts, ...extraParts],
+        } as UIMessage;
       }
     }
 
