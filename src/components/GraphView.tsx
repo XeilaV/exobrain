@@ -1021,11 +1021,11 @@ const GraphView = () => {
               <p className="text-sm font-body text-foreground text-center">{confirmDialog.message}</p>
               <div className="flex gap-2">
                 <button onClick={() => setConfirmDialog(null)}
-                  className="flex-1 text-xs py-2 rounded-lg bg-muted text-foreground font-body hover:bg-muted/80">
+                  className="flex-1 text-sm md:text-xs py-2.5 md:py-2 min-h-11 md:min-h-0 rounded-lg bg-muted text-foreground font-body hover:bg-muted/80">
                   Cancelar
                 </button>
                 <button onClick={confirmDialog.onConfirm}
-                  className="flex-1 text-xs py-2 rounded-lg bg-primary text-primary-foreground font-body hover:opacity-90">
+                  className="flex-1 text-sm md:text-xs py-2.5 md:py-2 min-h-11 md:min-h-0 rounded-lg bg-primary text-primary-foreground font-body hover:opacity-90">
                   Confirmar
                 </button>
               </div>
