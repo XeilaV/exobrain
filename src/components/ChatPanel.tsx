@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNotes } from "@/contexts/NotesContext";
 import { ChatMessage } from "@/types/notes";
 import { Send, X, Sparkles, Loader2, Image, Mic, MicOff, Paperclip } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
