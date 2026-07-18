@@ -1061,6 +1061,21 @@ const GraphView = () => {
         </div>
       )}
 
+      {/* Icon picker (category) */}
+      {iconPickerCat && (
+        <div
+          className="fixed z-50 bg-card border border-border rounded-lg shadow-xl p-3"
+          style={{ left: Math.min(iconPickerCat.x, size.w - 280), top: Math.min(iconPickerCat.y, size.h - 260) }}
+          onClick={e => e.stopPropagation()}
+        >
+          <p className="text-xs font-body text-muted-foreground mb-2">Elige un icono</p>
+          <EmojiPicker
+            value={categories.find(c => c.id === iconPickerCat.id)?.icon}
+            onChange={(icon) => { updateCategory(iconPickerCat.id, { icon }); setIconPickerCat(null); }}
+          />
+        </div>
+      )}
+
       {/* Confirm dialog */}
       <AnimatePresence>
         {confirmDialog && (
