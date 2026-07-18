@@ -270,13 +270,30 @@ const ChatPanel = () => {
                   Asistente AI
                 </h3>
               </div>
-              <button
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => setIsOpen(false)}
-                className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    if (messages.length === 0) return;
+                    if (confirm("¿Limpiar la conversación y empezar de nuevo?")) {
+                      setMessages([]);
+                      try { localStorage.removeItem(CHAT_STORAGE_KEY); } catch {}
+                    }
+                  }}
+                  className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground disabled:opacity-40"
+                  disabled={messages.length === 0}
+                  title="Nueva conversación"
+                >
+                  <Trash2 size={14} />
+                </button>
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => setIsOpen(false)}
+                  className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
