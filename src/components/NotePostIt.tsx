@@ -1,26 +1,36 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight, Check } from "lucide-react";
+import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight, Check, Calendar as CalendarIcon, MoreHorizontal } from "lucide-react";
 
 import { useNoteAttachments } from "@/hooks/useNoteAttachments";
 import { motion, Reorder } from "framer-motion";
 import { toast } from "sonner";
 import RichTextEditor from "./RichTextEditor";
 import NameInputDialog from "./NameInputDialog";
+import TaskSheet from "./TaskSheet";
+import { format, isToday, isTomorrow, isPast } from "date-fns";
+import { es } from "date-fns/locale";
+import { ChecklistItem } from "@/types/notes";
 
 interface PostItChecklistItemProps {
-  item: { id: string; text: string; completed: boolean };
+  item: ChecklistItem;
   noteId: string;
   mobile: boolean;
-  index?: number;
   isFirst?: boolean;
   isLast?: boolean;
   onMove?: (dir: -1 | 1) => void;
-  onDuplicate?: () => void;
-  onAddSubtask?: () => void;
+  onOpenSheet?: () => void;
+  subtaskCount?: number;
 }
 
-const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, onDuplicate, onAddSubtask }: PostItChecklistItemProps) => {
+const dueLabel = (iso: string, hasTime?: boolean) => {
+  const d = new Date(iso);
+  if (isToday(d)) return hasTime ? `hoy ${format(d, "HH:mm")}` : "hoy";
+  if (isTomorrow(d)) return hasTime ? `mañana ${format(d, "HH:mm")}` : "mañana";
+  return hasTime ? format(d, "d MMM HH:mm", { locale: es }) : format(d, "d MMM", { locale: es });
+};
+
+const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, onOpenSheet, subtaskCount = 0 }: PostItChecklistItemProps) => {
   const { toggleChecklistItem, deleteChecklistItem, updateNote, selectedNote } = useNotes();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
@@ -49,17 +59,65 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
 
   const startEdit = () => { setEditText(item.text); setIsEditing(true); };
 
+  const checkbox = (
+    <button onClick={() => toggleChecklistItem(noteId, item.id)} aria-label={item.completed ? "Marcar como pendiente" : "Marcar como completada"}
+      className={`text-primary shrink-0 flex items-center justify-center ${mobile ? "min-h-11 min-w-11" : ""}`}>
+      {item.completed ? <CheckSquare size={mobile ? 22 : 16} /> : <Square size={mobile ? 22 : 16} />}
+    </button>
+  );
+
+  if (mobile) {
+    const overdue = item.dueAt && !item.completed && isPast(new Date(item.dueAt)) && !isToday(new Date(item.dueAt));
+    return (
+      <div className="flex items-center gap-1 bg-background/50 rounded-md px-1.5 py-1 min-h-14">
+        {checkbox}
+        {isEditing ? (
+          <textarea ref={inputRef} value={editText} onChange={e => { setEditText(e.target.value); autoGrow(e.currentTarget); }}
+            onBlur={commitEdit}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitEdit(); } if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); } }}
+            rows={1}
+            className="flex-1 min-w-0 text-[15px] font-body bg-muted rounded px-2 py-1.5 outline-none text-foreground focus:ring-1 focus:ring-ring resize-none overflow-hidden leading-snug" />
+        ) : (
+          <button
+            onClick={startEdit}
+            className="flex-1 min-w-0 text-left py-1.5"
+            style={{ flexBasis: "70%" }}
+          >
+            <span className={`block text-[15px] font-body leading-snug break-words ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
+              {item.text || <span className="italic text-muted-foreground/60">Sin título</span>}
+            </span>
+            {(item.dueAt || subtaskCount > 0) && (
+              <span className="flex items-center gap-2 mt-0.5 text-[11px] font-body text-muted-foreground">
+                {item.dueAt && (
+                  <span className={`inline-flex items-center gap-0.5 ${overdue ? "text-destructive" : ""}`}>
+                    <CalendarIcon size={11} />{dueLabel(item.dueAt, item.hasTime)}
+                  </span>
+                )}
+                {subtaskCount > 0 && (
+                  <span className="inline-flex items-center gap-0.5">
+                    <CornerDownRight size={11} />{subtaskCount}
+                  </span>
+                )}
+              </span>
+            )}
+          </button>
+        )}
+        <button onClick={e => { e.stopPropagation(); onMove?.(-1); }} disabled={isFirst} aria-label="Subir"
+          className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-9 flex items-center justify-center"><ChevronUp size={18} /></button>
+        <button onClick={e => { e.stopPropagation(); onMove?.(1); }} disabled={isLast} aria-label="Bajar"
+          className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-9 flex items-center justify-center"><ChevronDown size={18} /></button>
+        <button onClick={e => { e.stopPropagation(); onOpenSheet?.(); }} aria-label="Más opciones"
+          className="text-muted-foreground shrink-0 min-h-11 min-w-11 flex items-center justify-center"><MoreHorizontal size={20} /></button>
+      </div>
+    );
+  }
+
   const textEl = isEditing ? (
     <textarea ref={inputRef} value={editText} onChange={e => { setEditText(e.target.value); autoGrow(e.currentTarget); }}
       onBlur={commitEdit}
       onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitEdit(); } if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); } }}
       rows={1}
       className="flex-1 text-sm font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring resize-none overflow-hidden leading-snug" />
-  ) : mobile ? (
-    <span
-      onClick={startEdit}
-      className={`flex-1 text-sm font-body ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
-    >{item.text}</span>
   ) : (
     <span
       onPointerDown={e => { dragStartRef.current = { x: e.clientX, y: e.clientY }; draggedRef.current = false; }}
@@ -77,43 +135,10 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
     >{item.text}</span>
   );
 
-  const checkbox = (
-    <button onClick={() => toggleChecklistItem(noteId, item.id)} aria-label={item.completed ? "Marcar como pendiente" : "Marcar como completada"}
-      className={`text-primary shrink-0 flex items-center justify-center ${mobile ? "min-h-11 min-w-11" : ""}`}>
-      {item.completed ? <CheckSquare size={mobile ? 22 : 16} /> : <Square size={mobile ? 22 : 16} />}
-    </button>
-  );
-
-  if (mobile) {
-    const editingActions = (
-      <>
-        <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); commitEdit(); }} aria-label="Confirmar"
-          className="text-primary shrink-0 min-h-11 min-w-11 flex items-center justify-center"><Check size={20} /></button>
-        <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); onDuplicate?.(); setIsEditing(false); }} aria-label="Duplicar"
-          className="text-muted-foreground shrink-0 min-h-11 min-w-11 flex items-center justify-center"><Copy size={18} /></button>
-        <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); onAddSubtask?.(); setIsEditing(false); }} aria-label="Subtarea"
-          className="text-muted-foreground shrink-0 min-h-11 min-w-11 flex items-center justify-center"><CornerDownRight size={18} /></button>
-        <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); deleteChecklistItem(noteId, item.id); setIsEditing(false); }} aria-label="Borrar"
-          className="text-destructive shrink-0 min-h-11 min-w-11 flex items-center justify-center"><Trash2 size={18} /></button>
-      </>
-    );
-    const idleActions = (
-      <>
-        <button onClick={e => { e.stopPropagation(); onMove?.(-1); }} disabled={isFirst} aria-label="Subir"
-          className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-11 flex items-center justify-center"><ChevronUp size={20} /></button>
-        <button onClick={e => { e.stopPropagation(); onMove?.(1); }} disabled={isLast} aria-label="Bajar"
-          className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-11 flex items-center justify-center"><ChevronDown size={20} /></button>
-      </>
-    );
-    return (
-      <div className="flex items-center gap-1.5 bg-background/50 rounded px-2 py-1.5 min-h-11">
-        {checkbox}{textEl}{isEditing ? editingActions : idleActions}
-      </div>
-    );
-  }
-
   const actions = (
     <>
+      <button onClick={() => onOpenSheet?.()} aria-label="Detalles"
+        className="opacity-0 group-hover:opacity-60 text-muted-foreground shrink-0"><MoreHorizontal size={14} /></button>
       <button onClick={() => { navigator.clipboard.writeText(item.text); toast.success("Copiado"); }}
         className="opacity-0 group-hover:opacity-50 text-muted-foreground shrink-0"><Copy size={12} /></button>
       <Trash2 size={12} className="opacity-0 group-hover:opacity-50 text-destructive cursor-pointer shrink-0"
@@ -151,6 +176,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { attachments, uploading, uploadFile, deleteAttachment } = useNoteAttachments(noteId);
   const [newChildDialog, setNewChildDialog] = useState<null | "text" | "checklist">(null);
+  const [sheetTaskId, setSheetTaskId] = useState<string | null>(null);
 
   useEffect(() => { setSelectedNoteId(noteId); }, [noteId, setSelectedNoteId]);
 
@@ -308,32 +334,36 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
             </h3>
             {isMobile ? (
               <div className="space-y-1">
-                {note.checklist.map((item, idx) => (
-                  <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile
-                    isFirst={idx === 0} isLast={idx === note.checklist.length - 1}
-                    onMove={(dir) => {
-                      const newOrder = [...note.checklist];
-                      const target = idx + dir;
-                      if (target < 0 || target >= newOrder.length) return;
-                      [newOrder[idx], newOrder[target]] = [newOrder[target], newOrder[idx]];
-                      updateNote(noteId, { checklist: newOrder });
-                    }}
-                    onDuplicate={() => {
-                      const newOrder = [...note.checklist];
-                      newOrder.splice(idx + 1, 0, { id: crypto.randomUUID(), text: item.text, completed: false });
-                      updateNote(noteId, { checklist: newOrder });
-                    }}
-                    onAddSubtask={() => {
-                      const newOrder = [...note.checklist];
-                      newOrder.splice(idx + 1, 0, { id: crypto.randomUUID(), text: "  ↳ ", completed: false });
-                      updateNote(noteId, { checklist: newOrder });
-                    }} />
-                ))}
+                {note.checklist.filter(i => !i.parentId).map((item, idx, arr) => {
+                  const subCount = note.checklist.filter(s => s.parentId === item.id).length;
+                  return (
+                    <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile
+                      subtaskCount={subCount}
+                      isFirst={idx === 0} isLast={idx === arr.length - 1}
+                      onMove={(dir) => {
+                        // Reorder within top-level items only, preserving subtasks
+                        const tops = note.checklist.filter(i => !i.parentId);
+                        const target = idx + dir;
+                        if (target < 0 || target >= tops.length) return;
+                        const newTops = [...tops];
+                        [newTops[idx], newTops[target]] = [newTops[target], newTops[idx]];
+                        // Rebuild: each top followed by its subtasks
+                        const rebuilt: ChecklistItem[] = [];
+                        newTops.forEach(t => {
+                          rebuilt.push(t);
+                          note.checklist.filter(s => s.parentId === t.id).forEach(s => rebuilt.push(s));
+                        });
+                        updateNote(noteId, { checklist: rebuilt });
+                      }}
+                      onOpenSheet={() => setSheetTaskId(item.id)} />
+                  );
+                })}
               </div>
             ) : (
               <Reorder.Group axis="y" values={note.checklist} onReorder={handleReorder} className="space-y-1">
                 {note.checklist.map(item => (
-                  <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile={false} />
+                  <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile={false}
+                    onOpenSheet={() => setSheetTaskId(item.id)} />
                 ))}
               </Reorder.Group>
             )}
@@ -349,6 +379,21 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
                 className="flex-1 text-base md:text-sm bg-muted rounded px-2 py-2.5 md:py-1.5 outline-none text-foreground placeholder:text-muted-foreground font-body resize-none overflow-hidden leading-snug max-h-40 min-h-11 md:min-h-0" />
               <button onClick={handleAddItem} aria-label="Añadir tarea" className="rounded bg-primary text-primary-foreground hover:opacity-90 shrink-0 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1.5 flex items-center justify-center">
                 <Plus size={isMobile ? 20 : 14} />
+              </button>
+              <button
+                onClick={async () => {
+                  const text = newItemText.trim() || "Nueva tarea";
+                  const newItem: ChecklistItem = { id: crypto.randomUUID(), text, completed: false };
+                  const newChecklist = [...note.checklist, newItem];
+                  updateNote(noteId, { checklist: newChecklist });
+                  setNewItemText("");
+                  setSheetTaskId(newItem.id);
+                }}
+                aria-label="Añadir tarea con detalles"
+                title="Añadir con fecha, notas, subtareas"
+                className="rounded bg-muted text-foreground hover:bg-muted/70 shrink-0 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1.5 flex items-center justify-center"
+              >
+                <MoreHorizontal size={isMobile ? 20 : 14} />
               </button>
             </div>
           </div>
@@ -463,6 +508,65 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
           if (created) updateNote(created.id, { title: name });
         }}
         onCancel={() => setNewChildDialog(null)}
+      />
+
+      <TaskSheet
+        open={sheetTaskId !== null}
+        task={sheetTaskId ? note.checklist.find(i => i.id === sheetTaskId) ?? null : null}
+        allItems={note.checklist}
+        onClose={() => setSheetTaskId(null)}
+        onChange={(patch) => {
+          if (!sheetTaskId) return;
+          updateNote(noteId, {
+            checklist: note.checklist.map(i => i.id === sheetTaskId ? { ...i, ...patch, updatedAt: new Date().toISOString() } : i),
+          });
+        }}
+        onDelete={() => {
+          if (!sheetTaskId) return;
+          updateNote(noteId, {
+            checklist: note.checklist.filter(i => i.id !== sheetTaskId && i.parentId !== sheetTaskId),
+          });
+          setSheetTaskId(null);
+        }}
+        onAddSubtask={(text) => {
+          if (!sheetTaskId) return;
+          const sub: ChecklistItem = { id: crypto.randomUUID(), text, completed: false, parentId: sheetTaskId };
+          // Insert right after the parent's existing subtasks group
+          const parentIdx = note.checklist.findIndex(i => i.id === sheetTaskId);
+          const lastSubIdx = (() => {
+            let last = parentIdx;
+            for (let i = parentIdx + 1; i < note.checklist.length; i++) {
+              if (note.checklist[i].parentId === sheetTaskId) last = i; else if (!note.checklist[i].parentId) break;
+            }
+            return last;
+          })();
+          const next = [...note.checklist];
+          next.splice(lastSubIdx + 1, 0, sub);
+          updateNote(noteId, { checklist: next });
+        }}
+        onToggleSubtask={(id) => {
+          updateNote(noteId, {
+            checklist: note.checklist.map(i => i.id === id ? { ...i, completed: !i.completed } : i),
+          });
+        }}
+        onDeleteSubtask={(id) => {
+          updateNote(noteId, { checklist: note.checklist.filter(i => i.id !== id) });
+        }}
+        onMoveSubtask={(id, dir) => {
+          if (!sheetTaskId) return;
+          const subs = note.checklist.filter(i => i.parentId === sheetTaskId);
+          const idx = subs.findIndex(s => s.id === id);
+          const target = idx + dir;
+          if (target < 0 || target >= subs.length) return;
+          const newSubs = [...subs];
+          [newSubs[idx], newSubs[target]] = [newSubs[target], newSubs[idx]];
+          // Rebuild: keep non-subs where they are; splice new subs in place of old
+          const parentIdx = note.checklist.findIndex(i => i.id === sheetTaskId);
+          const rebuilt = note.checklist.filter(i => i.parentId !== sheetTaskId);
+          const insertAt = rebuilt.findIndex(i => i.id === sheetTaskId) + 1;
+          rebuilt.splice(insertAt, 0, ...newSubs);
+          updateNote(noteId, { checklist: rebuilt });
+        }}
       />
     </motion.div>
   );
