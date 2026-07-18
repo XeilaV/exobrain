@@ -50,6 +50,86 @@ export type Database = {
         }
         Relationships: []
       }
+      google_calendar_credentials: {
+        Row: {
+          calendar_id: string
+          connection_api_key: string
+          created_at: string
+          email: string | null
+          last_sync_at: string | null
+          sync_token: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calendar_id?: string
+          connection_api_key: string
+          created_at?: string
+          email?: string | null
+          last_sync_at?: string | null
+          sync_token?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calendar_id?: string
+          connection_api_key?: string
+          created_at?: string
+          email?: string | null
+          last_sync_at?: string | null
+          sync_token?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      google_calendar_sync: {
+        Row: {
+          calendar_id: string
+          created_at: string
+          event_id: string | null
+          last_google_update: string | null
+          last_local_update: string | null
+          note_id: string | null
+          sync_status: string
+          task_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calendar_id?: string
+          created_at?: string
+          event_id?: string | null
+          last_google_update?: string | null
+          last_local_update?: string | null
+          note_id?: string | null
+          sync_status?: string
+          task_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calendar_id?: string
+          created_at?: string
+          event_id?: string | null
+          last_google_update?: string | null
+          last_local_update?: string | null
+          note_id?: string | null
+          sync_status?: string
+          task_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_calendar_sync_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       note_attachments: {
         Row: {
           content_type: string
@@ -163,6 +243,8 @@ export type Database = {
           brain_name: string
           created_at: string
           display_name: string | null
+          google_calendar_connected: boolean
+          google_calendar_email: string | null
           id: string
           onboarded: boolean
           updated_at: string
@@ -172,6 +254,8 @@ export type Database = {
           brain_name?: string
           created_at?: string
           display_name?: string | null
+          google_calendar_connected?: boolean
+          google_calendar_email?: string | null
           id: string
           onboarded?: boolean
           updated_at?: string
@@ -181,6 +265,8 @@ export type Database = {
           brain_name?: string
           created_at?: string
           display_name?: string | null
+          google_calendar_connected?: boolean
+          google_calendar_email?: string | null
           id?: string
           onboarded?: boolean
           updated_at?: string

@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Calendar as CalendarIcon, Clock, Trash2, Plus, CornerDownRight, CheckSquare, Square, ChevronUp, ChevronDown } from "lucide-react";
+import { X, Calendar as CalendarIcon, Clock, Trash2, Plus, CornerDownRight, CheckSquare, Square, ChevronUp, ChevronDown, CalendarPlus, CalendarCheck2, CalendarX } from "lucide-react";
 import { ChecklistItem } from "@/types/notes";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 
 interface TaskSheetProps {
   open: boolean;
+  noteId: string;
   task: ChecklistItem | null;
   allItems: ChecklistItem[];
   onChange: (patch: Partial<ChecklistItem>) => void;
@@ -19,9 +21,10 @@ interface TaskSheetProps {
 }
 
 const TaskSheet = ({
-  open, task, allItems, onChange, onDelete,
+  open, noteId, task, allItems, onChange, onDelete,
   onAddSubtask, onToggleSubtask, onDeleteSubtask, onMoveSubtask, onClose,
 }: TaskSheetProps) => {
+  const gcal = useGoogleCalendar();
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [newSub, setNewSub] = useState("");
@@ -183,6 +186,56 @@ const TaskSheet = ({
                   </p>
                 )}
               </div>
+
+              {/* Google Calendar */}
+              {dueDate && (() => {
+                const mapping = gcal.mappings[task.id];
+                const isSynced = mapping?.sync_status === "synced";
+                const doSync = () => gcal.syncTask({
+                  note_id: noteId, task_id: task.id, title: task.text,
+                  notes: task.notes, due_at: task.dueAt!, has_time: task.hasTime,
+                });
+                return (
+                  <div>
+                    <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider font-body">Google Calendar</label>
+                    <div className="mt-1">
+                      {!gcal.connected ? (
+                        <button onClick={gcal.connect}
+                          className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-muted hover:bg-muted/70 min-h-11 w-full font-body text-foreground">
+                          <CalendarPlus size={16} /> Conectar Google Calendar
+                        </button>
+                      ) : isSynced ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="flex items-center gap-1.5 text-sm text-primary font-body">
+                            <CalendarCheck2 size={16} /> En tu calendario
+                          </span>
+                          <button onClick={doSync}
+                            className="text-xs px-2 py-1.5 rounded bg-muted min-h-9 font-body">
+                            Actualizar
+                          </button>
+                          <button onClick={() => gcal.removeTask(noteId, task.id)}
+                            className="text-xs px-2 py-1.5 rounded bg-muted text-destructive min-h-9 font-body flex items-center gap-1">
+                            <CalendarX size={14} /> Quitar
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button onClick={doSync}
+                            className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-primary text-primary-foreground min-h-11 font-body">
+                            <CalendarPlus size={16} /> Añadir a Google Calendar
+                          </button>
+                          <button onClick={() => gcal.declineTask(noteId, task.id)}
+                            className="text-xs px-2 py-1.5 rounded bg-muted min-h-9 font-body">
+                            No
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+
 
               {/* Subtasks */}
               <div>
