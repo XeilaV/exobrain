@@ -260,9 +260,9 @@ const ChatPanel = () => {
               {messages.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
                   <Sparkles size={32} className="mx-auto mb-3 text-primary/40" />
-                  <p className="text-sm font-body">¡Hola! Soy tu asistente.</p>
+                  <p className="text-sm font-body">Tu compañero de ideas.</p>
                   <p className="text-xs mt-1">
-                    Puedes pedirme ideas, buscar información actual o proponer cambios en tus notas. Confirmarás cada acción antes de aplicarla.
+                    Pregúntame lo que sea: puedo buscar en internet, resumir temas y debatir contigo. No modifico tus notas.
                   </p>
                 </div>
               )}
