@@ -189,6 +189,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (updates.parentNoteId !== undefined) dbUpdates.parent_note_id = updates.parentNoteId;
       if (updates.checklist !== undefined) dbUpdates.checklist = updates.checklist;
       if (updates.linkedNoteIds !== undefined) dbUpdates.linked_note_ids = updates.linkedNoteIds;
+      if ((updates as any).icon !== undefined) dbUpdates.icon = (updates as any).icon;
       await supabase.from("notes").update(dbUpdates).eq("id", id);
     }, 500);
   }, []);
