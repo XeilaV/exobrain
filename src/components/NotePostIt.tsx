@@ -28,7 +28,8 @@ const dueLabel = (iso: string, hasTime?: boolean) => {
   return hasTime ? format(d, "d MMM HH:mm", { locale: es }) : format(d, "d MMM", { locale: es });
 };
 
-const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, onOpenSheet, subtaskCount = 0 }: PostItChecklistItemProps) => {
+const PostItChecklistItem = ({ item, noteId, mobile, onOpenSheet, subtaskCount = 0 }: PostItChecklistItemProps) => {
+  const dragControls = useDragControls();
   const { toggleChecklistItem, deleteChecklistItem, updateNote, selectedNote } = useNotes();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
