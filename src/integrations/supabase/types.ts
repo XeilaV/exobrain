@@ -171,6 +171,41 @@ export type Database = {
           },
         ]
       }
+      note_versions: {
+        Row: {
+          checklist: Json
+          content: string
+          created_at: string
+          id: string
+          note_id: string
+          source: string
+        }
+        Insert: {
+          checklist?: Json
+          content?: string
+          created_at?: string
+          id?: string
+          note_id: string
+          source?: string
+        }
+        Update: {
+          checklist?: Json
+          content?: string
+          created_at?: string
+          id?: string
+          note_id?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "note_versions_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notes: {
         Row: {
           category_id: string
