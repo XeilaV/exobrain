@@ -281,10 +281,10 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
       <div className="flex-1 overflow-y-auto scrollbar-thin px-3 py-2 space-y-3">
         {isChecklistNote ? (
           <div>
-            <h3 className="font-display text-sm font-semibold text-foreground flex items-center gap-1.5 mb-2">
-              <CheckSquare size={14} className="text-primary" />Tareas
+            <h3 className="font-display text-base md:text-sm font-semibold text-foreground flex items-center gap-1.5 mb-2">
+              <CheckSquare size={16} className="text-primary" />Tareas
               {note.checklist.length > 0 && (
-                <span className="text-[10px] text-muted-foreground font-body font-normal">{completedCount}/{note.checklist.length}</span>
+                <span className="text-xs md:text-[10px] text-muted-foreground font-body font-normal">{completedCount}/{note.checklist.length}</span>
               )}
             </h3>
             {isMobile ? (
@@ -317,9 +317,9 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
                 }}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddItem(); (e.currentTarget as HTMLTextAreaElement).style.height = "auto"; } }}
                 placeholder="Añadir tarea..." rows={1}
-                className="flex-1 text-sm bg-muted rounded px-2 py-1.5 outline-none text-foreground placeholder:text-muted-foreground font-body resize-none overflow-hidden leading-snug max-h-40" />
-              <button onClick={handleAddItem} className="p-1.5 rounded bg-primary text-primary-foreground hover:opacity-90 shrink-0">
-                <Plus size={14} />
+                className="flex-1 text-base md:text-sm bg-muted rounded px-2 py-2.5 md:py-1.5 outline-none text-foreground placeholder:text-muted-foreground font-body resize-none overflow-hidden leading-snug max-h-40 min-h-11 md:min-h-0" />
+              <button onClick={handleAddItem} aria-label="Añadir tarea" className="rounded bg-primary text-primary-foreground hover:opacity-90 shrink-0 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1.5 flex items-center justify-center">
+                <Plus size={isMobile ? 20 : 14} />
               </button>
             </div>
           </div>
