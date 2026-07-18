@@ -176,6 +176,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { attachments, uploading, uploadFile, deleteAttachment } = useNoteAttachments(noteId);
   const [newChildDialog, setNewChildDialog] = useState<null | "text" | "checklist">(null);
+  const [sheetTaskId, setSheetTaskId] = useState<string | null>(null);
 
   useEffect(() => { setSelectedNoteId(noteId); }, [noteId, setSelectedNoteId]);
 
