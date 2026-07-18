@@ -512,6 +512,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
 
       <TaskSheet
         open={sheetTaskId !== null}
+        noteId={noteId}
         task={sheetTaskId ? note.checklist.find(i => i.id === sheetTaskId) ?? null : null}
         allItems={note.checklist}
         onClose={() => setSheetTaskId(null)}
