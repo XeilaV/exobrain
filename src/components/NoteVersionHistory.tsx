@@ -77,7 +77,7 @@ const NoteVersionHistory = ({ noteId, isOpen, onClose }: NoteVersionHistoryProps
                 aria-label="Cerrar"
                 className="p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1 flex items-center justify-center"
               >
-                <X size={isOpen ? 20 : 16} />
+                <X size={16} />
               </button>
             </div>
 
