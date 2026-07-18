@@ -1,13 +1,25 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNotes } from "@/contexts/NotesContext";
 import { useAuth } from "@/hooks/useAuth";
-import { Send, X, Sparkles, Loader2, Image, Mic, MicOff } from "lucide-react";
+import { Send, X, Sparkles, Loader2, Image, Mic, MicOff, Trash2 } from "lucide-react";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import { DefaultChatTransport, type UIMessage } from "ai";
+
+const CHAT_STORAGE_KEY = "exobrain-chat-history";
+
+const loadInitialMessages = (): UIMessage[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as UIMessage[]) : [];
+  } catch {
+    return [];
+  }
+};
 
 const ChatPanel = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -58,18 +70,30 @@ const ChatPanel = () => {
     [session?.access_token, notesContext, attachedImage, attachedAudio],
   );
 
+  const initialMessages = useMemo(loadInitialMessages, []);
+
   const {
     messages,
     sendMessage,
+    setMessages,
     status,
     error,
   } = useChat({
     transport,
+    messages: initialMessages,
     onError: (err) => {
       console.error("Chat error:", err);
       toast.error("Error del asistente. Inténtalo de nuevo.");
     },
   });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+    } catch {
+      // ignore quota errors
+    }
+  }, [messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -246,13 +270,30 @@ const ChatPanel = () => {
                   Asistente AI
                 </h3>
               </div>
-              <button
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => setIsOpen(false)}
-                className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    if (messages.length === 0) return;
+                    if (confirm("¿Limpiar la conversación y empezar de nuevo?")) {
+                      setMessages([]);
+                      try { localStorage.removeItem(CHAT_STORAGE_KEY); } catch {}
+                    }
+                  }}
+                  className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground disabled:opacity-40"
+                  disabled={messages.length === 0}
+                  title="Nueva conversación"
+                >
+                  <Trash2 size={14} />
+                </button>
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => setIsOpen(false)}
+                  className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
