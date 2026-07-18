@@ -59,8 +59,24 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
 
   const startEdit = () => { setEditText(item.text); setIsEditing(true); };
 
-  const checkbox = (
+  const isBullet = item.style === "bullet";
+
+  const toggleStyle = () => {
+    if (!selectedNote) return;
+    updateNote(noteId, {
+      checklist: selectedNote.checklist.map(i => i.id === item.id ? { ...i, style: isBullet ? "task" : "bullet" as const } : i),
+    });
+  };
+
+  const checkbox = isBullet ? (
+    <button onClick={toggleStyle} aria-label="Cambiar a tarea"
+      className={`text-primary shrink-0 flex items-center justify-center ${mobile ? "min-h-11 min-w-11" : ""}`}>
+      <Dot size={mobile ? 28 : 20} />
+    </button>
+  ) : (
     <button onClick={() => toggleChecklistItem(noteId, item.id)} aria-label={item.completed ? "Marcar como pendiente" : "Marcar como completada"}
+      onDoubleClick={toggleStyle}
+      title="Doble clic: convertir en viñeta"
       className={`text-primary shrink-0 flex items-center justify-center ${mobile ? "min-h-11 min-w-11" : ""}`}>
       {item.completed ? <CheckSquare size={mobile ? 22 : 16} /> : <Square size={mobile ? 22 : 16} />}
     </button>
