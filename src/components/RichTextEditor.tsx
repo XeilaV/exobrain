@@ -55,37 +55,37 @@ const RichTextEditor = ({ content, onChange, placeholder }: RichTextEditorProps)
       <div className="flex items-center gap-0.5 flex-wrap sticky top-0 bg-card/95 backdrop-blur z-10 py-1 -mx-1 px-1 border-b border-border">
         <ToolbarBtn active={editor.isActive("heading", { level: 1 })}
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="Título">
-          <Heading1 size={14} />
+          <Heading1 size={18} className="md:size-3.5" />
         </ToolbarBtn>
         <ToolbarBtn active={editor.isActive("heading", { level: 2 })}
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Subtítulo">
-          <Heading2 size={14} />
+          <Heading2 size={18} className="md:size-3.5" />
         </ToolbarBtn>
         <div className="w-px h-4 bg-border mx-1" />
         <ToolbarBtn active={editor.isActive("bold")}
           onClick={() => editor.chain().focus().toggleBold().run()} title="Negrita">
-          <Bold size={14} />
+          <Bold size={18} className="md:size-3.5" />
         </ToolbarBtn>
         <ToolbarBtn active={editor.isActive("italic")}
           onClick={() => editor.chain().focus().toggleItalic().run()} title="Cursiva">
-          <Italic size={14} />
+          <Italic size={18} className="md:size-3.5" />
         </ToolbarBtn>
         <div className="w-px h-4 bg-border mx-1" />
         <ToolbarBtn active={editor.isActive("bulletList")}
           onClick={() => editor.chain().focus().toggleBulletList().run()} title="Lista">
-          <List size={14} />
+          <List size={18} className="md:size-3.5" />
         </ToolbarBtn>
         <ToolbarBtn active={editor.isActive("orderedList")}
           onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Lista numerada">
-          <ListOrdered size={14} />
+          <ListOrdered size={18} className="md:size-3.5" />
         </ToolbarBtn>
         <ToolbarBtn active={editor.isActive("blockquote")}
           onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Cita">
-          <Quote size={14} />
+          <Quote size={18} className="md:size-3.5" />
         </ToolbarBtn>
         <ToolbarBtn active={editor.isActive("code")}
           onClick={() => editor.chain().focus().toggleCode().run()} title="Código">
-          <Code size={14} />
+          <Code size={18} className="md:size-3.5" />
         </ToolbarBtn>
       </div>
       <EditorContent editor={editor} />
