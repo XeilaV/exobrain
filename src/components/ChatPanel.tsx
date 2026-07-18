@@ -270,29 +270,46 @@ const ChatPanel = () => {
                   Asistente AI
                 </h3>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 relative">
                 <button
                   onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => {
-                    if (messages.length === 0) return;
-                    if (confirm("¿Limpiar la conversación y empezar de nuevo?")) {
-                      setMessages([]);
-                      try { localStorage.removeItem(CHAT_STORAGE_KEY); } catch {}
-                    }
-                  }}
-                  className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground disabled:opacity-40"
-                  disabled={messages.length === 0}
-                  title="Nueva conversación"
+                  onClick={() => setShowMenu((v) => !v)}
+                  className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground"
+                  aria-label="Más opciones"
                 >
-                  <Trash2 size={14} />
+                  <MoreHorizontal size={16} />
                 </button>
                 <button
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => setIsOpen(false)}
                   className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground"
+                  aria-label="Cerrar"
                 >
                   <X size={16} />
                 </button>
+                {showMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                    <div className="absolute right-0 top-8 z-50 min-w-[200px] bg-popover border border-border rounded-lg shadow-xl py-1 text-sm font-body">
+                      <button
+                        disabled={messages.length === 0}
+                        onClick={() => {
+                          setShowMenu(false);
+                          if (messages.length === 0) return;
+                          if (confirm("¿Iniciar una nueva conversación?")) {
+                            setMessages([]);
+                            try { localStorage.removeItem(CHAT_STORAGE_KEY); } catch {}
+                          }
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left disabled:opacity-40 disabled:pointer-events-none"
+                      >
+                        <RefreshCw size={14} /> Nueva conversación
+                      </button>
+                      <div className="px-3 py-2 text-[10px] uppercase tracking-wide text-muted-foreground/70">Próximamente</div>
+                      <div className="px-3 py-1.5 text-xs text-muted-foreground/60">Conectar Google Calendar</div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
