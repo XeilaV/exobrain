@@ -1312,6 +1312,8 @@ const GraphView = () => {
         }}
       />
 
+      <HistoryDialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog} />
+
       {/* Post-it overlay */}
       <AnimatePresence>
         {openPostIt && (
