@@ -202,9 +202,10 @@ const TaskSheet = ({
                   </p>
                 )}
               </div>
+              )}
 
               {/* Google Calendar */}
-              {dueDate && (() => {
+              {task.style !== "bullet" && dueDate && (() => {
                 const mapping = gcal.mappings[task.id];
                 const isSynced = mapping?.sync_status === "synced";
                 const doSync = () => gcal.syncTask({
