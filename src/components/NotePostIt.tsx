@@ -375,32 +375,28 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
               )}
             </h3>
             {isMobile ? (
-              <div className="space-y-1">
-                {note.checklist.filter(i => !i.parentId).map((item, idx, arr) => {
+              <Reorder.Group
+                axis="y"
+                values={note.checklist.filter(i => !i.parentId)}
+                onReorder={(newTops: ChecklistItem[]) => {
+                  const rebuilt: ChecklistItem[] = [];
+                  newTops.forEach(t => {
+                    rebuilt.push(t);
+                    note.checklist.filter(s => s.parentId === t.id).forEach(s => rebuilt.push(s));
+                  });
+                  updateNote(noteId, { checklist: rebuilt });
+                }}
+                className="space-y-1"
+              >
+                {note.checklist.filter(i => !i.parentId).map((item) => {
                   const subCount = note.checklist.filter(s => s.parentId === item.id).length;
                   return (
                     <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile
                       subtaskCount={subCount}
-                      isFirst={idx === 0} isLast={idx === arr.length - 1}
-                      onMove={(dir) => {
-                        // Reorder within top-level items only, preserving subtasks
-                        const tops = note.checklist.filter(i => !i.parentId);
-                        const target = idx + dir;
-                        if (target < 0 || target >= tops.length) return;
-                        const newTops = [...tops];
-                        [newTops[idx], newTops[target]] = [newTops[target], newTops[idx]];
-                        // Rebuild: each top followed by its subtasks
-                        const rebuilt: ChecklistItem[] = [];
-                        newTops.forEach(t => {
-                          rebuilt.push(t);
-                          note.checklist.filter(s => s.parentId === t.id).forEach(s => rebuilt.push(s));
-                        });
-                        updateNote(noteId, { checklist: rebuilt });
-                      }}
                       onOpenSheet={() => setSheetTaskId(item.id)} />
                   );
                 })}
-              </div>
+              </Reorder.Group>
             ) : (
               <Reorder.Group axis="y" values={note.checklist} onReorder={handleReorder} className="space-y-1">
                 {note.checklist.map(item => (
