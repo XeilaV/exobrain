@@ -195,7 +195,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
   const [maximized, setMaximized] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { attachments, uploading, uploadFile, deleteAttachment } = useNoteAttachments(noteId);
   const [newChildDialog, setNewChildDialog] = useState<null | "text" | "checklist">(null);
