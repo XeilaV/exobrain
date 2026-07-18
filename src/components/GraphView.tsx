@@ -7,6 +7,7 @@ import { useTheme } from "@/hooks/useTheme";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
 import NameInputDialog from "./NameInputDialog";
+import CreateNodeDialog from "./CreateNodeDialog";
 import ColorPicker from "./ColorPicker";
 import GoogleCalendarMenuItem from "./GoogleCalendarMenuItem";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
@@ -63,6 +64,9 @@ const GraphView = () => {
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [newNoteDialog, setNewNoteDialog] = useState<{ categoryId: string; parentNoteId: string | null; type: "text" | "checklist" } | null>(null);
+  const [createDialog, setCreateDialog] = useState<{ x: number; y: number } | null>(null);
+  const canvasLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canvasLongPressStart = useRef<{ x: number; y: number } | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [viewZoom, setViewZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
@@ -506,6 +510,17 @@ const GraphView = () => {
         pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       }
 
+      // Cancel canvas long-press if pointer moved too far
+      if (canvasLongPressTimer.current && canvasLongPressStart.current) {
+        const s = canvasLongPressStart.current;
+        if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > 8) {
+          clearTimeout(canvasLongPressTimer.current);
+          canvasLongPressTimer.current = null;
+          canvasLongPressStart.current = null;
+        }
+      }
+
+
       // Pinch (two active pointers): zoom + pan following centroid
       if (pinchState.current && pointersRef.current.size >= 2) {
         const pts = Array.from(pointersRef.current.values());
@@ -558,6 +573,13 @@ const GraphView = () => {
     const onUp = (e: PointerEvent) => {
       pointersRef.current.delete(e.pointerId);
       dragState.current = null;
+
+      // Cancel canvas long-press if pointer released before timer fired
+      if (canvasLongPressTimer.current) {
+        clearTimeout(canvasLongPressTimer.current);
+        canvasLongPressTimer.current = null;
+      }
+      canvasLongPressStart.current = null;
 
       // End pinch when going below 2 pointers; do NOT continue as pan (1-finger canvas pan disabled on touch)
       if (pinchState.current && pointersRef.current.size < 2) {
@@ -682,7 +704,7 @@ const GraphView = () => {
         // Always track pointer for pinch detection
         pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-        // Second pointer -> start pinch (cancel any in-flight pan or node drag)
+        // Second pointer -> start pinch (cancel any in-flight pan, node drag or canvas long-press)
         if (pointersRef.current.size >= 2) {
           const pts = Array.from(pointersRef.current.values());
           const [p1, p2] = pts;
@@ -698,12 +720,27 @@ const GraphView = () => {
           panState.current = null;
           dragState.current = null;
           cancelLongPress();
+          if (canvasLongPressTimer.current) { clearTimeout(canvasLongPressTimer.current); canvasLongPressTimer.current = null; }
+          canvasLongPressStart.current = null;
           didPan.current = true;
           setIsPanning(true);
           return;
         }
 
         if (!onBackground) return;
+
+        // Long-press on empty canvas -> open "create" dialog (works for touch and mouse)
+        canvasLongPressStart.current = { x: e.clientX, y: e.clientY };
+        if (canvasLongPressTimer.current) clearTimeout(canvasLongPressTimer.current);
+        canvasLongPressTimer.current = setTimeout(() => {
+          canvasLongPressTimer.current = null;
+          // Only trigger if user hasn't started panning/pinching
+          if (didPan.current || pinchState.current || pointersRef.current.size >= 2) return;
+          setCreateDialog({ x: e.clientX, y: e.clientY });
+          // Cancel any pending pan so the click after release doesn't act
+          panState.current = null;
+          didPan.current = true;
+        }, 550);
 
         // Touch: 1-finger canvas pan is disabled (use 2 fingers). Only mouse/pen pans with one pointer.
         if (e.pointerType === "touch") return;
@@ -1293,6 +1330,22 @@ const GraphView = () => {
           if (created) updateNote(created.id, { title: name });
         }}
         onCancel={() => setNewNoteDialog(null)}
+      />
+
+      <CreateNodeDialog
+        open={createDialog !== null}
+        categories={categories}
+        notes={notes}
+        onCreateCategory={(name, color) => {
+          addCategory(name, "📌", color, null);
+          setCreateDialog(null);
+        }}
+        onCreateNote={async (categoryId, parentNoteId, type, name) => {
+          setCreateDialog(null);
+          const created = await addNote(categoryId, parentNoteId, type);
+          if (created) updateNote(created.id, { title: name });
+        }}
+        onCancel={() => setCreateDialog(null)}
       />
     </div>
   );
