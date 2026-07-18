@@ -17,9 +17,6 @@ interface PostItChecklistItemProps {
   item: ChecklistItem;
   noteId: string;
   mobile: boolean;
-  isFirst?: boolean;
-  isLast?: boolean;
-  onMove?: (dir: -1 | 1) => void;
   onOpenSheet?: () => void;
   subtaskCount?: number;
 }
