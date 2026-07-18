@@ -510,6 +510,17 @@ const GraphView = () => {
         pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       }
 
+      // Cancel canvas long-press if pointer moved too far
+      if (canvasLongPressTimer.current && canvasLongPressStart.current) {
+        const s = canvasLongPressStart.current;
+        if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > 8) {
+          clearTimeout(canvasLongPressTimer.current);
+          canvasLongPressTimer.current = null;
+          canvasLongPressStart.current = null;
+        }
+      }
+
+
       // Pinch (two active pointers): zoom + pan following centroid
       if (pinchState.current && pointersRef.current.size >= 2) {
         const pts = Array.from(pointersRef.current.values());
