@@ -88,7 +88,7 @@ const TaskSheet = ({
           <motion.div
             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="bg-card border border-border rounded-t-2xl md:rounded-2xl shadow-2xl w-full md:max-w-md max-h-[88vh] md:max-h-[80vh] flex flex-col overflow-hidden"
+            className="bg-card border border-border rounded-t-2xl md:rounded-2xl shadow-2xl w-full h-[96vh] md:h-auto md:max-w-md md:max-h-[80vh] flex flex-col overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
             {/* Grabber */}
@@ -98,17 +98,32 @@ const TaskSheet = ({
 
             {/* Header */}
             <div className="flex items-center gap-2 px-4 py-2 border-b border-border">
+              {task.style === "bullet" ? (
+                <span className="text-primary min-h-11 min-w-11 flex items-center justify-center" aria-hidden>
+                  <Dot size={28} />
+                </span>
+              ) : (
+                <button
+                  onClick={() => onChange({ completed: !task.completed })}
+                  aria-label={task.completed ? "Marcar pendiente" : "Completar"}
+                  className="text-primary min-h-11 min-w-11 flex items-center justify-center"
+                >
+                  {task.completed ? <CheckSquare size={22} /> : <Square size={22} />}
+                </button>
+              )}
+              {/* Style toggle: task ⇄ bullet */}
               <button
-                onClick={() => onChange({ completed: !task.completed })}
-                aria-label={task.completed ? "Marcar pendiente" : "Completar"}
-                className="text-primary min-h-11 min-w-11 flex items-center justify-center"
+                onClick={() => onChange({ style: task.style === "bullet" ? "task" : "bullet" })}
+                aria-label={task.style === "bullet" ? "Cambiar a tarea" : "Cambiar a viñeta"}
+                title={task.style === "bullet" ? "Cambiar a tarea" : "Cambiar a viñeta"}
+                className="text-muted-foreground hover:text-foreground min-h-11 min-w-11 flex items-center justify-center rounded-md hover:bg-muted"
               >
-                {task.completed ? <CheckSquare size={22} /> : <Square size={22} />}
+                {task.style === "bullet" ? <ListChecks size={18} /> : <Dot size={22} />}
               </button>
               <span className="text-xs text-muted-foreground font-body flex-1">
-                {task.completed ? "Completada" : "Pendiente"}
+                {task.style === "bullet" ? "Viñeta" : task.completed ? "Completada" : "Pendiente"}
               </span>
-              <button onClick={onDelete} aria-label="Eliminar tarea"
+              <button onClick={onDelete} aria-label="Eliminar"
                 className="text-destructive min-h-11 min-w-11 flex items-center justify-center">
                 <Trash2 size={20} />
               </button>
