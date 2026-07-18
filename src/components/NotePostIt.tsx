@@ -272,9 +272,6 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
             {isChecklistNote ? "Lista" : "Texto"}
           </span>
         </div>
-        <button onClick={() => setShowHistory(true)} aria-label="Historial de versiones" className="rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1 flex items-center justify-center">
-          <History size={isMobile ? 20 : 16} />
-        </button>
         {!isMobile && (
           <button onClick={() => setMaximized(m => !m)} aria-label={maximized ? "Restaurar" : "Maximizar"} className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0">
             {maximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
