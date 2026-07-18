@@ -202,13 +202,18 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await supabase.from("categories").delete().eq("id", id);
   }, []);
 
+  // Debounce checklist writes per note to coalesce rapid mutations (add + delete) and
+  // avoid race conditions where an older PATCH overwrites a newer one on the server.
+  const checklistTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const persistChecklist = useCallback((noteId: string, newChecklist: ChecklistItem[]) => {
-    // Cancel any pending debounced updateNote that might overwrite checklist with stale data
     clearTimeout(updateTimers.current[noteId]);
-    supabase.from("notes")
-      .update({ checklist: newChecklist as any, updated_at: new Date().toISOString() })
-      .eq("id", noteId)
-      .then(({ error }) => { if (error) toast.error("No se pudo guardar la lista"); });
+    clearTimeout(checklistTimers.current[noteId]);
+    checklistTimers.current[noteId] = setTimeout(() => {
+      supabase.from("notes")
+        .update({ checklist: newChecklist as any, updated_at: new Date().toISOString() })
+        .eq("id", noteId)
+        .then(({ error }) => { if (error) toast.error("No se pudo guardar la lista"); });
+    }, 250);
   }, []);
 
   const addChecklistItem = useCallback((noteId: string, text: string) => {
