@@ -4,6 +4,30 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
+export interface AiActionPayload {
+  action: "create_note" | "update_note" | "create_category";
+  title?: string;
+  content?: string;
+  noteType?: NoteType;
+  categoryId?: string | null;
+  parentNoteId?: string | null;
+  noteId?: string;
+  appendContent?: string;
+  replaceContent?: string;
+  addChecklistItems?: string[];
+  color?: string;
+  icon?: string;
+}
+
+export interface NoteVersion {
+  id: string;
+  noteId: string;
+  content: string;
+  checklist: ChecklistItem[];
+  source: string;
+  createdAt: string;
+}
+
 interface NotesContextType {
   notes: Note[];
   categories: Category[];
@@ -40,6 +64,9 @@ interface NotesContextType {
   setBrainName: (name: string) => void;
   onboarded: boolean;
   setOnboarded: (v: boolean) => void;
+  applyAiAction: (payload: AiActionPayload) => Promise<Note | Category | null>;
+  getNoteVersions: (noteId: string) => Promise<NoteVersion[]>;
+  restoreVersion: (noteId: string, versionId: string) => Promise<boolean>;
 }
 
 const NotesContext = createContext<NotesContextType | null>(null);
