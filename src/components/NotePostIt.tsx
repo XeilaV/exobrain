@@ -606,6 +606,13 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
           rebuilt.splice(insertAt, 0, ...newSubs);
           updateNote(noteId, { checklist: rebuilt });
         }}
+        onReorderSubtasks={(newSubs) => {
+          if (!sheetTaskId) return;
+          const rebuilt = note.checklist.filter(i => i.parentId !== sheetTaskId);
+          const insertAt = rebuilt.findIndex(i => i.id === sheetTaskId) + 1;
+          rebuilt.splice(insertAt, 0, ...newSubs);
+          updateNote(noteId, { checklist: rebuilt });
+        }}
       />
       
     </motion.div>
