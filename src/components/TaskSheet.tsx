@@ -25,7 +25,7 @@ interface TaskSheetProps {
 
 const TaskSheet = ({
   open, noteId, task, allItems, onChange, onDelete,
-  onAddSubtask, onToggleSubtask, onDeleteSubtask, onMoveSubtask, onClose,
+  onAddSubtask, onToggleSubtask, onDeleteSubtask, onMoveSubtask, onReorderSubtasks, onClose,
 }: TaskSheetProps) => {
   const gcal = useGoogleCalendar();
   const [title, setTitle] = useState("");
