@@ -1,7 +1,9 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { Bold, Italic, Heading1, Heading2, List, ListOrdered, Quote, Code } from "lucide-react";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import { Bold, Italic, Heading1, Heading2, List, ListOrdered, Quote, Code, ListChecks } from "lucide-react";
 import { useEffect } from "react";
 
 interface RichTextEditorProps {
@@ -30,6 +32,8 @@ const RichTextEditor = ({ content, onChange, placeholder }: RichTextEditorProps)
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       Placeholder.configure({ placeholder: placeholder || "Escribe aquí..." }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
     ],
     content: content || "",
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
@@ -78,6 +82,10 @@ const RichTextEditor = ({ content, onChange, placeholder }: RichTextEditorProps)
         <ToolbarBtn active={editor.isActive("orderedList")}
           onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Lista numerada">
           <ListOrdered size={18} className="md:size-3.5" />
+        </ToolbarBtn>
+        <ToolbarBtn active={editor.isActive("taskList")}
+          onClick={() => editor.chain().focus().toggleTaskList().run()} title="Lista de tareas">
+          <ListChecks size={18} className="md:size-3.5" />
         </ToolbarBtn>
         <ToolbarBtn active={editor.isActive("blockquote")}
           onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Cita">
