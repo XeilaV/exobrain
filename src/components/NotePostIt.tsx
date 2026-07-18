@@ -11,6 +11,11 @@ import NameInputDialog from "./NameInputDialog";
 interface PostItChecklistItemProps {
   item: { id: string; text: string; completed: boolean };
   noteId: string;
+  mobile: boolean;
+  isFirst?: boolean;
+  isLast?: boolean;
+  onMove?: (dir: -1 | 1) => void;
+}
 }
 
 const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
