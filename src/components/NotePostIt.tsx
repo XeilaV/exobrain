@@ -77,12 +77,12 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove }: 
 
   const actions = mobile ? (
     <>
-      <button onClick={() => onMove?.(-1)} disabled={isFirst}
-        className="text-muted-foreground disabled:opacity-20 shrink-0 p-0.5"><ChevronUp size={16} /></button>
-      <button onClick={() => onMove?.(1)} disabled={isLast}
-        className="text-muted-foreground disabled:opacity-20 shrink-0 p-0.5"><ChevronDown size={16} /></button>
-      <Trash2 size={14} className="text-destructive/70 cursor-pointer shrink-0"
-        onClick={() => deleteChecklistItem(noteId, item.id)} />
+      <button onClick={() => onMove?.(-1)} disabled={isFirst} aria-label="Subir"
+        className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-11 flex items-center justify-center"><ChevronUp size={20} /></button>
+      <button onClick={() => onMove?.(1)} disabled={isLast} aria-label="Bajar"
+        className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-11 flex items-center justify-center"><ChevronDown size={20} /></button>
+      <button onClick={() => deleteChecklistItem(noteId, item.id)} aria-label="Borrar"
+        className="text-destructive/80 shrink-0 min-h-11 min-w-11 flex items-center justify-center"><Trash2 size={18} /></button>
     </>
   ) : (
     <>
@@ -95,7 +95,7 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove }: 
 
   if (mobile) {
     return (
-      <div className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1">
+      <div className="flex items-center gap-1.5 group bg-background/50 rounded px-2 py-1.5 min-h-11">
         {checkbox}{textEl}{actions}
       </div>
     );
