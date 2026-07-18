@@ -1175,22 +1175,22 @@ const GraphView = () => {
           <div className="flex gap-2">
             <input
               value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)}
-              className="w-10 text-center bg-muted rounded text-sm p-1" maxLength={2}
+              className="w-11 md:w-10 text-center bg-muted rounded text-base md:text-sm p-2 md:p-1 min-h-11 md:min-h-0" maxLength={2}
             />
             <input
               value={newCatName} onChange={e => setNewCatName(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleAddCategory()}
               placeholder="Nombre del tema..." autoFocus
-              className="flex-1 bg-muted rounded text-xs px-2 py-1 text-foreground outline-none font-body"
+              className="flex-1 bg-muted rounded text-base md:text-xs px-2 py-2.5 md:py-1 min-h-11 md:min-h-0 text-foreground outline-none font-body"
             />
           </div>
           <div>
-            <p className="text-[10px] font-body text-muted-foreground mb-1">Color</p>
+            <p className="text-xs md:text-[10px] font-body text-muted-foreground mb-1">Color</p>
             <ColorPicker value={newCatColor} onChange={setNewCatColor} />
           </div>
           <div className="flex gap-2">
-            <button onClick={handleAddCategory} className="flex-1 bg-primary text-primary-foreground rounded text-xs py-1.5 font-medium">Añadir</button>
-            <button onClick={() => { setIsAddingCat(false); setNewCatName(""); }} className="flex-1 bg-muted text-foreground rounded text-xs py-1.5">Cancelar</button>
+            <button onClick={handleAddCategory} className="flex-1 bg-primary text-primary-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0 font-medium">Añadir</button>
+            <button onClick={() => { setIsAddingCat(false); setNewCatName(""); }} className="flex-1 bg-muted text-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0">Cancelar</button>
           </div>
         </div>
       )}
