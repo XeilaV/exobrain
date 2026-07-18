@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNotes } from "@/contexts/NotesContext";
 import { ChatMessage } from "@/types/notes";
 import { Send, X, Sparkles, Loader2, Image, Mic, MicOff, Paperclip } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ const ChatPanel = () => {
   const chunksRef = useRef<Blob[]>([]);
   const { notes, categories } = useNotes();
   const isMobile = useIsMobile();
+  const dragControls = useDragControls();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -239,8 +240,30 @@ const ChatPanel = () => {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             exit={{ scale: 0 }}
-            onClick={() => setIsOpen(true)}
-            className={toggleClasses}
+            drag
+            dragMomentum={false}
+            dragElastic={0}
+            dragConstraints={{
+              top: -window.innerHeight + 120,
+              left: -window.innerWidth + 80,
+              right: 20,
+              bottom: 20,
+            }}
+            onClick={(e) => {
+              // avoid opening if it was a drag
+              const target = e.target as HTMLElement;
+              if (target.dataset.dragged === "1") {
+                target.dataset.dragged = "";
+                return;
+              }
+              setIsOpen(true);
+            }}
+            onDragEnd={(_, info) => {
+              if (Math.abs(info.offset.x) > 4 || Math.abs(info.offset.y) > 4) {
+                (document.activeElement as HTMLElement)?.blur?.();
+              }
+            }}
+            className={`${toggleClasses} touch-none cursor-grab active:cursor-grabbing`}
           >
             <Sparkles size={isMobile ? 20 : 22} />
           </motion.button>
@@ -253,17 +276,32 @@ const ChatPanel = () => {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            drag
+            dragMomentum={false}
+            dragElastic={0}
+            dragListener={false}
+            dragControls={dragControls}
+            dragConstraints={{
+              top: -window.innerHeight + 200,
+              left: -window.innerWidth + 100,
+              right: window.innerWidth - 100,
+              bottom: window.innerHeight - 200,
+            }}
             className={panelClasses}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border bg-chat shrink-0">
-              <div className="flex items-center gap-2">
+            {/* Header (drag handle) */}
+            <div
+              onPointerDown={(e) => dragControls.start(e)}
+              className="flex items-center justify-between p-4 border-b border-border bg-chat shrink-0 cursor-grab active:cursor-grabbing touch-none select-none"
+            >
+              <div className="flex items-center gap-2 pointer-events-none">
                 <Sparkles size={18} className="text-primary" />
                 <h3 className="font-display font-semibold text-card-foreground text-sm">
                   Asistente AI
                 </h3>
               </div>
               <button
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => setIsOpen(false)}
                 className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground"
               >
