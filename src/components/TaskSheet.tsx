@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Calendar as CalendarIcon, Clock, Trash2, Plus, CornerDownRight, CheckSquare, Square, ChevronUp, ChevronDown, CalendarPlus, CalendarCheck2, CalendarX, Dot, ListChecks } from "lucide-react";
+import { X, Calendar as CalendarIcon, Clock, Trash2, Plus, CornerDownRight, CheckSquare, Square, ChevronUp, ChevronDown, CalendarPlus, CalendarCheck2, CalendarX, Dot, ListChecks, Copy } from "lucide-react";
+import { toast } from "sonner";
+
 import { ChecklistItem } from "@/types/notes";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -123,10 +125,15 @@ const TaskSheet = ({
               <span className="text-xs text-muted-foreground font-body flex-1">
                 {task.style === "bullet" ? "Viñeta" : task.completed ? "Completada" : "Pendiente"}
               </span>
+              <button onClick={() => { navigator.clipboard.writeText(task.text); toast.success("Copiado"); }} aria-label="Copiar"
+                className="text-muted-foreground min-h-11 min-w-11 flex items-center justify-center">
+                <Copy size={18} />
+              </button>
               <button onClick={onDelete} aria-label="Eliminar"
                 className="text-destructive min-h-11 min-w-11 flex items-center justify-center">
                 <Trash2 size={20} />
               </button>
+
               <button onClick={onClose} aria-label="Cerrar"
                 className="text-muted-foreground min-h-11 min-w-11 flex items-center justify-center">
                 <X size={22} />

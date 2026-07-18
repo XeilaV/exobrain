@@ -85,48 +85,53 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
   if (mobile) {
     const overdue = item.dueAt && !item.completed && isPast(new Date(item.dueAt)) && !isToday(new Date(item.dueAt));
     return (
-      <div className="flex items-center gap-1 bg-background/50 rounded-md px-1.5 py-1 min-h-14">
-        {checkbox}
-        {isEditing ? (
-          <textarea ref={inputRef} value={editText} onChange={e => { setEditText(e.target.value); autoGrow(e.currentTarget); }}
-            onBlur={commitEdit}
-            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitEdit(); } if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); } }}
-            rows={1}
-            className="flex-1 min-w-0 text-[15px] font-body bg-muted rounded px-2 py-1.5 outline-none text-foreground focus:ring-1 focus:ring-ring resize-none overflow-hidden leading-snug" />
-        ) : (
-          <button
-            onClick={startEdit}
-            className="flex-1 min-w-0 text-left py-1.5"
-            style={{ flexBasis: "70%" }}
-          >
-            <span className={`block text-[15px] font-body leading-snug break-words ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
-              {item.text || <span className="italic text-muted-foreground/60">Sin título</span>}
+      <div className="flex items-center gap-1 bg-background/50 rounded-md px-1 py-1 min-h-14">
+        <div className="shrink-0 w-9 h-9 flex items-center justify-center">
+          {isBullet ? (
+            <button onClick={toggleStyle} aria-label="Cambiar a tarea" className="text-primary w-9 h-9 flex items-center justify-center">
+              <Dot size={24} />
+            </button>
+          ) : (
+            <button onClick={() => toggleChecklistItem(noteId, item.id)}
+              onDoubleClick={toggleStyle}
+              aria-label={item.completed ? "Marcar como pendiente" : "Marcar como completada"}
+              className="text-primary w-9 h-9 flex items-center justify-center">
+              {item.completed ? <CheckSquare size={20} /> : <Square size={20} />}
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => onOpenSheet?.()}
+          className="flex-1 min-w-0 text-left py-1.5 basis-[80%]"
+        >
+          <span className={`block text-[15px] font-body leading-snug break-words ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
+            {item.text || <span className="italic text-muted-foreground/60">Sin título</span>}
+          </span>
+          {(item.dueAt || subtaskCount > 0) && (
+            <span className="flex items-center gap-2 mt-0.5 text-[11px] font-body text-muted-foreground">
+              {item.dueAt && (
+                <span className={`inline-flex items-center gap-0.5 ${overdue ? "text-destructive" : ""}`}>
+                  <CalendarIcon size={11} />{dueLabel(item.dueAt, item.hasTime)}
+                </span>
+              )}
+              {subtaskCount > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  <CornerDownRight size={11} />{subtaskCount}
+                </span>
+              )}
             </span>
-            {(item.dueAt || subtaskCount > 0) && (
-              <span className="flex items-center gap-2 mt-0.5 text-[11px] font-body text-muted-foreground">
-                {item.dueAt && (
-                  <span className={`inline-flex items-center gap-0.5 ${overdue ? "text-destructive" : ""}`}>
-                    <CalendarIcon size={11} />{dueLabel(item.dueAt, item.hasTime)}
-                  </span>
-                )}
-                {subtaskCount > 0 && (
-                  <span className="inline-flex items-center gap-0.5">
-                    <CornerDownRight size={11} />{subtaskCount}
-                  </span>
-                )}
-              </span>
-            )}
-          </button>
-        )}
-        <button onClick={e => { e.stopPropagation(); onMove?.(-1); }} disabled={isFirst} aria-label="Subir"
-          className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-9 flex items-center justify-center"><ChevronUp size={18} /></button>
-        <button onClick={e => { e.stopPropagation(); onMove?.(1); }} disabled={isLast} aria-label="Bajar"
-          className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-9 flex items-center justify-center"><ChevronDown size={18} /></button>
-        <button onClick={e => { e.stopPropagation(); onOpenSheet?.(); }} aria-label="Más opciones"
-          className="text-muted-foreground shrink-0 min-h-11 min-w-11 flex items-center justify-center"><MoreHorizontal size={20} /></button>
+          )}
+        </button>
+        <div className="shrink-0 flex flex-col items-center justify-center -space-y-1">
+          <button onClick={e => { e.stopPropagation(); onMove?.(-1); }} disabled={isFirst} aria-label="Subir"
+            className="text-muted-foreground disabled:opacity-20 w-8 h-7 flex items-center justify-center"><ChevronUp size={16} /></button>
+          <button onClick={e => { e.stopPropagation(); onMove?.(1); }} disabled={isLast} aria-label="Bajar"
+            className="text-muted-foreground disabled:opacity-20 w-8 h-7 flex items-center justify-center"><ChevronDown size={16} /></button>
+        </div>
       </div>
     );
   }
+
 
   const textEl = isEditing ? (
     <textarea ref={inputRef} value={editText} onChange={e => { setEditText(e.target.value); autoGrow(e.currentTarget); }}

@@ -1,44 +1,24 @@
-# Plan: TaskSheet a pantalla casi completa + estilo bullet/task
+## Objetivo
+Reajustar los ítems de las notas tipo tasks en móvil para que el texto respire (~80% del ancho), los controles ocupen menos, y toda la edición ocurra dentro del TaskSheet (que ahora también tendrá Copiar).
 
-## 1. TaskSheet ocupa casi toda la pantalla (mobile)
+## 1. `src/components/NotePostIt.tsx` — render móvil del ítem (líneas 85–128)
 
-En `src/components/TaskSheet.tsx`:
-- Cambiar `max-h-[88vh]` → `h-[96vh]` en móvil (`md:h-auto md:max-h-[80vh]`).
-- Añadir `flex-1` al contenedor scrollable para que las subtareas queden accesibles sin tanto scroll.
-- En desktop se mantiene el modal centrado con `md:max-w-md md:max-h-[80vh]`.
+- **Texto ocupa ~80%**: el contenedor del texto pasa a `flex-1` con `basis-[80%]`, sin el modo inline `isEditing` en móvil.
+- **Tap = abrir TaskSheet** (no edición inline). El click en el texto llama a `onOpenSheet?.()` en lugar de `startEdit`.
+  - Se elimina en móvil el `textarea` inline y el estado `isEditing` para móvil (queda solo para desktop).
+- **Controles compactos**:
+  - Quitar el botón `MoreHorizontal` (los "tres puntos") — ya no hace falta porque el tap abre el sheet.
+  - Botones ▲/▼ pasan de `min-w-9 min-h-11` a un tamaño más contenido: `w-8 h-8` con icono `size={16}`, agrupados en columna estrecha `flex-col gap-0` a la derecha, para ocupar menos ancho horizontal.
+  - Checkbox/bullet en móvil baja de `min-w-11` a `w-9 h-9` con icono `size={20}`.
+- **Contenedor**: `min-h-14` se mantiene; padding lateral se reduce ligeramente (`px-1`).
+- Resultado: checkbox (~36px) + texto (flex-1, ~80%) + columna ▲▼ (~32px). Sin "...".
 
-Resultado: al abrir una tarea en móvil se ve casi toda la pantalla, con las subtareas visibles sin scroll excesivo.
+## 2. `src/components/TaskSheet.tsx` — añadir "Copiar" junto a "Borrar"
 
-## 2. Estilo del ítem: bullet vs task (tipo Notion)
-
-Añadir a cada `ChecklistItem` un campo opcional `style: "task" | "bullet"` (default `"task"`).
-
-### Modelo (`src/types/notes.ts`)
-```ts
-export type ChecklistItemStyle = "task" | "bullet";
-// añadir: style?: ChecklistItemStyle;
-```
-No requiere migración de BD: el checklist se guarda como JSON, así que el campo aparece automáticamente.
-
-### UI en Tasks (`NotePostIt.tsx` lista + `TaskSheet.tsx`)
-- Nuevo toggle pequeño junto al checkbox / en el header del sheet:
-  - Icono `CheckSquare` (task) / `Dot` o `Circle` pequeño (bullet).
-- Si `style === "bullet"`: render como viñeta (•) sin checkbox, sin estado completado, sin fecha (ocultamos secciones de Google Calendar y fecha en TaskSheet cuando es bullet).
-- Si `style === "task"`: comportamiento actual (checkbox, fecha, Google Calendar, subtareas).
-
-### UI en notas de texto (`RichTextEditor.tsx`)
-TipTap ya trae `BulletList`. Añadir `TaskList` + `TaskItem` de `@tiptap/extension-task-list` / `@tiptap/extension-task-item` (ya deberían venir con StarterKit o instalar en fase de build).
-- Botón nuevo en la toolbar junto a `BulletList` y `OrderedList`: **Task list** (icono `ListChecks`).
-- Estilos en `src/index.css` para `ul[data-type="taskList"]` con casilla visible.
-
-## Archivos a tocar
-- `src/types/notes.ts` — añadir `style`.
-- `src/components/TaskSheet.tsx` — altura casi-fullscreen, toggle bullet/task, ocultar campos cuando bullet.
-- `src/components/NotePostIt.tsx` — render condicional del ítem según `style`.
-- `src/components/RichTextEditor.tsx` — botón TaskList y extensiones.
-- `src/index.css` — estilos `taskList`.
-- `package.json` — añadir `@tiptap/extension-task-list` y `@tiptap/extension-task-item`.
+En el header (junto al botón `Trash2`), añadir un botón con icono `Copy` que copia al portapapeles el título del task (`navigator.clipboard.writeText(task.text)`) y muestra `toast.success("Copiado")`.
+- Importar `Copy` de lucide-react y `toast` de sonner (ya usado en el proyecto).
+- Mismo tamaño de área táctil que los otros botones del header (`min-h-11 min-w-11`).
 
 ## Fuera de alcance
-- Sincronización con Google Calendar (queda para más tarde, como pediste).
-- Migraciones de BD (no hacen falta, `checklist` es JSON).
+- Desktop: se mantiene el layout actual (Reorder + acciones hover).
+- No se toca la persistencia, TaskSheet body, ni la lógica de subtareas.
