@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Calendar as CalendarIcon, Clock, Trash2, Plus, CornerDownRight, CheckSquare, Square, ChevronUp, ChevronDown } from "lucide-react";
+import { X, Calendar as CalendarIcon, Clock, Trash2, Plus, CornerDownRight, CheckSquare, Square, ChevronUp, ChevronDown, CalendarPlus, CalendarCheck2, CalendarX } from "lucide-react";
 import { ChecklistItem } from "@/types/notes";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 
 interface TaskSheetProps {
   open: boolean;
+  noteId: string;
   task: ChecklistItem | null;
   allItems: ChecklistItem[];
   onChange: (patch: Partial<ChecklistItem>) => void;
@@ -19,9 +21,10 @@ interface TaskSheetProps {
 }
 
 const TaskSheet = ({
-  open, task, allItems, onChange, onDelete,
+  open, noteId, task, allItems, onChange, onDelete,
   onAddSubtask, onToggleSubtask, onDeleteSubtask, onMoveSubtask, onClose,
 }: TaskSheetProps) => {
+  const gcal = useGoogleCalendar();
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [newSub, setNewSub] = useState("");
