@@ -175,8 +175,21 @@ const PostItChecklistItem = ({ item, noteId, mobile, onOpenSheet, subtaskCount =
   );
 
   return (
-    <Reorder.Item value={item} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1 touch-none" id={item.id} style={{ touchAction: "none" }}>
-      <GripVertical size={14} className="text-muted-foreground/40 shrink-0 pointer-events-none" />
+    <Reorder.Item
+      value={item}
+      id={item.id}
+      dragListener={false}
+      dragControls={dragControls}
+      className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1"
+    >
+      <div
+        onPointerDown={(e) => { e.preventDefault(); dragControls.start(e); }}
+        style={{ touchAction: "none" }}
+        aria-label="Arrastrar para reordenar"
+        className="shrink-0 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical size={14} />
+      </div>
       {checkbox}{textEl}{actions}
     </Reorder.Item>
   );
