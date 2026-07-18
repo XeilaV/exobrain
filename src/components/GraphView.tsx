@@ -7,6 +7,7 @@ import { useTheme } from "@/hooks/useTheme";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
 import NameInputDialog from "./NameInputDialog";
+import CreateNodeDialog from "./CreateNodeDialog";
 import ColorPicker from "./ColorPicker";
 import GoogleCalendarMenuItem from "./GoogleCalendarMenuItem";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
