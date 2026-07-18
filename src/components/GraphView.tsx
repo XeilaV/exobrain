@@ -982,6 +982,12 @@ const GraphView = () => {
                     <Palette size={12} />Cambiar color
                   </button>
                   <button
+                    onClick={() => { setIconPickerCat({ id: catId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <span className="text-sm leading-none">🙂</span>Cambiar icono
+                  </button>
+                  <button
                     onClick={() => {
                       setConfirmDialog({
                         message: "¿Eliminar este tema y sus notas?",
