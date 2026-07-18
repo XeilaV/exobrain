@@ -831,38 +831,44 @@ const GraphView = () => {
                 </span>
               )}
 
-              {/* Circle */}
-              <div
-                className={`rounded-full flex items-center justify-center shadow-md border-2 transition-all ${
-                  isLinkSource ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-                }`}
-                style={{
-                  width: r * 2,
-                  height: r * 2,
-                  backgroundColor: isRoot ? `hsl(var(--card))` : `hsl(${node.color})`,
-                  borderColor: isRoot ? `hsl(var(--foreground))` : `hsl(${node.color})`,
-                }}
-              >
-                {isRoot && (
+              {/* Circle (or plain text for root) */}
+              {isRoot ? (
+                <div
+                  className="flex items-center justify-center"
+                  style={{ width: r * 2, height: r * 2 }}
+                >
                   <span
-                    className="font-display font-bold text-foreground text-center px-2 leading-tight"
-                    style={{ fontSize: node.label.length > 10 ? 11 : 14 }}
+                    className="font-display font-bold text-foreground text-center px-2 leading-tight whitespace-nowrap"
+                    style={{ fontSize: node.label.length > 10 ? 13 : 16 }}
                   >
                     {node.label}
                   </span>
-                )}
-                {showCollapsedDot && (
-                  <span
-                    className="rounded-full"
-                    style={{ width: 6, height: 6, backgroundColor: "hsl(var(--background))" }}
-                  />
-                )}
-                {node.type === "note" && !showCollapsedDot && (
-                  <span className="text-[10px]" style={{ color: "hsl(var(--background))" }}>
-                    {node.noteType === "checklist" ? "☑" : ""}
-                  </span>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div
+                  className={`rounded-full flex items-center justify-center shadow-md border-2 transition-all ${
+                    isLinkSource ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
+                  }`}
+                  style={{
+                    width: r * 2,
+                    height: r * 2,
+                    backgroundColor: `hsl(${node.color})`,
+                    borderColor: `hsl(${node.color})`,
+                  }}
+                >
+                  {showCollapsedDot && (
+                    <span
+                      className="rounded-full"
+                      style={{ width: 6, height: 6, backgroundColor: "hsl(var(--background))" }}
+                    />
+                  )}
+                  {node.type === "note" && !showCollapsedDot && (
+                    <span className="text-[10px]" style={{ color: "hsl(var(--background))" }}>
+                      {node.noteType === "checklist" ? "☑" : ""}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Label above circle for notes (children grow upward) */}
               {node.type === "note" && (
