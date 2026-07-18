@@ -686,7 +686,7 @@ const GraphView = () => {
         // Always track pointer for pinch detection
         pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-        // Second pointer -> start pinch (cancel any in-flight pan or node drag)
+        // Second pointer -> start pinch (cancel any in-flight pan, node drag or canvas long-press)
         if (pointersRef.current.size >= 2) {
           const pts = Array.from(pointersRef.current.values());
           const [p1, p2] = pts;
@@ -702,12 +702,27 @@ const GraphView = () => {
           panState.current = null;
           dragState.current = null;
           cancelLongPress();
+          if (canvasLongPressTimer.current) { clearTimeout(canvasLongPressTimer.current); canvasLongPressTimer.current = null; }
+          canvasLongPressStart.current = null;
           didPan.current = true;
           setIsPanning(true);
           return;
         }
 
         if (!onBackground) return;
+
+        // Long-press on empty canvas -> open "create" dialog (works for touch and mouse)
+        canvasLongPressStart.current = { x: e.clientX, y: e.clientY };
+        if (canvasLongPressTimer.current) clearTimeout(canvasLongPressTimer.current);
+        canvasLongPressTimer.current = setTimeout(() => {
+          canvasLongPressTimer.current = null;
+          // Only trigger if user hasn't started panning/pinching
+          if (didPan.current || pinchState.current || pointersRef.current.size >= 2) return;
+          setCreateDialog({ x: e.clientX, y: e.clientY });
+          // Cancel any pending pan so the click after release doesn't act
+          panState.current = null;
+          didPan.current = true;
+        }, 550);
 
         // Touch: 1-finger canvas pan is disabled (use 2 fingers). Only mouse/pen pans with one pointer.
         if (e.pointerType === "touch") return;
