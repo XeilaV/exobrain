@@ -290,9 +290,6 @@ const ChatPanel = () => {
                           </div>
                         );
                       }
-                      if (isProposalTool(part)) {
-                        return <div key={idx}>{renderProposalCard(part)}</div>;
-                      }
                       return null;
                     })}
                   </div>
