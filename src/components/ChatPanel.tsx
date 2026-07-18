@@ -10,13 +10,21 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import type { UIMessage, ToolUIPart } from "ai";
 
+type ProposalState = "applied" | "discarded";
+type AppliedProposals = { [key: string]: ProposalState };
+
+const isProposalTool = (part: UIMessage["parts"][number]): part is ToolUIPart =>
+  part.type === "tool-propose_create_note" ||
+  part.type === "tool-propose_update_note" ||
+  part.type === "tool-propose_create_category";
+
 const ChatPanel = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [attachedAudio, setAttachedAudio] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [appliedProposals, setAppliedProposals] = useState<Record<string, "applied" | "discarded">({});
+  const [appliedProposals, setAppliedProposals] = useState<AppliedProposals>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -398,7 +406,7 @@ const ChatPanel = () => {
                           </div>
                         );
                       }
-                      if (isToolUIPart(part)) {
+                      if (isProposalTool(part)) {
                         return <div key={idx}>{renderProposalCard(part)}</div>;
                       }
                       return null;
