@@ -23,8 +23,16 @@ export interface AiActionPayload {
 export interface NoteVersion {
   id: string;
   noteId: string;
+  title: string;
   content: string;
   checklist: ChecklistItem[];
+  categoryId: string | null;
+  parentNoteId: string | null;
+  linkedNoteIds: string[];
+  noteType: NoteType;
+  isCollapsed: boolean;
+  icon?: string | null;
+  eventType: string;
   source: string;
   createdAt: string;
 }
@@ -68,6 +76,7 @@ interface NotesContextType {
   applyAiAction: (payload: AiActionPayload) => Promise<Note | Category | null>;
   getNoteVersions: (noteId: string) => Promise<NoteVersion[]>;
   restoreVersion: (noteId: string, versionId: string) => Promise<boolean>;
+  recoverDeletedVersion: (versionId: string) => Promise<Note | null>;
 }
 
 const NotesContext = createContext<NotesContextType | null>(null);
@@ -413,7 +422,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const getNoteVersions = useCallback(async (noteId: string): Promise<NoteVersion[]> => {
     const { data, error } = await supabase.from("note_versions")
-      .select("id, note_id, content, checklist, source, created_at")
+      .select("id, note_id, title, content, checklist, category_id, parent_note_id, linked_note_ids, note_type, is_collapsed, icon, event_type, source, created_at")
       .eq("note_id", noteId)
       .order("created_at", { ascending: false });
     if (error) {
@@ -423,30 +432,60 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return (data || []).map((row: any) => ({
       id: row.id,
       noteId: row.note_id,
+      title: row.title,
       content: row.content,
       checklist: row.checklist as ChecklistItem[],
+      categoryId: row.category_id,
+      parentNoteId: row.parent_note_id,
+      linkedNoteIds: row.linked_note_ids ?? [],
+      noteType: (row.note_type as NoteType) ?? "text",
+      isCollapsed: row.is_collapsed ?? true,
+      icon: row.icon ?? null,
+      eventType: row.event_type ?? "edit",
       source: row.source,
       createdAt: row.created_at,
     }));
   }, []);
 
   const restoreVersion = useCallback(async (noteId: string, versionId: string): Promise<boolean> => {
-    const { data, error } = await supabase.from("note_versions")
-      .select("content, checklist")
-      .eq("id", versionId)
-      .single();
+    clearTimeout(updateTimers.current[noteId]);
+    clearTimeout(checklistTimers.current[noteId]);
+
+    const { data, error } = await supabase.rpc("restore_note_version", {
+      _note_id: noteId,
+      _version_id: versionId,
+    });
+
     if (error || !data) {
       console.error("restoreVersion error:", error);
       toast.error("No se pudo cargar la versión");
       return false;
     }
-    updateNote(noteId, {
-      content: data.content,
-      checklist: (data.checklist as unknown as ChecklistItem[]) || [],
-    });
+
+    const restored = dbToNote(data);
+    setNotes(prev => prev.map(n => n.id === noteId ? restored : n));
+    setSelectedNoteId(noteId);
     toast.success("Versión restaurada");
     return true;
-  }, [updateNote]);
+  }, []);
+
+  const recoverDeletedVersion = useCallback(async (versionId: string): Promise<Note | null> => {
+    const { data, error } = await supabase.rpc("recover_deleted_note_version", {
+      _version_id: versionId,
+    });
+
+    if (error || !data) {
+      console.error("recoverDeletedVersion error:", error);
+      toast.error("No se pudo recuperar la nota");
+      return null;
+    }
+
+    const recovered = dbToNote(data);
+    setNotes(prev => [recovered, ...prev]);
+    setSelectedNoteId(recovered.id);
+    toast.success("Nota recuperada");
+    return recovered;
+  }, []);
 
   const getChildNotes = useCallback((noteId: string) => notes.filter(n => n.parentNoteId === noteId), [notes]);
   const getLinkedNotes = useCallback((noteId: string) => {
@@ -485,7 +524,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       getChildNotes, getLinkedNotes, getParentNote,
       getSubcategories, getRootCategories, getCategoryPath,
       brainName, setBrainName, onboarded, setOnboarded,
-      applyAiAction, getNoteVersions, restoreVersion,
+      applyAiAction, getNoteVersions, restoreVersion, recoverDeletedVersion,
     }}>
       {children}
     </NotesContext.Provider>
