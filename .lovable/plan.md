@@ -1,100 +1,80 @@
 
-# Rediseño: Listas → Tasks (estilo Google Tasks)
+# Sincronización bidireccional con Google Calendar
 
-## 1. Modelo de datos
+Cada usuario conecta su cuenta de Google. Los tokens los custodia el gateway de Lovable (nunca el navegador ni la base de datos del proyecto). La sincronización es **bidireccional** y **opt-in por tarea**: antes de crear un evento en Google se pregunta al usuario.
 
-Ampliar el JSON `checklist` de cada nota tipo `checklist` para que cada item sea una **Task** con:
+## 1. App User Connector (Google Calendar)
 
-```ts
-type Task = {
-  id: string;
-  text: string;
-  notes?: string;          // descripción larga
-  completed: boolean;
-  dueAt?: string | null;   // ISO datetime (fecha + hora opcional)
-  hasTime?: boolean;       // false = solo fecha, true = fecha + hora
-  remindAt?: string | null;
-  parentId?: string | null; // subtareas anidadas
-  order: number;
-  // sync opcional Google
-  googleTaskId?: string;
-  googleEventId?: string;
-  updatedAt: string;
-};
+- Configurar cliente OAuth mediante `connector_app_user--connect_client` (connector_id `google_calendar`).
+- Redirect URI en Google Cloud Console: `https://connector-gateway.lovable.dev/api/v1/app-users/oauth2/callback`.
+- Scopes: `userinfo.email`, `userinfo.profile`, `https://www.googleapis.com/auth/calendar.events`.
+
+## 2. Modelo de datos
+
+Nueva tabla `google_calendar_sync`:
+
+```
+task_id text PK        -- id del ChecklistItem o note_id si la nota tiene fecha
+note_id uuid
+user_id uuid
+event_id text          -- id del evento en Google
+calendar_id text       -- 'primary' por defecto
+sync_status text       -- 'synced' | 'pending' | 'declined'
+last_google_update timestamptz
+last_local_update timestamptz
 ```
 
-Nueva tabla `user_integrations` para guardar preferencias de sync por usuario:
-- `google_tasks_enabled bool`, `google_calendar_enabled bool`
-- `google_tasklist_id text` (lista de destino en Google Tasks)
-- `google_calendar_id text`
-- `last_sync_at timestamptz`
+Con RLS `auth.uid() = user_id` y GRANTs a `authenticated` + `service_role`.
 
-Con RLS + GRANT estándar (`auth.uid() = user_id`).
+Añadir a `profiles`:
+- `google_calendar_connected boolean default false`
+- `google_calendar_last_sync timestamptz`
 
-## 2. UI móvil — flujo de creación y edición
+## 3. Flujo por tarea (opt-in)
 
-**Item en lista (estado normal, ≥70% ancho útil):**
-```text
-[ ] Título de la tarea            📅 mar 21   ▲ ▼
-    ↳ 2 subtareas
-```
-- Tap corto en el checkbox → completar.
-- Tap corto en el texto → **input rápido inline** para renombrar.
-- Icono "expandir" (o long-press) → abre **bottom-sheet** con edición completa.
+Cuando el usuario guarda una tarea/nota con `dueAt`:
 
-**Creación:**
-- Input rápido al pie de la lista: escribes título → Enter añade y limpia.
-- Botón "＋ opciones" a la derecha del input → crea la task y abre bottom-sheet.
+1. Si Google no está conectado → CTA para conectar.
+2. Si está conectado → aparece un diálogo: **"¿Añadir esta tarea a tu Google Calendar?"** [Sí, una vez] [Sí, siempre para esta lista] [No].
+3. Se guarda la elección en `google_calendar_sync.sync_status`.
+4. Si acepta → edge function `google-calendar-sync-task` crea el evento y guarda `event_id`.
 
-**Bottom-sheet de edición (≈85% alto):**
-- Título (input grande)
-- Notas (textarea multilinea)
-- Fecha (date picker) + toggle "añadir hora" (time picker)
-- Recordatorio (toggle + selector)
-- Subtareas (mini-lista con reorden ▲▼ y add)
-- Botones: Guardar / Eliminar
+Al editar la tarea (título, fecha, notas) → si `sync_status = 'synced'` se actualiza el evento sin volver a preguntar. Al borrar la tarea o quitar la fecha → se borra el evento.
 
-Reutiliza los estilos actuales (`bg-card`, tokens semánticos, modo oscuro) y respeta accesibilidad móvil (targets ≥44px, texto ≥14px).
+## 4. Flujo Google → ExoBrain
 
-## 3. Sincronización con Google (opcional, por usuario)
+Edge function `google-calendar-pull` (invocada al abrir la app y cada ~5 min mientras está activa):
 
-Ajustes en el menú de perfil → sección **Integraciones**:
-- Toggle "Sincronizar con Google Tasks"
-- Toggle "Sincronizar recordatorios con Google Calendar"
-- Selector de lista de Google Tasks destino
-- Selector de calendario destino
+1. Llama `events.list` con `updatedMin = last_google_update` sobre calendario `primary`.
+2. Para cada evento:
+   - Si tiene mapping en `google_calendar_sync` → actualiza la tarea local (título, fecha, notas).
+   - Si es un evento nuevo → muestra un diálogo en la app: **"Nuevo evento en tu calendario: '<título>'. ¿Añadirlo a ExoBrain?"** con selector de lista destino.
+3. Deleciones en Google (evento cancelado) → se pregunta si borrar la tarea local o solo desincronizar.
 
-Usa **App User Connectors** (cada usuario conecta su propia cuenta):
-- `google_tasks` para tasks
-- `google_calendar` para eventos/recordatorios
+Resolución de conflictos: gana la edición con `updated_at` más reciente; si empatan, se pregunta.
 
-Sync bidireccional vía Edge Functions:
-- `sync-google-tasks` (pull + push, guarda `googleTaskId`)
-- `sync-google-calendar` (crea eventos para tasks con `remindAt`)
-- Trigger: al abrir la app, al editar una task, y botón "Sincronizar ahora"
+## 5. Edge Functions
 
-Si el usuario **no activa** ninguna integración, todo funciona 100% local en ExoBrain (comportamiento por defecto).
+- `google-calendar-status` — verifica conexión y devuelve estado.
+- `google-calendar-sync-task` — POST/PATCH/DELETE de un evento a partir de un `ChecklistItem`.
+- `google-calendar-pull` — trae cambios desde Google y devuelve la lista de nuevos eventos pendientes de confirmar.
+- `google-calendar-disconnect` — borra mapeos y desactiva sync.
 
-## 4. Migración de datos existentes
+Todas usan `callAsAppUser` con el token del usuario autenticado (no se expone token al cliente).
 
-Los items actuales `{id, text, completed}` se leen tal cual y se tratan como Tasks sin fecha, sin subtareas, `order` = índice en el array. Sin migración SQL destructiva.
+## 6. UI
 
-## 5. Detalles técnicos
+- Menú de usuario → "Conectar Google Calendar" (o "Desconectar" si ya está conectada).
+- `TaskSheet`: badge/icono cuando la tarea está sincronizada; opción "Dejar de sincronizar" en el menú.
+- Bandeja de "eventos nuevos de Google" (bottom-sheet) para aceptar/rechazar en bloque los eventos entrantes.
 
-- Nuevo componente `src/components/TaskSheet.tsx` (bottom-sheet con framer-motion).
-- Nuevo componente `src/components/TaskListView.tsx` que sustituye la sección de checklist actual dentro de `NotePostIt.tsx` cuando `noteType === "checklist"`.
-- `NotesContext`: nuevas funciones `updateTask`, `addSubtask`, `moveTask`. El debounce actual (`persistChecklist` 250ms) se mantiene.
-- `src/lib/tasks.ts`: helpers para árbol de subtareas y formato de fechas (usar `date-fns` ya presente).
-- Date picker: shadcn `Calendar` en un `Popover` dentro del sheet (con `pointer-events-auto`).
-- Google sync: `src/integrations/lovable/appUserConnector.ts` + edge functions `sync-google-tasks` y `sync-google-calendar`. Solo se cargan si el usuario activa la integración.
-- Sin cambios en desktop más allá de exponer los nuevos campos (fecha, notas, subtareas) en el mismo panel lateral existente.
+## 7. Seguridad
 
-## 6. Orden de implementación
+- Tokens OAuth solo en el gateway; ninguna edge function los devuelve al cliente.
+- RLS estricta en `google_calendar_sync` y validación `auth.uid()` en cada edge function.
+- Sincronización solo del calendario `primary` en la primera fase.
 
-1. Modelo `Task` + migración de tipos + `TaskListView` con item ancho al 70%+ y flechas.
-2. `TaskSheet` con título, notas, fecha/hora, recordatorio, subtareas.
-3. Input rápido + botón "＋ opciones".
-4. Tabla `user_integrations` + pantalla de Integraciones.
-5. Conectar Google Tasks (App User Connector) + edge function de sync.
-6. Conectar Google Calendar + sync de recordatorios.
-7. Verificación en viewport móvil (393×667) con Playwright: crear, editar, subtarea, fecha, completar, sync.
+## Preguntas antes de implementar
+
+1. Para eventos entrantes nuevos desde Google, ¿todos van a una lista fija (ej. "Google Calendar") o siempre preguntas la lista destino?
+2. La opción "Sí, siempre para esta lista" ¿te interesa, o prefieres que siempre pregunte por cada tarea nueva?
