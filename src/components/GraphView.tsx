@@ -1117,6 +1117,9 @@ const GraphView = () => {
                     <Brain size={12} />Renombrar tu brain
                   </button>
                   <GoogleCalendarMenuItem onClose={() => setShowProfileMenu(false)} />
+                  <div className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 flex items-center gap-2 font-body text-muted-foreground/60 cursor-not-allowed">
+                    <span className="text-[10px] uppercase tracking-wide">Historial · próximamente</span>
+                  </div>
                   <button
                     onClick={async () => { setShowProfileMenu(false); await signOut(); navigate("/auth"); }}
                     className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
