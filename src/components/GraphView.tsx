@@ -1060,8 +1060,8 @@ const GraphView = () => {
               {user ? (
                 <>
                   <div className="px-3 py-2 border-b border-border">
-                    <p className="text-[10px] font-body text-muted-foreground">Sesión</p>
-                    <p className="text-xs font-body text-foreground truncate">{user.email}</p>
+                    <p className="text-xs md:text-[10px] font-body text-muted-foreground">Sesión</p>
+                    <p className="text-sm md:text-xs font-body text-foreground truncate">{user.email}</p>
                   </div>
                   <button
                     onClick={() => { setShowBrainDialog(true); setShowProfileMenu(false); }}
