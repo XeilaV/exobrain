@@ -1211,7 +1211,7 @@ const GraphView = () => {
               }
             }}
             autoFocus
-            className="w-full bg-muted rounded text-xs px-2 py-1.5 text-foreground outline-none font-body"
+            className="w-full bg-muted rounded text-base md:text-xs px-2 py-2.5 md:py-1.5 min-h-11 md:min-h-0 text-foreground outline-none font-body"
           />
           <div className="flex gap-2">
             <button
@@ -1221,11 +1221,11 @@ const GraphView = () => {
                   setEditingCat(null);
                 }
               }}
-              className="flex-1 bg-primary text-primary-foreground rounded text-xs py-1.5 font-medium"
+              className="flex-1 bg-primary text-primary-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0 font-medium"
             >
               Guardar
             </button>
-            <button onClick={() => setEditingCat(null)} className="flex-1 bg-muted text-foreground rounded text-xs py-1.5">Cancelar</button>
+            <button onClick={() => setEditingCat(null)} className="flex-1 bg-muted text-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0">Cancelar</button>
           </div>
         </div>
       )}
