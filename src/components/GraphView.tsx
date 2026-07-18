@@ -892,7 +892,7 @@ const GraphView = () => {
             {contextMenu.nodeId === "root" && (
               <button
                 onClick={() => { setShowBrainDialog(true); setContextMenu(null); }}
-                className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
               >
                 <Rename size={12} />Renombrar cerebro
               </button>
@@ -904,13 +904,13 @@ const GraphView = () => {
                 <>
                   <button
                     onClick={() => { setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "text" }); setContextMenu(null); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <FileText size={12} />Añadir nota
                   </button>
                   <button
                     onClick={() => { setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "checklist" }); setContextMenu(null); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <ListChecks size={12} />Añadir lista
                   </button>
@@ -920,13 +920,13 @@ const GraphView = () => {
                       if (cat) setEditingCat({ id: catId, name: cat.name });
                       setContextMenu(null);
                     }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <Pencil size={12} />Renombrar tema
                   </button>
                   <button
                     onClick={() => { setColorPickerCat({ id: catId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <Palette size={12} />Cambiar color
                   </button>
@@ -938,7 +938,7 @@ const GraphView = () => {
                       });
                       setContextMenu(null);
                     }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
                   >
                     <Trash2 size={12} />Eliminar tema
                   </button>
@@ -954,19 +954,19 @@ const GraphView = () => {
                 <>
                   <button
                     onClick={() => { setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "text" }); setContextMenu(null); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <FileText size={12} />Añadir hija (texto)
                   </button>
                   <button
                     onClick={() => { setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "checklist" }); setContextMenu(null); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <ListChecks size={12} />Añadir hija (lista)
                   </button>
                   <button
                     onClick={() => { setLinkingNoteId(nId); setContextMenu(null); toast.info("Pulsa otra nota para enlazar"); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     🔗 Enlazar con otra nota
                   </button>
@@ -978,7 +978,7 @@ const GraphView = () => {
                       });
                       setContextMenu(null);
                     }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
                   >
                     <Trash2 size={12} />Eliminar
                   </button>
@@ -1065,13 +1065,13 @@ const GraphView = () => {
                   </div>
                   <button
                     onClick={() => { setShowBrainDialog(true); setShowProfileMenu(false); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <Brain size={12} />Renombrar tu brain
                   </button>
                   <button
                     onClick={async () => { setShowProfileMenu(false); await signOut(); navigate("/auth"); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
                   >
                     <LogOut size={12} />Cerrar sesión
                   </button>
@@ -1079,7 +1079,7 @@ const GraphView = () => {
               ) : (
                 <button
                   onClick={() => { setShowProfileMenu(false); navigate("/auth"); }}
-                  className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                 >
                   <LogIn size={12} />Iniciar sesión
                 </button>
