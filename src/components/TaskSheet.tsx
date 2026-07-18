@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Calendar as CalendarIcon, Clock, Trash2, Plus, CornerDownRight, CheckSquare, Square, ChevronUp, ChevronDown, CalendarPlus, CalendarCheck2, CalendarX, Dot, ListChecks } from "lucide-react";
+import { X, Calendar as CalendarIcon, Clock, Trash2, Plus, CornerDownRight, CheckSquare, Square, ChevronUp, ChevronDown, CalendarPlus, CalendarCheck2, CalendarX, Dot, ListChecks, Copy } from "lucide-react";
+import { toast } from "sonner";
+
 import { ChecklistItem } from "@/types/notes";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
