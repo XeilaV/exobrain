@@ -16,9 +16,8 @@ interface PostItChecklistItemProps {
   isLast?: boolean;
   onMove?: (dir: -1 | 1) => void;
 }
-}
 
-const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
+const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove }: PostItChecklistItemProps) => {
   const { toggleChecklistItem, deleteChecklistItem, updateNote, selectedNote } = useNotes();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
