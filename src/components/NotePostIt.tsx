@@ -70,8 +70,9 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove }: 
   );
 
   const checkbox = (
-    <button onClick={() => toggleChecklistItem(noteId, item.id)} className="text-primary shrink-0">
-      {item.completed ? <CheckSquare size={16} /> : <Square size={16} />}
+    <button onClick={() => toggleChecklistItem(noteId, item.id)} aria-label={item.completed ? "Marcar como pendiente" : "Marcar como completada"}
+      className={`text-primary shrink-0 flex items-center justify-center ${mobile ? "min-h-11 min-w-11" : ""}`}>
+      {item.completed ? <CheckSquare size={mobile ? 22 : 16} /> : <Square size={mobile ? 22 : 16} />}
     </button>
   );
 
