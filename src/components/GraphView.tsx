@@ -231,7 +231,7 @@ const GraphView = () => {
       const catAngle = -Math.PI + t * Math.PI;
 
       const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
-      const catExpanded = !cat.isCollapsed && rootNotes.length > 0;
+      const catExpanded = cat.isCollapsed === false && rootNotes.length > 0;
 
       // Empuje radial cuando la categoría está expandida.
       const extra = catExpanded ? expansionOffset(rootNotes.length) : 0;
