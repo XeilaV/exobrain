@@ -1331,6 +1331,22 @@ const GraphView = () => {
         }}
         onCancel={() => setNewNoteDialog(null)}
       />
+
+      <CreateNodeDialog
+        open={createDialog !== null}
+        categories={categories}
+        notes={notes}
+        onCreateCategory={(name, color) => {
+          addCategory(name, "📌", color, null);
+          setCreateDialog(null);
+        }}
+        onCreateNote={async (categoryId, parentNoteId, type, name) => {
+          setCreateDialog(null);
+          const created = await addNote(categoryId, parentNoteId, type);
+          if (created) updateNote(created.id, { title: name });
+        }}
+        onCancel={() => setCreateDialog(null)}
+      />
     </div>
   );
 };
