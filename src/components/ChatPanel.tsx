@@ -15,13 +15,12 @@ const ChatPanel = () => {
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [attachedAudio, setAttachedAudio] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [appliedProposals, setAppliedProposals] = useState<AppliedProposals>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const { notes, categories, applyAiAction } = useNotes();
+  const { notes, categories } = useNotes();
   const { session } = useAuth();
   const isMobile = useIsMobile();
   const dragControls = useDragControls();
