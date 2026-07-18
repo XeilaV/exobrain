@@ -171,7 +171,7 @@ const GraphView = () => {
     ) => {
       const R = radiusForDepth(depth);
       const children = notes.filter(n => n.parentNoteId === note.id);
-      const expanded = !note.isCollapsed && children.length > 0;
+      const expanded = note.isCollapsed === false && children.length > 0;
 
       // Si la nota está expandida, alejarla un poco extra del padre.
       const extra = expanded ? expansionOffset(children.length) : 0;
