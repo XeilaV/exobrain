@@ -267,31 +267,21 @@ const TaskSheet = ({
                 <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider font-body flex items-center gap-1">
                   <CornerDownRight size={12} /> Subtareas {subtasks.length > 0 && <span className="text-muted-foreground/60">({subtasks.filter(s => s.completed).length}/{subtasks.length})</span>}
                 </label>
-                <div className="mt-1 space-y-1">
-                  {subtasks.map((s, i) => (
-                    <div key={s.id} className="flex items-center gap-1.5 bg-background/60 rounded px-2 min-h-11">
-                      <button onClick={() => onToggleSubtask(s.id)} aria-label="Completar"
-                        className="text-primary min-h-11 min-w-11 flex items-center justify-center">
-                        {s.completed ? <CheckSquare size={18} /> : <Square size={18} />}
-                      </button>
-                      <span className={`flex-1 text-sm font-body ${s.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                        {s.text}
-                      </span>
-                      <button onClick={() => onMoveSubtask(s.id, -1)} disabled={i === 0} aria-label="Subir"
-                        className="text-muted-foreground disabled:opacity-20 min-h-11 min-w-11 flex items-center justify-center">
-                        <ChevronUp size={18} />
-                      </button>
-                      <button onClick={() => onMoveSubtask(s.id, 1)} disabled={i === subtasks.length - 1} aria-label="Bajar"
-                        className="text-muted-foreground disabled:opacity-20 min-h-11 min-w-11 flex items-center justify-center">
-                        <ChevronDown size={18} />
-                      </button>
-                      <button onClick={() => onDeleteSubtask(s.id)} aria-label="Borrar"
-                        className="text-destructive min-h-11 min-w-11 flex items-center justify-center">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+                <Reorder.Group
+                  axis="y"
+                  values={subtasks}
+                  onReorder={(newOrder: ChecklistItem[]) => onReorderSubtasks?.(newOrder)}
+                  className="mt-1 space-y-1"
+                >
+                  {subtasks.map((s) => (
+                    <SubtaskRow
+                      key={s.id}
+                      item={s}
+                      onToggle={() => onToggleSubtask(s.id)}
+                      onDelete={() => onDeleteSubtask(s.id)}
+                    />
                   ))}
-                </div>
+                </Reorder.Group>
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <input
                     value={newSub}
