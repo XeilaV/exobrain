@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import RichTextEditor from "./RichTextEditor";
 import NameInputDialog from "./NameInputDialog";
 import TaskSheet from "./TaskSheet";
-import NoteVersionHistory from "./NoteVersionHistory";
+
 import { format, isToday, isTomorrow, isPast } from "date-fns";
 import { es } from "date-fns/locale";
 import { ChecklistItem } from "@/types/notes";
