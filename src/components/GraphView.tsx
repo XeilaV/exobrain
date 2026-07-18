@@ -1038,7 +1038,7 @@ const GraphView = () => {
       <div className="fixed top-3 right-3 z-30 flex gap-2">
         <button
           onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
-          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
           title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
           aria-label="Alternar modo oscuro"
         >
@@ -1047,7 +1047,7 @@ const GraphView = () => {
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShowProfileMenu(v => !v); setShowFilterPanel(false); setIsAddingCat(false); }}
-            className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+            className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
             title={user ? "Perfil" : "Iniciar sesión"}
           >
             <UserIcon size={16} />
@@ -1092,7 +1092,7 @@ const GraphView = () => {
 
         <button
           onClick={(e) => { e.stopPropagation(); fitFullTree(); setShowFilterPanel(false); setIsAddingCat(false); }}
-          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
           title="Ver árbol completo"
         >
           <TreePine size={16} />
@@ -1110,7 +1110,7 @@ const GraphView = () => {
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); setIsAddingCat(true); setShowFilterPanel(false); }}
-          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
           title="Nuevo tema"
         >
           <Plus size={16} />
