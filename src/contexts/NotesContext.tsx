@@ -440,7 +440,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     updateNote(noteId, {
       content: data.content,
-      checklist: data.checklist as ChecklistItem[],
+      checklist: (data.checklist as unknown as ChecklistItem[]) || [],
     });
     toast.success("Versión restaurada");
     return true;
