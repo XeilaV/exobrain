@@ -1,13 +1,25 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNotes } from "@/contexts/NotesContext";
 import { useAuth } from "@/hooks/useAuth";
-import { Send, X, Sparkles, Loader2, Image, Mic, MicOff } from "lucide-react";
+import { Send, X, Sparkles, Loader2, Image, Mic, MicOff, Trash2 } from "lucide-react";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import { DefaultChatTransport, type UIMessage } from "ai";
+
+const CHAT_STORAGE_KEY = "exobrain-chat-history";
+
+const loadInitialMessages = (): UIMessage[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as UIMessage[]) : [];
+  } catch {
+    return [];
+  }
+};
 
 const ChatPanel = () => {
   const [isOpen, setIsOpen] = useState(false);
