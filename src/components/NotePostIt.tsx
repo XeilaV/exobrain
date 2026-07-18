@@ -84,7 +84,21 @@ const PostItChecklistItem = ({ item, noteId, mobile, onOpenSheet, subtaskCount =
   if (mobile) {
     const overdue = item.dueAt && !item.completed && isPast(new Date(item.dueAt)) && !isToday(new Date(item.dueAt));
     return (
-      <div className="flex items-center gap-1 bg-background/50 rounded-md px-1 py-1 min-h-14">
+      <Reorder.Item
+        value={item}
+        id={item.id}
+        dragListener={false}
+        dragControls={dragControls}
+        className="flex items-center gap-1 bg-background/50 rounded-md px-1 py-1 min-h-14"
+      >
+        <div
+          onPointerDown={(e) => { e.preventDefault(); dragControls.start(e); }}
+          style={{ touchAction: "none" }}
+          aria-label="Arrastrar para reordenar"
+          className="shrink-0 w-8 h-11 flex items-center justify-center text-muted-foreground/60 cursor-grab active:cursor-grabbing"
+        >
+          <GripVertical size={18} />
+        </div>
         <div className="shrink-0 w-9 h-9 flex items-center justify-center">
           {isBullet ? (
             <button onClick={toggleStyle} aria-label="Cambiar a tarea" className="text-primary w-9 h-9 flex items-center justify-center">
@@ -121,13 +135,7 @@ const PostItChecklistItem = ({ item, noteId, mobile, onOpenSheet, subtaskCount =
             </span>
           )}
         </button>
-        <div className="shrink-0 flex flex-col items-center justify-center -space-y-1">
-          <button onClick={e => { e.stopPropagation(); onMove?.(-1); }} disabled={isFirst} aria-label="Subir"
-            className="text-muted-foreground disabled:opacity-20 w-8 h-7 flex items-center justify-center"><ChevronUp size={16} /></button>
-          <button onClick={e => { e.stopPropagation(); onMove?.(1); }} disabled={isLast} aria-label="Bajar"
-            className="text-muted-foreground disabled:opacity-20 w-8 h-7 flex items-center justify-center"><ChevronDown size={16} /></button>
-        </div>
-      </div>
+      </Reorder.Item>
     );
   }
 
