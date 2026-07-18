@@ -8,6 +8,39 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 
+const SubtaskRow = ({ item, onToggle, onDelete }: { item: ChecklistItem; onToggle: () => void; onDelete: () => void }) => {
+  const controls = useDragControls();
+  return (
+    <Reorder.Item
+      value={item}
+      id={item.id}
+      dragListener={false}
+      dragControls={controls}
+      className="flex items-center gap-1 bg-background/60 rounded px-1 min-h-11"
+    >
+      <div
+        onPointerDown={(e) => { e.preventDefault(); controls.start(e); }}
+        style={{ touchAction: "none" }}
+        aria-label="Arrastrar para reordenar"
+        className="shrink-0 w-8 h-11 flex items-center justify-center text-muted-foreground/60 cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical size={16} />
+      </div>
+      <button onClick={onToggle} aria-label="Completar"
+        className="text-primary min-h-11 min-w-11 flex items-center justify-center">
+        {item.completed ? <CheckSquare size={18} /> : <Square size={18} />}
+      </button>
+      <span className={`flex-1 text-sm font-body ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
+        {item.text}
+      </span>
+      <button onClick={onDelete} aria-label="Borrar"
+        className="text-destructive min-h-11 min-w-11 flex items-center justify-center">
+        <Trash2 size={16} />
+      </button>
+    </Reorder.Item>
+  );
+};
+
 interface TaskSheetProps {
   open: boolean;
   noteId: string;
