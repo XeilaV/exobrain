@@ -1,7 +1,10 @@
+export type ChecklistItemStyle = "task" | "bullet";
+
 export interface ChecklistItem {
   id: string;
   text: string;
   completed: boolean;
+  style?: ChecklistItemStyle; // "task" (default) shows checkbox, "bullet" shows • only
   // Task-style extensions (optional for backwards compatibility)
   notes?: string;
   dueAt?: string | null;      // ISO date or datetime
