@@ -1,6 +1,6 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight } from "lucide-react";
+import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight, Check } from "lucide-react";
 
 import { useNoteAttachments } from "@/hooks/useNoteAttachments";
 import { motion, Reorder } from "framer-motion";
@@ -24,12 +24,9 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
   const { toggleChecklistItem, deleteChecklistItem, updateNote, selectedNote } = useNotes();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
-  const [showActions, setShowActions] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const draggedRef = useRef(false);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressedRef = useRef(false);
 
   const autoGrow = (el: HTMLTextAreaElement | null) => {
     if (!el) return;
@@ -39,23 +36,28 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
 
   useEffect(() => { if (isEditing) { inputRef.current?.focus(); autoGrow(inputRef.current); } }, [isEditing]);
 
-  const saveEdit = () => {
-    if (!selectedNote) return;
+  const commitEdit = () => {
+    if (!selectedNote) { setIsEditing(false); return; }
     const trimmed = editText.trim();
     if (trimmed && trimmed !== item.text) {
       updateNote(noteId, { checklist: selectedNote.checklist.map(i => i.id === item.id ? { ...i, text: trimmed } : i) });
-    } else { setEditText(item.text); }
+    } else if (!trimmed) {
+      setEditText(item.text);
+    }
     setIsEditing(false);
   };
 
+  const startEdit = () => { setEditText(item.text); setIsEditing(true); };
+
   const textEl = isEditing ? (
     <textarea ref={inputRef} value={editText} onChange={e => { setEditText(e.target.value); autoGrow(e.currentTarget); }}
-      onBlur={saveEdit} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); } }}
+      onBlur={commitEdit}
+      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitEdit(); } if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); } }}
       rows={1}
       className="flex-1 text-sm font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring resize-none overflow-hidden leading-snug" />
   ) : mobile ? (
     <span
-      onClick={() => { if (longPressedRef.current) { longPressedRef.current = false; return; } setIsEditing(true); setEditText(item.text); }}
+      onClick={startEdit}
       className={`flex-1 text-sm font-body ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
     >{item.text}</span>
   ) : (
@@ -68,7 +70,7 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
         if (Math.hypot(dx, dy) > 5) draggedRef.current = true;
       }}
       onPointerUp={() => {
-        if (!draggedRef.current) { setIsEditing(true); setEditText(item.text); }
+        if (!draggedRef.current) { startEdit(); }
         dragStartRef.current = null;
       }}
       className={`flex-1 text-sm font-body select-none ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
@@ -82,14 +84,35 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
     </button>
   );
 
-  const actions = mobile ? (
-    <>
-      <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onMove?.(-1); }} disabled={isFirst} aria-label="Subir"
-        className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-11 flex items-center justify-center"><ChevronUp size={20} /></button>
-      <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onMove?.(1); }} disabled={isLast} aria-label="Bajar"
-        className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-11 flex items-center justify-center"><ChevronDown size={20} /></button>
-    </>
-  ) : (
+  if (mobile) {
+    const editingActions = (
+      <>
+        <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); commitEdit(); }} aria-label="Confirmar"
+          className="text-primary shrink-0 min-h-11 min-w-11 flex items-center justify-center"><Check size={20} /></button>
+        <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); onDuplicate?.(); setIsEditing(false); }} aria-label="Duplicar"
+          className="text-muted-foreground shrink-0 min-h-11 min-w-11 flex items-center justify-center"><Copy size={18} /></button>
+        <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); onAddSubtask?.(); setIsEditing(false); }} aria-label="Subtarea"
+          className="text-muted-foreground shrink-0 min-h-11 min-w-11 flex items-center justify-center"><CornerDownRight size={18} /></button>
+        <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); deleteChecklistItem(noteId, item.id); setIsEditing(false); }} aria-label="Borrar"
+          className="text-destructive shrink-0 min-h-11 min-w-11 flex items-center justify-center"><Trash2 size={18} /></button>
+      </>
+    );
+    const idleActions = (
+      <>
+        <button onClick={e => { e.stopPropagation(); onMove?.(-1); }} disabled={isFirst} aria-label="Subir"
+          className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-11 flex items-center justify-center"><ChevronUp size={20} /></button>
+        <button onClick={e => { e.stopPropagation(); onMove?.(1); }} disabled={isLast} aria-label="Bajar"
+          className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-11 flex items-center justify-center"><ChevronDown size={20} /></button>
+      </>
+    );
+    return (
+      <div className="flex items-center gap-1.5 bg-background/50 rounded px-2 py-1.5 min-h-11">
+        {checkbox}{textEl}{isEditing ? editingActions : idleActions}
+      </div>
+    );
+  }
+
+  const actions = (
     <>
       <button onClick={() => { navigator.clipboard.writeText(item.text); toast.success("Copiado"); }}
         className="opacity-0 group-hover:opacity-50 text-muted-foreground shrink-0"><Copy size={12} /></button>
@@ -97,54 +120,6 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
         onClick={() => deleteChecklistItem(noteId, item.id)} />
     </>
   );
-
-  if (mobile) {
-    const cancelLongPress = () => {
-      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-    };
-    const startLongPress = () => {
-      longPressedRef.current = false;
-      cancelLongPress();
-      longPressTimer.current = setTimeout(() => {
-        longPressedRef.current = true;
-        setShowActions(true);
-        if (navigator.vibrate) navigator.vibrate(30);
-      }, 450);
-    };
-    return (
-      <div className="relative">
-        <div
-          className="flex items-center gap-1.5 group bg-background/50 rounded px-2 py-1.5 min-h-11 select-none"
-          onPointerDown={startLongPress}
-          onPointerMove={cancelLongPress}
-          onPointerUp={cancelLongPress}
-          onPointerCancel={cancelLongPress}
-          onContextMenu={e => e.preventDefault()}
-        >
-          {checkbox}{textEl}{actions}
-        </div>
-        {showActions && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setShowActions(false)} />
-            <div className="absolute right-2 top-full mt-1 z-50 bg-popover border border-border rounded-lg shadow-xl overflow-hidden min-w-[180px]">
-              <button onClick={() => { setShowActions(false); onDuplicate?.(); }}
-                className="w-full flex items-center gap-2 px-3 py-3 text-sm text-foreground hover:bg-muted min-h-11 text-left">
-                <Copy size={16} className="text-muted-foreground" /> Duplicar
-              </button>
-              <button onClick={() => { setShowActions(false); onAddSubtask?.(); }}
-                className="w-full flex items-center gap-2 px-3 py-3 text-sm text-foreground hover:bg-muted min-h-11 text-left">
-                <CornerDownRight size={16} className="text-muted-foreground" /> Subtarea
-              </button>
-              <button onClick={() => { setShowActions(false); deleteChecklistItem(noteId, item.id); }}
-                className="w-full flex items-center gap-2 px-3 py-3 text-sm text-destructive hover:bg-muted min-h-11 text-left">
-                <Trash2 size={16} /> Borrar
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    );
-  }
 
   return (
     <Reorder.Item value={item} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1 touch-none" id={item.id} style={{ touchAction: "none" }}>
