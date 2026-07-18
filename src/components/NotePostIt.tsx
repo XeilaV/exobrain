@@ -1,6 +1,7 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2 } from "lucide-react";
+import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2 } from "lucide-react";
+
 import { useNoteAttachments } from "@/hooks/useNoteAttachments";
 import { motion, Reorder } from "framer-motion";
 import { toast } from "sonner";
@@ -10,9 +11,13 @@ import NameInputDialog from "./NameInputDialog";
 interface PostItChecklistItemProps {
   item: { id: string; text: string; completed: boolean };
   noteId: string;
+  mobile: boolean;
+  isFirst?: boolean;
+  isLast?: boolean;
+  onMove?: (dir: -1 | 1) => void;
 }
 
-const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
+const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove }: PostItChecklistItemProps) => {
   const { toggleChecklistItem, deleteChecklistItem, updateNote, selectedNote } = useNotes();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
@@ -37,37 +42,69 @@ const PostItChecklistItem = ({ item, noteId }: PostItChecklistItemProps) => {
     setIsEditing(false);
   };
 
-  return (
-    <Reorder.Item value={item} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1 touch-none" id={item.id} style={{ touchAction: "none" }}>
-      <GripVertical size={14} className="text-muted-foreground/40 shrink-0 pointer-events-none" />
-      <button onClick={() => toggleChecklistItem(noteId, item.id)} className="text-primary shrink-0">
-        {item.completed ? <CheckSquare size={16} /> : <Square size={16} />}
-      </button>
-      {isEditing ? (
-        <textarea ref={inputRef} value={editText} onChange={e => { setEditText(e.target.value); autoGrow(e.currentTarget); }}
-          onBlur={saveEdit} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); } }}
-          rows={1}
-          className="flex-1 text-sm font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring resize-none overflow-hidden leading-snug" />
-      ) : (
-        <span
-          onPointerDown={e => { dragStartRef.current = { x: e.clientX, y: e.clientY }; draggedRef.current = false; }}
-          onPointerMove={e => {
-            if (!dragStartRef.current) return;
-            const dx = e.clientX - dragStartRef.current.x;
-            const dy = e.clientY - dragStartRef.current.y;
-            if (Math.hypot(dx, dy) > 5) draggedRef.current = true;
-          }}
-          onPointerUp={() => {
-            if (!draggedRef.current) { setIsEditing(true); setEditText(item.text); }
-            dragStartRef.current = null;
-          }}
-          className={`flex-1 text-sm font-body select-none ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
-        >{item.text}</span>
-      )}
+  const textEl = isEditing ? (
+    <textarea ref={inputRef} value={editText} onChange={e => { setEditText(e.target.value); autoGrow(e.currentTarget); }}
+      onBlur={saveEdit} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === "Escape") { setEditText(item.text); setIsEditing(false); } }}
+      rows={1}
+      className="flex-1 text-sm font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring resize-none overflow-hidden leading-snug" />
+  ) : mobile ? (
+    <span
+      onClick={() => { setIsEditing(true); setEditText(item.text); }}
+      className={`flex-1 text-sm font-body ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
+    >{item.text}</span>
+  ) : (
+    <span
+      onPointerDown={e => { dragStartRef.current = { x: e.clientX, y: e.clientY }; draggedRef.current = false; }}
+      onPointerMove={e => {
+        if (!dragStartRef.current) return;
+        const dx = e.clientX - dragStartRef.current.x;
+        const dy = e.clientY - dragStartRef.current.y;
+        if (Math.hypot(dx, dy) > 5) draggedRef.current = true;
+      }}
+      onPointerUp={() => {
+        if (!draggedRef.current) { setIsEditing(true); setEditText(item.text); }
+        dragStartRef.current = null;
+      }}
+      className={`flex-1 text-sm font-body select-none ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
+    >{item.text}</span>
+  );
+
+  const checkbox = (
+    <button onClick={() => toggleChecklistItem(noteId, item.id)} className="text-primary shrink-0">
+      {item.completed ? <CheckSquare size={16} /> : <Square size={16} />}
+    </button>
+  );
+
+  const actions = mobile ? (
+    <>
+      <button onClick={() => onMove?.(-1)} disabled={isFirst}
+        className="text-muted-foreground disabled:opacity-20 shrink-0 p-0.5"><ChevronUp size={16} /></button>
+      <button onClick={() => onMove?.(1)} disabled={isLast}
+        className="text-muted-foreground disabled:opacity-20 shrink-0 p-0.5"><ChevronDown size={16} /></button>
+      <Trash2 size={14} className="text-destructive/70 cursor-pointer shrink-0"
+        onClick={() => deleteChecklistItem(noteId, item.id)} />
+    </>
+  ) : (
+    <>
       <button onClick={() => { navigator.clipboard.writeText(item.text); toast.success("Copiado"); }}
         className="opacity-0 group-hover:opacity-50 text-muted-foreground shrink-0"><Copy size={12} /></button>
       <Trash2 size={12} className="opacity-0 group-hover:opacity-50 text-destructive cursor-pointer shrink-0"
         onClick={() => deleteChecklistItem(noteId, item.id)} />
+    </>
+  );
+
+  if (mobile) {
+    return (
+      <div className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1">
+        {checkbox}{textEl}{actions}
+      </div>
+    );
+  }
+
+  return (
+    <Reorder.Item value={item} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1 touch-none" id={item.id} style={{ touchAction: "none" }}>
+      <GripVertical size={14} className="text-muted-foreground/40 shrink-0 pointer-events-none" />
+      {checkbox}{textEl}{actions}
     </Reorder.Item>
   );
 };
@@ -248,11 +285,27 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
                 <span className="text-[10px] text-muted-foreground font-body font-normal">{completedCount}/{note.checklist.length}</span>
               )}
             </h3>
-            <Reorder.Group axis="y" values={note.checklist} onReorder={handleReorder} className="space-y-1">
-              {note.checklist.map(item => (
-                <PostItChecklistItem key={item.id} item={item} noteId={noteId} />
-              ))}
-            </Reorder.Group>
+            {isMobile ? (
+              <div className="space-y-1">
+                {note.checklist.map((item, idx) => (
+                  <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile
+                    isFirst={idx === 0} isLast={idx === note.checklist.length - 1}
+                    onMove={(dir) => {
+                      const newOrder = [...note.checklist];
+                      const target = idx + dir;
+                      if (target < 0 || target >= newOrder.length) return;
+                      [newOrder[idx], newOrder[target]] = [newOrder[target], newOrder[idx]];
+                      updateNote(noteId, { checklist: newOrder });
+                    }} />
+                ))}
+              </div>
+            ) : (
+              <Reorder.Group axis="y" values={note.checklist} onReorder={handleReorder} className="space-y-1">
+                {note.checklist.map(item => (
+                  <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile={false} />
+                ))}
+              </Reorder.Group>
+            )}
             <div className="flex items-end gap-1.5 mt-2">
               <textarea value={newItemText}
                 onChange={e => {
