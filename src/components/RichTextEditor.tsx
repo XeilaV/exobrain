@@ -32,6 +32,8 @@ const RichTextEditor = ({ content, onChange, placeholder }: RichTextEditorProps)
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       Placeholder.configure({ placeholder: placeholder || "Escribe aquí..." }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
     ],
     content: content || "",
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
