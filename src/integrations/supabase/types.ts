@@ -212,6 +212,7 @@ export type Database = {
           checklist: Json
           content: string
           created_at: string
+          icon: string | null
           id: string
           is_collapsed: boolean
           linked_note_ids: string[]
@@ -228,6 +229,7 @@ export type Database = {
           checklist?: Json
           content?: string
           created_at?: string
+          icon?: string | null
           id?: string
           is_collapsed?: boolean
           linked_note_ids?: string[]
@@ -244,6 +246,7 @@ export type Database = {
           checklist?: Json
           content?: string
           created_at?: string
+          icon?: string | null
           id?: string
           is_collapsed?: boolean
           linked_note_ids?: string[]
