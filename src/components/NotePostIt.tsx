@@ -335,21 +335,21 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
           <div className="border-t border-border pt-2 space-y-2">
             {parentNote && (
               <div>
-                <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-1 font-body">Madre</p>
+                <p className="text-[11px] md:text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-1 font-body">Madre</p>
                 <button onClick={() => setSelectedNoteId(parentNote.id)}
-                  className="flex items-center gap-1 text-[10px] bg-muted hover:bg-muted/80 text-foreground rounded px-2 py-1 font-body">
-                  <ArrowUp size={8} />{parentNote.noteType === "checklist" ? <ListChecks size={8} /> : <FileText size={8} />}{parentNote.title}
+                  className="flex items-center gap-1 text-sm md:text-[10px] bg-muted hover:bg-muted/80 text-foreground rounded px-3 py-2 md:px-2 md:py-1 font-body min-h-11 md:min-h-0">
+                  <ArrowUp size={12} className="md:size-2" />{parentNote.noteType === "checklist" ? <ListChecks size={12} className="md:size-2" /> : <FileText size={12} className="md:size-2" />}{parentNote.title}
                 </button>
               </div>
             )}
             {childNotes.length > 0 && (
               <div>
-                <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-1 font-body">Hijas</p>
+                <p className="text-[11px] md:text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-1 font-body">Hijas</p>
                 <div className="flex flex-wrap gap-1">
                   {childNotes.map(cn => (
                     <button key={cn.id} onClick={() => { setSelectedNoteId(cn.id); }}
-                      className="flex items-center gap-1 text-[10px] bg-muted hover:bg-muted/80 text-foreground rounded px-2 py-1 font-body">
-                      {cn.noteType === "checklist" ? <ListChecks size={8} /> : <FileText size={8} />}{cn.title}
+                      className="flex items-center gap-1 text-sm md:text-[10px] bg-muted hover:bg-muted/80 text-foreground rounded px-3 py-2 md:px-2 md:py-1 font-body min-h-11 md:min-h-0">
+                      {cn.noteType === "checklist" ? <ListChecks size={12} className="md:size-2" /> : <FileText size={12} className="md:size-2" />}{cn.title}
                     </button>
                   ))}
                 </div>
@@ -357,17 +357,17 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
             )}
             {linkedNotes.length > 0 && (
               <div>
-                <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-1 font-body">Enlazadas</p>
+                <p className="text-[11px] md:text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-1 font-body">Enlazadas</p>
                 <div className="flex flex-wrap gap-1">
                   {linkedNotes.map(ln => (
                     <div key={ln.id} className="flex items-center gap-0.5">
                       <button onClick={() => setSelectedNoteId(ln.id)}
-                        className="flex items-center gap-1 text-[10px] bg-primary/10 text-foreground rounded-l px-2 py-1 font-body">
-                        <Link2 size={8} className="text-primary" />{ln.title}
+                        className="flex items-center gap-1 text-sm md:text-[10px] bg-primary/10 text-foreground rounded-l px-3 py-2 md:px-2 md:py-1 font-body min-h-11 md:min-h-0">
+                        <Link2 size={12} className="md:size-2 text-primary" />{ln.title}
                       </button>
-                      <button onClick={() => unlinkNotes(noteId, ln.id)}
-                        className="text-[10px] bg-primary/10 hover:bg-destructive/15 text-muted-foreground rounded-r px-1 py-1">
-                        <Unlink size={8} />
+                      <button onClick={() => unlinkNotes(noteId, ln.id)} aria-label="Desenlazar"
+                        className="text-sm md:text-[10px] bg-primary/10 hover:bg-destructive/15 text-muted-foreground rounded-r px-2 py-2 md:px-1 md:py-1 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center">
+                        <Unlink size={12} className="md:size-2" />
                       </button>
                     </div>
                   ))}
