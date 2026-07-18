@@ -18,7 +18,8 @@ const ToolbarBtn = ({ active, onClick, children, title }: {
     onMouseDown={(e) => e.preventDefault()}
     onClick={onClick}
     title={title}
-    className={`p-1 rounded hover:bg-muted transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+    className={`p-2.5 md:p-1 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded hover:bg-muted transition-colors ${active ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+    aria-label={title}
   >
     {children}
   </button>
