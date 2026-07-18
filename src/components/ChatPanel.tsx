@@ -7,7 +7,8 @@ import ReactMarkdown from "react-markdown";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, isToolUIPart, type UIMessage, type ToolUIPart } from "ai";
+import { DefaultChatTransport } from "ai";
+import type { UIMessage, ToolUIPart } from "ai";
 
 const ChatPanel = () => {
   const [isOpen, setIsOpen] = useState(false);
