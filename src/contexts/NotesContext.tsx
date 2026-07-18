@@ -483,6 +483,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       getChildNotes, getLinkedNotes, getParentNote,
       getSubcategories, getRootCategories, getCategoryPath,
       brainName, setBrainName, onboarded, setOnboarded,
+      applyAiAction, getNoteVersions, restoreVersion,
     }}>
       {children}
     </NotesContext.Provider>
