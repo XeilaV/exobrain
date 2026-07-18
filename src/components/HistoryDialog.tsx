@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useNotes } from "@/contexts/NotesContext";
-import { History, RotateCcw, FileText, ListChecks, ChevronDown, ChevronRight } from "lucide-react";
+import { History, RotateCcw, FileText, ListChecks, ChevronDown, ChevronRight, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ChecklistItem } from "@/types/notes";
 
@@ -14,8 +14,11 @@ interface Props {
 interface HistoryRow {
   id: string;
   note_id: string;
+  title: string;
   content: string;
   checklist: ChecklistItem[];
+  note_type: string;
+  event_type: string;
   source: string;
   created_at: string;
 }
@@ -84,10 +87,11 @@ const describeChecklistChange = (
 };
 
 export default function HistoryDialog({ open, onOpenChange }: Props) {
-  const { notes, updateNote, setSelectedNoteId } = useNotes();
+  const { notes, restoreVersion, recoverDeletedVersion, setSelectedNoteId } = useNotes();
   const [rows, setRows] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [workingId, setWorkingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -96,9 +100,9 @@ export default function HistoryDialog({ open, onOpenChange }: Props) {
       setLoading(true);
       const { data, error } = await supabase
         .from("note_versions")
-        .select("id, note_id, content, checklist, source, created_at")
+        .select("id, note_id, title, content, checklist, note_type, event_type, source, created_at")
         .order("created_at", { ascending: false })
-        .limit(80);
+        .limit(200);
       if (!cancelled) {
         if (error) {
           console.error("history load error:", error);
@@ -136,26 +140,35 @@ export default function HistoryDialog({ open, onOpenChange }: Props) {
 
   const restore = async (row: HistoryRow) => {
     const note = noteById.get(row.note_id);
-    if (!note) {
-      toast.error("La nota original ya no existe");
-      return;
-    }
-    updateNote(row.note_id, {
-      content: row.content,
-      checklist: row.checklist || [],
-    });
-    toast.success("Versión restaurada");
+    setWorkingId(row.id);
+    const ok = note
+      ? await restoreVersion(row.note_id, row.id)
+      : !!(await recoverDeletedVersion(row.id));
+    setWorkingId(null);
+    if (!ok) return;
     onOpenChange(false);
-    setSelectedNoteId(row.note_id);
+    if (note) setSelectedNoteId(row.note_id);
+  };
+
+  const eventLabel = (eventType?: string) => {
+    switch (eventType) {
+      case "delete": return "Borrada";
+      case "pre_restore": return "Antes de restaurar";
+      case "recover_deleted": return "Recuperada";
+      default: return "Edición";
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent className="w-[96vw] max-w-4xl h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-heading">
-            <History size={18} /> Historial
+            <History size={18} /> Historial real
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Historial de versiones reales para restaurar notas activas o recuperar notas borradas.
+          </DialogDescription>
         </DialogHeader>
         <div className="overflow-y-auto flex-1 -mx-2 px-2">
           {loading && (
@@ -169,7 +182,8 @@ export default function HistoryDialog({ open, onOpenChange }: Props) {
           <ul className="space-y-2">
             {rows.map((row) => {
               const note = noteById.get(row.note_id);
-              const isChecklist = row.checklist && row.checklist.length > 0;
+              const isDeleted = !note || row.event_type === "delete";
+              const isChecklist = row.note_type === "checklist" || (row.checklist && row.checklist.length > 0);
               const isOpen = expandedId === row.id;
               const prev = prevByRowId.get(row.id) ?? null;
               const changes = isChecklist
@@ -181,42 +195,41 @@ export default function HistoryDialog({ open, onOpenChange }: Props) {
                   key={row.id}
                   className="border border-border rounded-lg hover:bg-muted/40 transition-colors"
                 >
-                  <button
-                    onClick={() => setExpandedId(isOpen ? null : row.id)}
-                    className="w-full text-left p-3 flex items-start justify-between gap-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground font-body">
+                  <div className="p-3 flex items-start justify-between gap-3">
+                    <button
+                      onClick={() => setExpandedId(isOpen ? null : row.id)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground font-body">
                         {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                        {isChecklist ? <ListChecks size={12} /> : <FileText size={12} />}
-                        <span className="truncate font-medium text-foreground">
-                          {note?.title || "(nota eliminada)"}
+                        {row.event_type === "delete" ? <Trash2 size={12} /> : isChecklist ? <ListChecks size={12} /> : <FileText size={12} />}
+                        <span className="font-medium text-foreground truncate max-w-[180px] sm:max-w-sm">
+                          {row.title || note?.title || "Nota sin título"}
                         </span>
-                        <span>·</span>
-                        <span>{formatDate(row.created_at)}</span>
-                        {row.source && row.source !== "user" && (
-                          <span className="px-1.5 py-0.5 rounded bg-muted text-[10px] uppercase">
-                            {row.source}
+                        <span className="px-1.5 py-0.5 rounded bg-muted text-[10px] uppercase">
+                          {eventLabel(row.event_type)}
+                        </span>
+                        {isDeleted && (
+                          <span className="px-1.5 py-0.5 rounded bg-destructive/10 text-[10px] uppercase text-destructive">
+                            recuperable
                           </span>
                         )}
+                        <span>{formatDate(row.created_at)}</span>
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground line-clamp-2 font-body">
                         {preview(row)}
                       </p>
-                    </div>
-                    {note && (
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          restore(row);
-                        }}
-                        className="shrink-0 inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-border hover:bg-muted transition-colors font-body"
-                        title="Restaurar esta versión"
-                      >
-                        <RotateCcw size={12} /> Restaurar
-                      </span>
-                    )}
-                  </button>
+                    </button>
+                    <button
+                      onClick={() => restore(row)}
+                      disabled={workingId === row.id}
+                      className="shrink-0 inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-border hover:bg-muted transition-colors font-body disabled:opacity-60"
+                      title={note ? "Restaurar esta versión" : "Recuperar esta nota"}
+                    >
+                      {note ? <RotateCcw size={12} /> : <Undo2 size={12} />}
+                      <span className="hidden sm:inline">{note ? "Restaurar" : "Recuperar"}</span>
+                    </button>
+                  </div>
                   {isOpen && (
                     <div className="px-3 pb-3 border-t border-border/60 pt-2 space-y-2">
                       <div>
@@ -273,6 +286,24 @@ export default function HistoryDialog({ open, onOpenChange }: Props) {
                           </div>
                         </div>
                       )}
+                      <div className="rounded-md bg-muted/40 p-2">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
+                          Versión completa
+                        </p>
+                        {isChecklist ? (
+                          <ul className="text-xs space-y-0.5">
+                            {(row.checklist || []).map((i) => (
+                              <li key={i.id}>
+                                {i.style === "bullet" ? "•" : i.completed ? "✓" : "○"} {i.text}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-xs whitespace-pre-wrap max-h-64 overflow-y-auto font-body">
+                            {stripHtml(row.content) || "(vacío)"}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   )}
                 </li>

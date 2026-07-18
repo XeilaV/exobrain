@@ -173,38 +173,66 @@ export type Database = {
       }
       note_versions: {
         Row: {
+          category_id: string | null
           checklist: Json
           content: string
           created_at: string
+          event_type: string
+          icon: string | null
           id: string
+          is_collapsed: boolean
+          linked_note_ids: string[]
           note_id: string
+          note_type: string
+          parent_note_id: string | null
+          pos_dx: number | null
+          pos_dy: number | null
+          restored_from_version_id: string | null
           source: string
+          title: string
+          user_id: string
         }
         Insert: {
+          category_id?: string | null
           checklist?: Json
           content?: string
           created_at?: string
+          event_type?: string
+          icon?: string | null
           id?: string
+          is_collapsed?: boolean
+          linked_note_ids?: string[]
           note_id: string
+          note_type?: string
+          parent_note_id?: string | null
+          pos_dx?: number | null
+          pos_dy?: number | null
+          restored_from_version_id?: string | null
           source?: string
+          title?: string
+          user_id: string
         }
         Update: {
+          category_id?: string | null
           checklist?: Json
           content?: string
           created_at?: string
+          event_type?: string
+          icon?: string | null
           id?: string
+          is_collapsed?: boolean
+          linked_note_ids?: string[]
           note_id?: string
+          note_type?: string
+          parent_note_id?: string | null
+          pos_dx?: number | null
+          pos_dy?: number | null
+          restored_from_version_id?: string | null
           source?: string
+          title?: string
+          user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "note_versions_note_id_fkey"
-            columns: ["note_id"]
-            isOneToOne: false
-            referencedRelation: "notes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       notes: {
         Row: {
@@ -316,7 +344,58 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      recover_deleted_note_version: {
+        Args: { _version_id: string }
+        Returns: {
+          category_id: string
+          checklist: Json
+          content: string
+          created_at: string
+          icon: string | null
+          id: string
+          is_collapsed: boolean
+          linked_note_ids: string[]
+          note_type: string
+          parent_note_id: string | null
+          pos_dx: number | null
+          pos_dy: number | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "notes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      restore_note_version: {
+        Args: { _note_id: string; _version_id: string }
+        Returns: {
+          category_id: string
+          checklist: Json
+          content: string
+          created_at: string
+          icon: string | null
+          id: string
+          is_collapsed: boolean
+          linked_note_ids: string[]
+          note_type: string
+          parent_note_id: string | null
+          pos_dx: number | null
+          pos_dy: number | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "notes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never

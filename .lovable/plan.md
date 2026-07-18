@@ -1,27 +1,52 @@
-# Drag-and-drop de items desde el asa lateral
+Plan para convertir el historial en una recuperación real y segura:
 
-## Objetivo
-Los items de una nota tipo lista (y las subtareas dentro de `TaskSheet`) se reordenan arrastrando desde el icono lateral izquierdo (`GripVertical`, los "cuatro puntos"). Un toque sobre el texto seguirá abriendo la edición. Se eliminan las flechas ▲/▼.
+1. **Proteger lo que hay ahora**
+   - Antes de tocar la lógica, hacer una copia/export interno de las notas y versiones actuales.
+   - Confirmado: hay versiones guardadas; `Refraneiro` aún tiene 11 snapshots recuperables.
 
-## Cambios
+2. **Cambiar el historial de “cambios parciales” a snapshots reales**
+   - Ampliar `note_versions` para guardar toda la nota, no solo `content` y `checklist`:
+     - título
+     - contenido
+     - checklist
+     - tipo de nota
+     - tema/categoría
+     - madre/padre
+     - enlaces
+     - icono
+     - posición/estado relevante si aplica
+   - Dejar de borrar versiones importantes tan agresivamente; el límite actual de 30 por nota puede cargarse historial útil.
 
-### 1. `src/components/NotePostIt.tsx` — `PostItChecklistItem`
-- Unificar mobile y desktop en un único `Reorder.Item` con `dragListener={false}` y `dragControls = useDragControls()`.
-- El icono `GripVertical` (izquierda) recibe `onPointerDown={(e) => dragControls.start(e)}`, `style={{ touchAction: "none" }}` y `cursor-grab`. Tamaño táctil ampliado en mobile (~w-9 h-9).
-- Solo ese asa lleva `touch-none`; el resto del item deja de tenerlo para que el scroll vertical del panel siga funcionando en mobile.
-- Se eliminan los botones `ChevronUp`/`ChevronDown` y la prop `onMove`/`isFirst`/`isLast` de la rama mobile (y se retira su render).
-- Tap sobre el texto sigue abriendo la edición vía `onOpenSheet` (mobile) o `startEdit` (desktop) — sin cambios de comportamiento.
-- Se mantiene `Reorder.Group` existente (línea 386) que llama a `handleReorder`.
+3. **Restaurar de verdad, sin crear un cambio normal encima**
+   - Sustituir el botón actual de restaurar, que usa `updateNote`, por una restauración backend atómica.
+   - La restauración debe:
+     - guardar primero el estado actual como “antes de restaurar”
+     - aplicar exactamente la versión elegida
+     - marcarla como `restore`, no como edición normal
+     - refrescar la nota en pantalla desde la base de datos
+   - Así “restaurar” será deshacer/volver a esa versión, no una edición más confusa.
 
-### 2. `src/components/TaskSheet.tsx` — lista de subtareas
-- Envolver las subtareas en un `Reorder.Group axis="y" values={subtasks} onReorder={...}` y cada fila en `Reorder.Item` con `dragListener={false}` + `useDragControls`.
-- Añadir un `GripVertical` a la izquierda de cada subtarea como asa (con `onPointerDown` → `controls.start(e)`).
-- Eliminar los botones `ChevronUp`/`ChevronDown` y la prop `onMoveSubtask` de la UI. Se conserva la función en el padre por ahora (llamada desde el nuevo `onReorder` que calcula los movimientos), o se sustituye por una acción de reorden equivalente que persista el nuevo orden en el mismo array `checklist` de la nota.
+4. **Recuperación de notas eliminadas**
+   - Cambiar el historial para que las versiones no desaparezcan al borrar una nota.
+   - Añadir snapshots de borrado, para poder ver y recuperar notas eliminadas.
+   - Mostrar notas borradas en el historial con opción **Recuperar como nota nueva**.
 
-### 3. Limpieza
-- Quitar imports no usados (`ChevronUp`, `ChevronDown`) en ambos archivos si dejan de referenciarse.
-- Mantener `onMoveSubtask` en el padre si aún lo usa el flujo de reorden; si no, retirarlo también.
+5. **Historial usable y claro**
+   - El historial mostrará por nota:
+     - fecha
+     - título en ese momento
+     - tipo de evento: edición, restauración, borrado
+     - previsualización real
+     - botón **Vista previa**
+     - botón **Restaurar esta versión**
+   - En móvil ocupará casi toda la pantalla para poder leer antes de restaurar.
 
-## Notas técnicas
-- `Reorder.Item` con `dragListener={false}` + `useDragControls` es el patrón oficial de Framer Motion para "drag por asa", evitando conflictos con el scroll y con el tap-para-editar.
-- `touchAction: "none"` se limita al asa: así en mobile el usuario puede desplazar la lista con el dedo sobre el texto y solo entra en modo arrastre al presionar el asa.
+6. **Caso inmediato de Refraneiro**
+   - Añadir una pantalla/flujo que permita abrir las 11 versiones existentes de `Refraneiro` y restaurar una concreta.
+   - Las versiones ya existentes solo tienen contenido/checklist, no estructura completa, pero sirven para recuperar el texto guardado.
+
+7. **Verificación**
+   - Probar crear/editar/restaurar una nota.
+   - Probar restaurar `Refraneiro` desde una versión anterior.
+   - Probar que restaurar no genera una cadena de cambios confusa.
+   - Probar que borrar una nota deja una versión recuperable.
