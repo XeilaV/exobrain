@@ -27,6 +27,7 @@ const ChatPanel = () => {
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [attachedAudio, setAttachedAudio] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
