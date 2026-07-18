@@ -285,11 +285,27 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
                 <span className="text-[10px] text-muted-foreground font-body font-normal">{completedCount}/{note.checklist.length}</span>
               )}
             </h3>
-            <Reorder.Group axis="y" values={note.checklist} onReorder={handleReorder} className="space-y-1">
-              {note.checklist.map(item => (
-                <PostItChecklistItem key={item.id} item={item} noteId={noteId} />
-              ))}
-            </Reorder.Group>
+            {isMobile ? (
+              <div className="space-y-1">
+                {note.checklist.map((item, idx) => (
+                  <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile
+                    isFirst={idx === 0} isLast={idx === note.checklist.length - 1}
+                    onMove={(dir) => {
+                      const newOrder = [...note.checklist];
+                      const target = idx + dir;
+                      if (target < 0 || target >= newOrder.length) return;
+                      [newOrder[idx], newOrder[target]] = [newOrder[target], newOrder[idx]];
+                      updateNote(noteId, { checklist: newOrder });
+                    }} />
+                ))}
+              </div>
+            ) : (
+              <Reorder.Group axis="y" values={note.checklist} onReorder={handleReorder} className="space-y-1">
+                {note.checklist.map(item => (
+                  <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile={false} />
+                ))}
+              </Reorder.Group>
+            )}
             <div className="flex items-end gap-1.5 mt-2">
               <textarea value={newItemText}
                 onChange={e => {
