@@ -9,6 +9,7 @@ import BrainNameDialog from "./BrainNameDialog";
 import NameInputDialog from "./NameInputDialog";
 import CreateNodeDialog from "./CreateNodeDialog";
 import ColorPicker from "./ColorPicker";
+import EmojiPicker from "./EmojiPicker";
 import GoogleCalendarMenuItem from "./GoogleCalendarMenuItem";
 import HistoryDialog from "./HistoryDialog";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
