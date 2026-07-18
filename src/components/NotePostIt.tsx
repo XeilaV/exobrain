@@ -592,7 +592,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
           updateNote(noteId, { checklist: rebuilt });
         }}
       />
-      <NoteVersionHistory noteId={noteId} isOpen={showHistory} onClose={() => setShowHistory(false)} />
+      
     </motion.div>
   );
 };
