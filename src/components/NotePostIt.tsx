@@ -183,34 +183,34 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
     >
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/50 shrink-0">
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-body flex-1 min-w-0 flex-wrap">
+        <div className="flex items-center gap-1 text-xs md:text-[10px] text-muted-foreground font-body flex-1 min-w-0 flex-wrap">
           {categoryPath.map((cat, i) => (
             <span key={cat.id} className="flex items-center gap-0.5">
-              {i > 0 && <ChevronRight size={8} />}
+              {i > 0 && <ChevronRight size={10} />}
               {cat.icon} {cat.name}
             </span>
           ))}
           {parentNote && (
             <>
-              <ChevronRight size={8} />
+              <ChevronRight size={10} />
               <button onClick={() => { setSelectedNoteId(parentNote.id); onClose(); }}
-                className="hover:text-foreground flex items-center gap-0.5">
-                <ArrowUp size={8} />{parentNote.title}
+                className="hover:text-foreground flex items-center gap-0.5 min-h-9 md:min-h-0">
+                <ArrowUp size={10} />{parentNote.title}
               </button>
             </>
           )}
           <span className="flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded bg-background/60">
-            {isChecklistNote ? <ListChecks size={9} /> : <Type size={9} />}
+            {isChecklistNote ? <ListChecks size={11} /> : <Type size={11} />}
             {isChecklistNote ? "Lista" : "Texto"}
           </span>
         </div>
         {!isMobile && (
-          <button onClick={() => setMaximized(m => !m)} className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0">
+          <button onClick={() => setMaximized(m => !m)} aria-label={maximized ? "Restaurar" : "Maximizar"} className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0">
             {maximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </button>
         )}
-        <button onClick={onClose} className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0">
-          <X size={16} />
+        <button onClick={onClose} aria-label="Cerrar" className="rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1 flex items-center justify-center">
+          <X size={isMobile ? 22 : 16} />
         </button>
       </div>
 
@@ -224,39 +224,40 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
         />
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           {note.parentNoteId ? (
-            <span className="text-[10px] bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-body">
+            <span className="text-xs md:text-[10px] bg-muted text-muted-foreground rounded px-2 py-1 md:px-1.5 md:py-0.5 font-body">
               {categories.find(c => c.id === note.categoryId)?.icon} heredada
             </span>
           ) : (
             <select value={note.categoryId} onChange={e => updateNote(noteId, { categoryId: e.target.value })}
-              className="text-[10px] bg-muted text-muted-foreground rounded px-1.5 py-0.5 outline-none font-body">
+              className="text-xs md:text-[10px] bg-muted text-muted-foreground rounded px-2 py-1.5 md:px-1.5 md:py-0.5 outline-none font-body min-h-11 md:min-h-0">
               {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
             </select>
           )}
           <button onClick={() => setShowLinkPicker(!showLinkPicker)}
-            className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
-            <Link2 size={10} />Enlazar
+            className="flex items-center gap-1 text-xs md:text-[10px] text-muted-foreground hover:text-foreground font-body min-h-11 md:min-h-0 px-2 md:px-0">
+            <Link2 size={14} className="md:size-2.5" />Enlazar
           </button>
           <button onClick={() => setNewChildDialog("text")}
-            className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body" title="Añadir nota hija de texto">
-            <Type size={10} />Hija
+            className="flex items-center gap-1 text-xs md:text-[10px] text-muted-foreground hover:text-foreground font-body min-h-11 md:min-h-0 px-2 md:px-0" title="Añadir nota hija de texto">
+            <Type size={14} className="md:size-2.5" />Hija
           </button>
           <button onClick={() => setNewChildDialog("checklist")}
-            className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body" title="Añadir lista hija">
-            <ListChecks size={10} />Lista
+            className="flex items-center gap-1 text-xs md:text-[10px] text-muted-foreground hover:text-foreground font-body min-h-11 md:min-h-0 px-2 md:px-0" title="Añadir lista hija">
+            <ListChecks size={14} className="md:size-2.5" />Lista
           </button>
           <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-            className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground font-body">
-            <Paperclip size={10} />{uploading ? "..." : "Archivo"}
+            className="flex items-center gap-1 text-xs md:text-[10px] text-muted-foreground hover:text-foreground font-body min-h-11 md:min-h-0 px-2 md:px-0">
+            <Paperclip size={14} className="md:size-2.5" />{uploading ? "..." : "Archivo"}
           </button>
           <input ref={fileInputRef} type="file" className="hidden" multiple
             onChange={e => { if (e.target.files) { Array.from(e.target.files).forEach(uploadFile); e.target.value = ""; } }} />
           <button onClick={() => { deleteNote(noteId); onClose(); toast.success("Nota eliminada"); }}
-            className="flex items-center gap-0.5 text-[10px] text-destructive hover:text-destructive/80 font-body ml-auto">
-            <Trash2 size={10} />Borrar
+            className="flex items-center gap-1 text-xs md:text-[10px] text-destructive hover:text-destructive/80 font-body ml-auto min-h-11 md:min-h-0 px-2 md:px-0">
+            <Trash2 size={14} className="md:size-2.5" />Borrar
           </button>
         </div>
       </div>
+
 
       {showLinkPicker && (
         <div className="px-3 py-1 shrink-0">
