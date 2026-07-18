@@ -70,18 +70,30 @@ const ChatPanel = () => {
     [session?.access_token, notesContext, attachedImage, attachedAudio],
   );
 
+  const initialMessages = useMemo(loadInitialMessages, []);
+
   const {
     messages,
     sendMessage,
+    setMessages,
     status,
     error,
   } = useChat({
     transport,
+    messages: initialMessages,
     onError: (err) => {
       console.error("Chat error:", err);
       toast.error("Error del asistente. Inténtalo de nuevo.");
     },
   });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+    } catch {
+      // ignore quota errors
+    }
+  }, [messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
