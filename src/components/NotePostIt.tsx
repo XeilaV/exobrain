@@ -215,6 +215,8 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
   const [maximized, setMaximized] = useState(false);
+  const [showIconPicker, setShowIconPicker] = useState(false);
+  
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { attachments, uploading, uploadFile, deleteAttachment } = useNoteAttachments(noteId);
