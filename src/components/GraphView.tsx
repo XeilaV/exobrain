@@ -1102,9 +1102,9 @@ const GraphView = () => {
 
 
         <button
-          onClick={(e) => { e.stopPropagation(); fitFullTree(); setShowFilterPanel(false); setIsAddingCat(false); }}
+          onClick={(e) => { e.stopPropagation(); setOffsets({}); fitFullTree(); setShowFilterPanel(false); setIsAddingCat(false); }}
           className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
-          title="Ver árbol completo"
+          title="Restablecer vista del árbol"
         >
           <TreePine size={16} />
         </button>
