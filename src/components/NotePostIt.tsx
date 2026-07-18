@@ -342,6 +342,16 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
                       if (target < 0 || target >= newOrder.length) return;
                       [newOrder[idx], newOrder[target]] = [newOrder[target], newOrder[idx]];
                       updateNote(noteId, { checklist: newOrder });
+                    }}
+                    onDuplicate={() => {
+                      const newOrder = [...note.checklist];
+                      newOrder.splice(idx + 1, 0, { id: crypto.randomUUID(), text: item.text, completed: false });
+                      updateNote(noteId, { checklist: newOrder });
+                    }}
+                    onAddSubtask={() => {
+                      const newOrder = [...note.checklist];
+                      newOrder.splice(idx + 1, 0, { id: crypto.randomUUID(), text: "  ↳ ", completed: false });
+                      updateNote(noteId, { checklist: newOrder });
                     }} />
                 ))}
               </div>
