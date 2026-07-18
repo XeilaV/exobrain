@@ -28,6 +28,7 @@ export interface Note {
   checklist: ChecklistItem[];
   noteType: NoteType;
   isCollapsed: boolean;
+  icon?: string | null;
   createdAt: string;
   updatedAt: string;
 }

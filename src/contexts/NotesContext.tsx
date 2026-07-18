@@ -89,6 +89,7 @@ const dbToNote = (row: any): Note => ({
   checklist: (row.checklist as ChecklistItem[]) ?? [],
   noteType: (row.note_type as NoteType) ?? "text",
   isCollapsed: row.is_collapsed ?? true,
+  icon: row.icon ?? null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -188,6 +189,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (updates.parentNoteId !== undefined) dbUpdates.parent_note_id = updates.parentNoteId;
       if (updates.checklist !== undefined) dbUpdates.checklist = updates.checklist;
       if (updates.linkedNoteIds !== undefined) dbUpdates.linked_note_ids = updates.linkedNoteIds;
+      if ((updates as any).icon !== undefined) dbUpdates.icon = (updates as any).icon;
       await supabase.from("notes").update(dbUpdates).eq("id", id);
     }, 500);
   }, []);

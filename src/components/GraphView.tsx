@@ -9,6 +9,7 @@ import BrainNameDialog from "./BrainNameDialog";
 import NameInputDialog from "./NameInputDialog";
 import CreateNodeDialog from "./CreateNodeDialog";
 import ColorPicker from "./ColorPicker";
+import EmojiPicker from "./EmojiPicker";
 import GoogleCalendarMenuItem from "./GoogleCalendarMenuItem";
 import HistoryDialog from "./HistoryDialog";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
@@ -57,6 +58,7 @@ const GraphView = () => {
   const [openPostIt, setOpenPostIt] = useState<{ noteId: string; x: number; y: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
   const [colorPickerCat, setColorPickerCat] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [iconPickerCat, setIconPickerCat] = useState<{ id: string; x: number; y: number } | null>(null);
   const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
@@ -980,6 +982,12 @@ const GraphView = () => {
                     <Palette size={12} />Cambiar color
                   </button>
                   <button
+                    onClick={() => { setIconPickerCat({ id: catId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <span className="text-sm leading-none">🙂</span>Cambiar icono
+                  </button>
+                  <button
                     onClick={() => {
                       setConfirmDialog({
                         message: "¿Eliminar este tema y sus notas?",
@@ -1049,6 +1057,21 @@ const GraphView = () => {
           <ColorPicker
             value={categories.find(c => c.id === colorPickerCat.id)?.color || ""}
             onChange={(color) => { updateCategory(colorPickerCat.id, { color }); setColorPickerCat(null); }}
+          />
+        </div>
+      )}
+
+      {/* Icon picker (category) */}
+      {iconPickerCat && (
+        <div
+          className="fixed z-50 bg-card border border-border rounded-lg shadow-xl p-3"
+          style={{ left: Math.min(iconPickerCat.x, size.w - 280), top: Math.min(iconPickerCat.y, size.h - 260) }}
+          onClick={e => e.stopPropagation()}
+        >
+          <p className="text-xs font-body text-muted-foreground mb-2">Elige un icono</p>
+          <EmojiPicker
+            value={categories.find(c => c.id === iconPickerCat.id)?.icon}
+            onChange={(icon) => { updateCategory(iconPickerCat.id, { icon }); setIconPickerCat(null); }}
           />
         </div>
       )}
