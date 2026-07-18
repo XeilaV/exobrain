@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { convertToModelMessages, streamText, tool, type UIMessage } from "npm:ai";
-import { z } from "npm:zod";
+import { convertToModelMessages, streamText, type UIMessage } from "npm:ai";
 import {
   createLovableAiGatewayProvider,
   getLovableAiGatewayRunId,
