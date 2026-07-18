@@ -1,7 +1,9 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { Bold, Italic, Heading1, Heading2, List, ListOrdered, Quote, Code } from "lucide-react";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import { Bold, Italic, Heading1, Heading2, List, ListOrdered, Quote, Code, ListChecks } from "lucide-react";
 import { useEffect } from "react";
 
 interface RichTextEditorProps {
