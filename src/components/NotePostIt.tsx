@@ -334,32 +334,36 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
             </h3>
             {isMobile ? (
               <div className="space-y-1">
-                {note.checklist.map((item, idx) => (
-                  <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile
-                    isFirst={idx === 0} isLast={idx === note.checklist.length - 1}
-                    onMove={(dir) => {
-                      const newOrder = [...note.checklist];
-                      const target = idx + dir;
-                      if (target < 0 || target >= newOrder.length) return;
-                      [newOrder[idx], newOrder[target]] = [newOrder[target], newOrder[idx]];
-                      updateNote(noteId, { checklist: newOrder });
-                    }}
-                    onDuplicate={() => {
-                      const newOrder = [...note.checklist];
-                      newOrder.splice(idx + 1, 0, { id: crypto.randomUUID(), text: item.text, completed: false });
-                      updateNote(noteId, { checklist: newOrder });
-                    }}
-                    onAddSubtask={() => {
-                      const newOrder = [...note.checklist];
-                      newOrder.splice(idx + 1, 0, { id: crypto.randomUUID(), text: "  ↳ ", completed: false });
-                      updateNote(noteId, { checklist: newOrder });
-                    }} />
-                ))}
+                {note.checklist.filter(i => !i.parentId).map((item, idx, arr) => {
+                  const subCount = note.checklist.filter(s => s.parentId === item.id).length;
+                  return (
+                    <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile
+                      subtaskCount={subCount}
+                      isFirst={idx === 0} isLast={idx === arr.length - 1}
+                      onMove={(dir) => {
+                        // Reorder within top-level items only, preserving subtasks
+                        const tops = note.checklist.filter(i => !i.parentId);
+                        const target = idx + dir;
+                        if (target < 0 || target >= tops.length) return;
+                        const newTops = [...tops];
+                        [newTops[idx], newTops[target]] = [newTops[target], newTops[idx]];
+                        // Rebuild: each top followed by its subtasks
+                        const rebuilt: ChecklistItem[] = [];
+                        newTops.forEach(t => {
+                          rebuilt.push(t);
+                          note.checklist.filter(s => s.parentId === t.id).forEach(s => rebuilt.push(s));
+                        });
+                        updateNote(noteId, { checklist: rebuilt });
+                      }}
+                      onOpenSheet={() => setSheetTaskId(item.id)} />
+                  );
+                })}
               </div>
             ) : (
               <Reorder.Group axis="y" values={note.checklist} onReorder={handleReorder} className="space-y-1">
                 {note.checklist.map(item => (
-                  <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile={false} />
+                  <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile={false}
+                    onOpenSheet={() => setSheetTaskId(item.id)} />
                 ))}
               </Reorder.Group>
             )}
@@ -375,6 +379,21 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
                 className="flex-1 text-base md:text-sm bg-muted rounded px-2 py-2.5 md:py-1.5 outline-none text-foreground placeholder:text-muted-foreground font-body resize-none overflow-hidden leading-snug max-h-40 min-h-11 md:min-h-0" />
               <button onClick={handleAddItem} aria-label="Añadir tarea" className="rounded bg-primary text-primary-foreground hover:opacity-90 shrink-0 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1.5 flex items-center justify-center">
                 <Plus size={isMobile ? 20 : 14} />
+              </button>
+              <button
+                onClick={async () => {
+                  const text = newItemText.trim() || "Nueva tarea";
+                  const newItem: ChecklistItem = { id: crypto.randomUUID(), text, completed: false };
+                  const newChecklist = [...note.checklist, newItem];
+                  updateNote(noteId, { checklist: newChecklist });
+                  setNewItemText("");
+                  setSheetTaskId(newItem.id);
+                }}
+                aria-label="Añadir tarea con detalles"
+                title="Añadir con fecha, notas, subtareas"
+                className="rounded bg-muted text-foreground hover:bg-muted/70 shrink-0 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1.5 flex items-center justify-center"
+              >
+                <MoreHorizontal size={isMobile ? 20 : 14} />
               </button>
             </div>
           </div>
