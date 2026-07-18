@@ -19,6 +19,7 @@ interface TaskSheetProps {
   onToggleSubtask: (id: string) => void;
   onDeleteSubtask: (id: string) => void;
   onMoveSubtask: (id: string, dir: -1 | 1) => void;
+  onReorderSubtasks?: (newOrder: ChecklistItem[]) => void;
   onClose: () => void;
 }
 
