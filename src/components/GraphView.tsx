@@ -171,7 +171,7 @@ const GraphView = () => {
     ) => {
       const R = radiusForDepth(depth);
       const children = notes.filter(n => n.parentNoteId === note.id);
-      const expanded = !note.isCollapsed && children.length > 0;
+      const expanded = note.isCollapsed === false && children.length > 0;
 
       // Si la nota está expandida, alejarla un poco extra del padre.
       const extra = expanded ? expansionOffset(children.length) : 0;
@@ -231,7 +231,7 @@ const GraphView = () => {
       const catAngle = -Math.PI + t * Math.PI;
 
       const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
-      const catExpanded = !cat.isCollapsed && rootNotes.length > 0;
+      const catExpanded = cat.isCollapsed === false && rootNotes.length > 0;
 
       // Empuje radial cuando la categoría está expandida.
       const extra = catExpanded ? expansionOffset(rootNotes.length) : 0;
@@ -378,8 +378,8 @@ const GraphView = () => {
 
     const isMobile = size.w < 640;
     const sideMargin = isMobile ? 12 : 36;
-    const topMargin = isMobile ? 36 : 48;
-    const bottomMargin = isMobile ? 88 : 80;
+    const topMargin = isMobile ? 48 : 56;
+    const bottomMargin = isMobile ? 48 : 56;
     const availableW = Math.max(1, size.w - sideMargin * 2);
     const availableH = Math.max(1, size.h - topMargin - bottomMargin);
     const treeW = Math.max(1, bounds.maxX - bounds.minX);
@@ -750,10 +750,13 @@ const GraphView = () => {
           if (!from || !to) return null;
           // Use child color for the branch
           const stroke = `hsl(${to.color})`;
+          // If terminating at the root text node, stop above the text so the
+          // trunk visibly ends where the label begins (no line crossing text).
+          const toY = edge.to === "root" ? to.y - ROOT_R : to.y;
           return (
             <path
               key={`be-${idx}`}
-              d={pathBetween(from.x, from.y, to.x, to.y)}
+              d={pathBetween(from.x, from.y, to.x, toY)}
               stroke={stroke}
               strokeWidth={2}
               strokeOpacity={0.5}
@@ -831,38 +834,44 @@ const GraphView = () => {
                 </span>
               )}
 
-              {/* Circle */}
-              <div
-                className={`rounded-full flex items-center justify-center shadow-md border-2 transition-all ${
-                  isLinkSource ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-                }`}
-                style={{
-                  width: r * 2,
-                  height: r * 2,
-                  backgroundColor: isRoot ? `hsl(var(--card))` : `hsl(${node.color})`,
-                  borderColor: isRoot ? `hsl(var(--foreground))` : `hsl(${node.color})`,
-                }}
-              >
-                {isRoot && (
+              {/* Circle (or plain text for root) */}
+              {isRoot ? (
+                <div
+                  className="flex items-center justify-center"
+                  style={{ width: r * 2, height: r * 2 }}
+                >
                   <span
-                    className="font-display font-bold text-foreground text-center px-2 leading-tight"
-                    style={{ fontSize: node.label.length > 10 ? 11 : 14 }}
+                    className="font-display font-bold text-foreground text-center px-2 leading-tight whitespace-nowrap"
+                    style={{ fontSize: node.label.length > 10 ? 13 : 16 }}
                   >
                     {node.label}
                   </span>
-                )}
-                {showCollapsedDot && (
-                  <span
-                    className="rounded-full"
-                    style={{ width: 6, height: 6, backgroundColor: "hsl(var(--background))" }}
-                  />
-                )}
-                {node.type === "note" && !showCollapsedDot && (
-                  <span className="text-[10px]" style={{ color: "hsl(var(--background))" }}>
-                    {node.noteType === "checklist" ? "☑" : ""}
-                  </span>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div
+                  className={`rounded-full flex items-center justify-center shadow-md border-2 transition-all ${
+                    isLinkSource ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
+                  }`}
+                  style={{
+                    width: r * 2,
+                    height: r * 2,
+                    backgroundColor: `hsl(${node.color})`,
+                    borderColor: `hsl(${node.color})`,
+                  }}
+                >
+                  {showCollapsedDot && (
+                    <span
+                      className="rounded-full"
+                      style={{ width: 6, height: 6, backgroundColor: "hsl(var(--background))" }}
+                    />
+                  )}
+                  {node.type === "note" && !showCollapsedDot && (
+                    <span className="text-[10px]" style={{ color: "hsl(var(--background))" }}>
+                      {node.noteType === "checklist" ? "☑" : ""}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Label above circle for notes (children grow upward) */}
               {node.type === "note" && (
