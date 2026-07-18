@@ -6,15 +6,16 @@ import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
-import { useChat, type Message } from "@ai-sdk/react";
-import type { ToolInvocation } from "ai";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport, isToolUIPart, type UIMessage, type ToolUIPart } from "ai";
 
 const ChatPanel = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [input, setInput] = useState("");
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [attachedAudio, setAttachedAudio] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [appliedProposals, setAppliedProposals] = useState<Record<string, "applied" | "discarded">>({});
+  const [appliedProposals, setAppliedProposals] = useState<Record<string, "applied" | "discarded">({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -41,33 +42,31 @@ const ChatPanel = () => {
     [notes, categories],
   );
 
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-agent`,
+        headers: {
+          Authorization: `Bearer ${session?.access_token || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: {
+          notesContext,
+          image: attachedImage || undefined,
+          audio: attachedAudio || undefined,
+        },
+      }),
+    [session?.access_token, notesContext, attachedImage, attachedAudio],
+  );
+
   const {
     messages,
-    input,
-    handleInputChange,
-    handleSubmit,
+    sendMessage,
     status,
     error,
     setMessages,
   } = useChat({
-    api: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-agent`,
-    headers: {
-      Authorization: `Bearer ${session?.access_token || ""}`,
-      "Content-Type": "application/json",
-    },
-    fetch: async (url, init) => {
-      const body = JSON.parse(init?.body as string);
-      const response = await fetch(url, {
-        ...init,
-        body: JSON.stringify({
-          ...body,
-          notesContext,
-          image: attachedImage || undefined,
-          audio: attachedAudio || undefined,
-        }),
-      });
-      return response;
-    },
+    transport,
     onError: (err) => {
       console.error("Chat error:", err);
       toast.error("Error del asistente. Inténtalo de nuevo.");
@@ -148,10 +147,12 @@ const ChatPanel = () => {
     }
   };
 
-  const onSubmit = (e?: React.FormEvent) => {
+  const onSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim() && !attachedImage && !attachedAudio) return;
-    handleSubmit(e);
+    const text = input.trim() || (attachedImage ? "Describe la imagen adjunta" : "Escucha el audio adjunto");
+    await sendMessage({ text });
+    setInput("");
     setAttachedImage(null);
     setAttachedAudio(null);
   };
@@ -163,9 +164,9 @@ const ChatPanel = () => {
     }
   };
 
-  const handleApply = async (toolInvocation: ToolInvocation) => {
-    if (toolInvocation.state !== "result") return;
-    const result = toolInvocation.result as any;
+  const handleApply = async (part: ToolUIPart) => {
+    if (part.state !== "output-available") return;
+    const result = part.output as any;
     if (!result?.action) return;
 
     const payload = {
@@ -186,10 +187,10 @@ const ChatPanel = () => {
 
     const applied = await applyAiAction(payload);
     if (applied) {
-      setAppliedProposals((prev) => ({ ...prev, [toolInvocation.toolCallId]: "applied" }));
+      setAppliedProposals((prev) => ({ ...prev, [part.toolCallId]: "applied" }));
       setMessages((prev) => [
         ...prev,
-        { role: "user", content: "He aplicado la acción que propusiste. Confírmame el resultado." } as Message,
+        { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: "He aplicado la acción que propusiste. Confírmame el resultado." }] } as UIMessage,
       ]);
       toast.success("Acción aplicada");
     } else {
@@ -197,16 +198,16 @@ const ChatPanel = () => {
     }
   };
 
-  const handleDiscard = (toolInvocation: ToolInvocation) => {
-    setAppliedProposals((prev) => ({ ...prev, [toolInvocation.toolCallId]: "discarded" }));
+  const handleDiscard = (part: ToolUIPart) => {
+    setAppliedProposals((prev) => ({ ...prev, [part.toolCallId]: "discarded" }));
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: "He descartado la acción que propusiste." } as Message,
+      { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: "He descartado la acción que propusiste." }] } as UIMessage,
     ]);
   };
 
-  const renderProposalCard = (toolInvocation: ToolInvocation) => {
-    if (toolInvocation.state !== "result") {
+  const renderProposalCard = (part: ToolUIPart) => {
+    if (part.state !== "output-available") {
       return (
         <div className="bg-muted/60 rounded-lg p-3 text-sm text-muted-foreground flex items-center gap-2">
           <Loader2 size={14} className="animate-spin" />
@@ -214,9 +215,9 @@ const ChatPanel = () => {
         </div>
       );
     }
-    const result = toolInvocation.result as any;
+    const result = part.output as any;
     const action = result?.action as string;
-    const state = appliedProposals[toolInvocation.toolCallId];
+    const state = appliedProposals[part.toolCallId];
 
     let title = "Propuesta";
     let details = "";
@@ -253,13 +254,13 @@ const ChatPanel = () => {
         ) : (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => handleApply(toolInvocation)}
+              onClick={() => handleApply(part)}
               className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90"
             >
               <Check size={12} /> Aplicar
             </button>
             <button
-              onClick={() => handleDiscard(toolInvocation)}
+              onClick={() => handleDiscard(part)}
               className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-muted text-muted-foreground text-xs font-medium hover:bg-muted/80"
             >
               <X size={12} /> Descartar
@@ -374,9 +375,9 @@ const ChatPanel = () => {
                 </div>
               )}
 
-              {messages.map((msg, i) => (
+              {messages.map((msg) => (
                 <motion.div
-                  key={i}
+                  key={msg.id}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
@@ -396,16 +397,11 @@ const ChatPanel = () => {
                           </div>
                         );
                       }
-                      if (part.type === "tool-invocation") {
-                        return <div key={idx}>{renderProposalCard(part.toolInvocation)}</div>;
+                      if (isToolUIPart(part)) {
+                        return <div key={idx}>{renderProposalCard(part)}</div>;
                       }
                       return null;
                     })}
-                    {!msg.parts && msg.content && (
-                      <div className="prose prose-sm max-w-none [&>p]:m-0 [&>ul]:my-1 [&>ol]:my-1">
-                        <ReactMarkdown>{typeof msg.content === "string" ? msg.content : ""}</ReactMarkdown>
-                      </div>
-                    )}
                   </div>
                 </motion.div>
               ))}
@@ -467,7 +463,7 @@ const ChatPanel = () => {
                 <textarea
                   ref={textareaRef}
                   value={input}
-                  onChange={handleInputChange}
+                  onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Escribe un mensaje..."
                   rows={1}
