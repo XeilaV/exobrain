@@ -574,6 +574,13 @@ const GraphView = () => {
       pointersRef.current.delete(e.pointerId);
       dragState.current = null;
 
+      // Cancel canvas long-press if pointer released before timer fired
+      if (canvasLongPressTimer.current) {
+        clearTimeout(canvasLongPressTimer.current);
+        canvasLongPressTimer.current = null;
+      }
+      canvasLongPressStart.current = null;
+
       // End pinch when going below 2 pointers; do NOT continue as pan (1-finger canvas pan disabled on touch)
       if (pinchState.current && pointersRef.current.size < 2) {
         pinchState.current = null;
