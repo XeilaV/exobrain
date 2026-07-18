@@ -57,6 +57,7 @@ const GraphView = () => {
   const [openPostIt, setOpenPostIt] = useState<{ noteId: string; x: number; y: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
   const [colorPickerCat, setColorPickerCat] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [iconPickerCat, setIconPickerCat] = useState<{ id: string; x: number; y: number } | null>(null);
   const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
