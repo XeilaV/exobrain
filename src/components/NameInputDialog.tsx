@@ -55,16 +55,16 @@ const NameInputDialog = ({
             if (e.key === "Escape") { e.preventDefault(); onCancel(); }
           }}
           placeholder={placeholder}
-          className="w-full bg-muted rounded-md text-sm px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring font-body"
+          className="w-full bg-muted rounded-md text-base md:text-sm px-3 py-3 md:py-2 min-h-11 md:min-h-0 text-foreground outline-none focus:ring-2 focus:ring-ring font-body"
         />
         <div className="flex gap-2 justify-end">
           <button
             onClick={onCancel}
-            className="px-3 py-1.5 rounded-md text-xs font-body text-muted-foreground hover:bg-muted"
+            className="px-4 py-2.5 md:px-3 md:py-1.5 min-h-11 md:min-h-0 rounded-md text-sm md:text-xs font-body text-muted-foreground hover:bg-muted"
           >Cancelar</button>
           <button
             onClick={submit}
-            className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90"
+            className="px-4 py-2.5 md:px-3 md:py-1.5 min-h-11 md:min-h-0 rounded-md bg-primary text-primary-foreground text-sm md:text-xs font-medium hover:opacity-90"
           >{submitLabel}</button>
         </div>
       </motion.div>

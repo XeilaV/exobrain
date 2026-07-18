@@ -892,7 +892,7 @@ const GraphView = () => {
             {contextMenu.nodeId === "root" && (
               <button
                 onClick={() => { setShowBrainDialog(true); setContextMenu(null); }}
-                className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
               >
                 <Rename size={12} />Renombrar cerebro
               </button>
@@ -904,13 +904,13 @@ const GraphView = () => {
                 <>
                   <button
                     onClick={() => { setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "text" }); setContextMenu(null); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <FileText size={12} />Añadir nota
                   </button>
                   <button
                     onClick={() => { setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "checklist" }); setContextMenu(null); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <ListChecks size={12} />Añadir lista
                   </button>
@@ -920,13 +920,13 @@ const GraphView = () => {
                       if (cat) setEditingCat({ id: catId, name: cat.name });
                       setContextMenu(null);
                     }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <Pencil size={12} />Renombrar tema
                   </button>
                   <button
                     onClick={() => { setColorPickerCat({ id: catId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <Palette size={12} />Cambiar color
                   </button>
@@ -938,7 +938,7 @@ const GraphView = () => {
                       });
                       setContextMenu(null);
                     }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
                   >
                     <Trash2 size={12} />Eliminar tema
                   </button>
@@ -954,19 +954,19 @@ const GraphView = () => {
                 <>
                   <button
                     onClick={() => { setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "text" }); setContextMenu(null); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <FileText size={12} />Añadir hija (texto)
                   </button>
                   <button
                     onClick={() => { setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "checklist" }); setContextMenu(null); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <ListChecks size={12} />Añadir hija (lista)
                   </button>
                   <button
                     onClick={() => { setLinkingNoteId(nId); setContextMenu(null); toast.info("Pulsa otra nota para enlazar"); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     🔗 Enlazar con otra nota
                   </button>
@@ -978,7 +978,7 @@ const GraphView = () => {
                       });
                       setContextMenu(null);
                     }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
                   >
                     <Trash2 size={12} />Eliminar
                   </button>
@@ -1021,11 +1021,11 @@ const GraphView = () => {
               <p className="text-sm font-body text-foreground text-center">{confirmDialog.message}</p>
               <div className="flex gap-2">
                 <button onClick={() => setConfirmDialog(null)}
-                  className="flex-1 text-xs py-2 rounded-lg bg-muted text-foreground font-body hover:bg-muted/80">
+                  className="flex-1 text-sm md:text-xs py-2.5 md:py-2 min-h-11 md:min-h-0 rounded-lg bg-muted text-foreground font-body hover:bg-muted/80">
                   Cancelar
                 </button>
                 <button onClick={confirmDialog.onConfirm}
-                  className="flex-1 text-xs py-2 rounded-lg bg-primary text-primary-foreground font-body hover:opacity-90">
+                  className="flex-1 text-sm md:text-xs py-2.5 md:py-2 min-h-11 md:min-h-0 rounded-lg bg-primary text-primary-foreground font-body hover:opacity-90">
                   Confirmar
                 </button>
               </div>
@@ -1038,7 +1038,7 @@ const GraphView = () => {
       <div className="fixed top-3 right-3 z-30 flex gap-2">
         <button
           onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
-          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
           title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
           aria-label="Alternar modo oscuro"
         >
@@ -1047,7 +1047,7 @@ const GraphView = () => {
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShowProfileMenu(v => !v); setShowFilterPanel(false); setIsAddingCat(false); }}
-            className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+            className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
             title={user ? "Perfil" : "Iniciar sesión"}
           >
             <UserIcon size={16} />
@@ -1060,18 +1060,18 @@ const GraphView = () => {
               {user ? (
                 <>
                   <div className="px-3 py-2 border-b border-border">
-                    <p className="text-[10px] font-body text-muted-foreground">Sesión</p>
-                    <p className="text-xs font-body text-foreground truncate">{user.email}</p>
+                    <p className="text-xs md:text-[10px] font-body text-muted-foreground">Sesión</p>
+                    <p className="text-sm md:text-xs font-body text-foreground truncate">{user.email}</p>
                   </div>
                   <button
                     onClick={() => { setShowBrainDialog(true); setShowProfileMenu(false); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <Brain size={12} />Renombrar tu brain
                   </button>
                   <button
                     onClick={async () => { setShowProfileMenu(false); await signOut(); navigate("/auth"); }}
-                    className="w-full text-left text-xs px-3 py-2 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
                   >
                     <LogOut size={12} />Cerrar sesión
                   </button>
@@ -1079,7 +1079,7 @@ const GraphView = () => {
               ) : (
                 <button
                   onClick={() => { setShowProfileMenu(false); navigate("/auth"); }}
-                  className="w-full text-left text-xs px-3 py-2 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                 >
                   <LogIn size={12} />Iniciar sesión
                 </button>
@@ -1092,7 +1092,7 @@ const GraphView = () => {
 
         <button
           onClick={(e) => { e.stopPropagation(); fitFullTree(); setShowFilterPanel(false); setIsAddingCat(false); }}
-          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
           title="Ver árbol completo"
         >
           <TreePine size={16} />
@@ -1100,7 +1100,7 @@ const GraphView = () => {
 
         <button
           onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); setIsAddingCat(false); }}
-          className={`p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all ${
+          className={`p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all flex items-center justify-center ${
             hiddenCategoryIds.size > 0 ? "text-primary" : "text-muted-foreground"
           }`}
           title="Filtrar temas"
@@ -1110,7 +1110,7 @@ const GraphView = () => {
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); setIsAddingCat(true); setShowFilterPanel(false); }}
-          className="p-2 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
           title="Nuevo tema"
         >
           <Plus size={16} />
@@ -1124,18 +1124,18 @@ const GraphView = () => {
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-display font-semibold text-foreground">Mostrar temas</p>
+            <p className="text-sm md:text-xs font-display font-semibold text-foreground">Mostrar temas</p>
             {hiddenCategoryIds.size > 0 && (
               <button
                 onClick={() => setHiddenCategoryIds(new Set())}
-                className="text-[10px] font-body text-primary hover:underline"
+                className="text-xs md:text-[10px] font-body text-primary hover:underline min-h-11 md:min-h-0 px-2 md:px-0"
               >
                 Mostrar todos
               </button>
             )}
           </div>
           {categories.length === 0 && (
-            <p className="text-[11px] font-body text-muted-foreground">No hay temas aún.</p>
+            <p className="text-sm md:text-[11px] font-body text-muted-foreground">No hay temas aún.</p>
           )}
           {categories.map(cat => {
             const hidden = hiddenCategoryIds.has(cat.id);
@@ -1150,16 +1150,16 @@ const GraphView = () => {
                     return next;
                   });
                 }}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-body text-left transition-colors ${
+                className={`w-full flex items-center gap-2 px-2 py-2.5 md:py-1.5 min-h-11 md:min-h-0 rounded-md text-sm md:text-xs font-body text-left transition-colors ${
                   hidden ? "opacity-40 hover:opacity-70" : "hover:bg-muted"
                 }`}
               >
                 <span
-                  className="w-3 h-3 rounded-full border"
+                  className="w-3.5 h-3.5 md:w-3 md:h-3 rounded-full border"
                   style={{ backgroundColor: `hsl(${cat.color})`, borderColor: `hsl(${cat.color})` }}
                 />
                 <span className="flex-1 truncate text-foreground">{cat.icon} {cat.name}</span>
-                <span className="text-[10px] text-muted-foreground">{hidden ? "oculto" : "visible"}</span>
+                <span className="text-xs md:text-[10px] text-muted-foreground">{hidden ? "oculto" : "visible"}</span>
               </button>
             );
           })}
@@ -1175,22 +1175,22 @@ const GraphView = () => {
           <div className="flex gap-2">
             <input
               value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)}
-              className="w-10 text-center bg-muted rounded text-sm p-1" maxLength={2}
+              className="w-11 md:w-10 text-center bg-muted rounded text-base md:text-sm p-2 md:p-1 min-h-11 md:min-h-0" maxLength={2}
             />
             <input
               value={newCatName} onChange={e => setNewCatName(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleAddCategory()}
               placeholder="Nombre del tema..." autoFocus
-              className="flex-1 bg-muted rounded text-xs px-2 py-1 text-foreground outline-none font-body"
+              className="flex-1 bg-muted rounded text-base md:text-xs px-2 py-2.5 md:py-1 min-h-11 md:min-h-0 text-foreground outline-none font-body"
             />
           </div>
           <div>
-            <p className="text-[10px] font-body text-muted-foreground mb-1">Color</p>
+            <p className="text-xs md:text-[10px] font-body text-muted-foreground mb-1">Color</p>
             <ColorPicker value={newCatColor} onChange={setNewCatColor} />
           </div>
           <div className="flex gap-2">
-            <button onClick={handleAddCategory} className="flex-1 bg-primary text-primary-foreground rounded text-xs py-1.5 font-medium">Añadir</button>
-            <button onClick={() => { setIsAddingCat(false); setNewCatName(""); }} className="flex-1 bg-muted text-foreground rounded text-xs py-1.5">Cancelar</button>
+            <button onClick={handleAddCategory} className="flex-1 bg-primary text-primary-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0 font-medium">Añadir</button>
+            <button onClick={() => { setIsAddingCat(false); setNewCatName(""); }} className="flex-1 bg-muted text-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0">Cancelar</button>
           </div>
         </div>
       )}
@@ -1211,7 +1211,7 @@ const GraphView = () => {
               }
             }}
             autoFocus
-            className="w-full bg-muted rounded text-xs px-2 py-1.5 text-foreground outline-none font-body"
+            className="w-full bg-muted rounded text-base md:text-xs px-2 py-2.5 md:py-1.5 min-h-11 md:min-h-0 text-foreground outline-none font-body"
           />
           <div className="flex gap-2">
             <button
@@ -1221,11 +1221,11 @@ const GraphView = () => {
                   setEditingCat(null);
                 }
               }}
-              className="flex-1 bg-primary text-primary-foreground rounded text-xs py-1.5 font-medium"
+              className="flex-1 bg-primary text-primary-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0 font-medium"
             >
               Guardar
             </button>
-            <button onClick={() => setEditingCat(null)} className="flex-1 bg-muted text-foreground rounded text-xs py-1.5">Cancelar</button>
+            <button onClick={() => setEditingCat(null)} className="flex-1 bg-muted text-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0">Cancelar</button>
           </div>
         </div>
       )}
