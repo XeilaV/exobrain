@@ -55,7 +55,7 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
       className="flex-1 text-sm font-body bg-muted rounded px-1.5 py-0.5 outline-none text-foreground focus:ring-1 focus:ring-ring resize-none overflow-hidden leading-snug" />
   ) : mobile ? (
     <span
-      onClick={() => { setIsEditing(true); setEditText(item.text); }}
+      onClick={() => { if (longPressedRef.current) { longPressedRef.current = false; return; } setIsEditing(true); setEditText(item.text); }}
       className={`flex-1 text-sm font-body ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}
     >{item.text}</span>
   ) : (
