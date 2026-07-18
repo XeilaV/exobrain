@@ -509,6 +509,65 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
         }}
         onCancel={() => setNewChildDialog(null)}
       />
+
+      <TaskSheet
+        open={sheetTaskId !== null}
+        task={sheetTaskId ? note.checklist.find(i => i.id === sheetTaskId) ?? null : null}
+        allItems={note.checklist}
+        onClose={() => setSheetTaskId(null)}
+        onChange={(patch) => {
+          if (!sheetTaskId) return;
+          updateNote(noteId, {
+            checklist: note.checklist.map(i => i.id === sheetTaskId ? { ...i, ...patch, updatedAt: new Date().toISOString() } : i),
+          });
+        }}
+        onDelete={() => {
+          if (!sheetTaskId) return;
+          updateNote(noteId, {
+            checklist: note.checklist.filter(i => i.id !== sheetTaskId && i.parentId !== sheetTaskId),
+          });
+          setSheetTaskId(null);
+        }}
+        onAddSubtask={(text) => {
+          if (!sheetTaskId) return;
+          const sub: ChecklistItem = { id: crypto.randomUUID(), text, completed: false, parentId: sheetTaskId };
+          // Insert right after the parent's existing subtasks group
+          const parentIdx = note.checklist.findIndex(i => i.id === sheetTaskId);
+          const lastSubIdx = (() => {
+            let last = parentIdx;
+            for (let i = parentIdx + 1; i < note.checklist.length; i++) {
+              if (note.checklist[i].parentId === sheetTaskId) last = i; else if (!note.checklist[i].parentId) break;
+            }
+            return last;
+          })();
+          const next = [...note.checklist];
+          next.splice(lastSubIdx + 1, 0, sub);
+          updateNote(noteId, { checklist: next });
+        }}
+        onToggleSubtask={(id) => {
+          updateNote(noteId, {
+            checklist: note.checklist.map(i => i.id === id ? { ...i, completed: !i.completed } : i),
+          });
+        }}
+        onDeleteSubtask={(id) => {
+          updateNote(noteId, { checklist: note.checklist.filter(i => i.id !== id) });
+        }}
+        onMoveSubtask={(id, dir) => {
+          if (!sheetTaskId) return;
+          const subs = note.checklist.filter(i => i.parentId === sheetTaskId);
+          const idx = subs.findIndex(s => s.id === id);
+          const target = idx + dir;
+          if (target < 0 || target >= subs.length) return;
+          const newSubs = [...subs];
+          [newSubs[idx], newSubs[target]] = [newSubs[target], newSubs[idx]];
+          // Rebuild: keep non-subs where they are; splice new subs in place of old
+          const parentIdx = note.checklist.findIndex(i => i.id === sheetTaskId);
+          const rebuilt = note.checklist.filter(i => i.parentId !== sheetTaskId);
+          const insertAt = rebuilt.findIndex(i => i.id === sheetTaskId) + 1;
+          rebuilt.splice(insertAt, 0, ...newSubs);
+          updateNote(noteId, { checklist: rebuilt });
+        }}
+      />
     </motion.div>
   );
 };
