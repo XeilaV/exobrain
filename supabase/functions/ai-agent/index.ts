@@ -84,6 +84,31 @@ REGLA DURA — NUNCA modificas la app. No creas, editas ni borras notas, categor
 Estilo: por defecto 4-8 líneas. Sé claro, evita relleno. Usa markdown (negritas, listas) cuando ayude a la lectura. Puedes referenciar las notas del usuario que aparecen abajo como contexto ("según tu nota 'X'…") pero solo para leerlas, nunca para escribir en ellas.
 ${notesContextText}`;
 
+    // Attach image/audio to the last user message as file parts.
+    const processedMessages = [...messages];
+    if (image || audio) {
+      const lastMsg = processedMessages[processedMessages.length - 1];
+      if (lastMsg && lastMsg.role === "user") {
+        const extraParts: any[] = [];
+        if (image) extraParts.push({ type: "file", mediaType: image.match(/^data:audio\//) ? "audio" : "image", url: image });
+        if (audio) extraParts.push({ type: "file", mediaType: "audio", url: audio });
+        processedMessages[processedMessages.length - 1] = {
+          ...lastMsg,
+          parts: [...lastMsg.parts, ...extraParts],
+        } as UIMessage;
+      }
+    }
+
+    const initialRunId = getLovableAiGatewayRunId(req);
+    const gateway = createLovableAiGatewayProvider(LOVABLE_API_KEY, initialRunId);
+    const model = gateway("google/gemini-3.5-flash");
+
+    const result = streamText({
+      model,
+      system: systemContent,
+      messages: await convertToModelMessages(processedMessages),
+    });
+
     const response = result.toUIMessageStreamResponse({
       headers: getLovableAiGatewayResponseHeaders(undefined, corsHeaders),
     });
