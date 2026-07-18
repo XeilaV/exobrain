@@ -125,10 +125,15 @@ const TaskSheet = ({
               <span className="text-xs text-muted-foreground font-body flex-1">
                 {task.style === "bullet" ? "Viñeta" : task.completed ? "Completada" : "Pendiente"}
               </span>
+              <button onClick={() => { navigator.clipboard.writeText(task.text); toast.success("Copiado"); }} aria-label="Copiar"
+                className="text-muted-foreground min-h-11 min-w-11 flex items-center justify-center">
+                <Copy size={18} />
+              </button>
               <button onClick={onDelete} aria-label="Eliminar"
                 className="text-destructive min-h-11 min-w-11 flex items-center justify-center">
                 <Trash2 size={20} />
               </button>
+
               <button onClick={onClose} aria-label="Cerrar"
                 className="text-muted-foreground min-h-11 min-w-11 flex items-center justify-center">
                 <X size={22} />
