@@ -1,70 +1,44 @@
 ## Objetivo
 
-Permitir que el asistente IA **cree notas y temas nuevos** y **añada contenido a notas existentes**, con doble red de seguridad: **confirmación previa** + **historial de versiones**. La IA también podrá **buscar en internet** para redactar mejor, usando Gemini con grounding nativo a través de Lovable AI Gateway.
+Convertir el asistente en un **compañero de conversación con acceso a internet**. Solo lee, busca y debate — **no crea, ni edita, ni borra** nada en ExoBrain. Sirve para explorar temas, contrastar ideas y traer información actualizada de la web.
 
-## Sobre ChatGPT y n8n
+## Comportamiento
 
-- **ChatGPT**: se resuelve con Lovable AI Gateway. Puedes usar GPT-5 o Gemini sin cuenta propia; se consume de tus créditos Lovable. No necesitas clave OpenAI.
-- **n8n**: no se usa aquí. Para tu caso (búsqueda + escritura de notas) es innecesaria complejidad.
-
-## Acciones que la IA podrá ejecutar
-
-1. **Crear nota/tema**: la IA propone título, categoría y tipo (texto o tareas).
-2. **Añadir contenido**: inserta texto al final de una nota existente.
-3. **Buscar en internet**: devuelve resultados con fuentes citadas.
-
-No se permitirá editar ni borrar contenido existente en esta versión para evitar miedos de pérdida de información.
-
-## Red de seguridad
-
-### 1. Confirmación previa (tool approval)
-Antes de crear o añadir, la IA devuelve al chat una **tarjeta de propuesta** con:
-- Acción: "Crear nota..." o "Añadir a 'Título de nota'..."
-- Contenido propuesto.
-- Botones **Aplicar** / **Descartar**.
-
-Solo se persiste si el usuario pulsa Aplicar.
-
-### 2. Historial de versiones persistente
-Cada nota conserva un historial de cambios en una nueva tabla `note_versions`:
-- Guarda copia del contenido y checklist en cada actualización.
-- Accesible desde el post-it con un botón **⟲ Historial**.
-- Permite ver versiones anteriores y restaurar.
-- Retención: últimas 30 versiones por nota (autopurga).
+- Responde siempre en español, tono cercano, estilo "brainstorming".
+- Tiene contexto de tus notas actuales (solo lectura) para referenciarlas cuando venga al caso ("según tu nota 'Recetas'…").
+- Puede buscar en internet cuando el tema lo pida (noticias, datos actuales, referencias, definiciones, ejemplos).
+- Cita fuentes cuando use resultados de la web (título + enlace).
+- Nunca modifica notas. Si le pides "añade esto a mi lista", responde con el texto listo para copiar y te sugiere que lo pegues tú.
 
 ## Cambios técnicos
 
-### Base de datos
-- Nueva tabla `note_versions`:
-  - `id`, `note_id`, `content`, `checklist`, `source` (`user` / `ai`), `created_at`.
-  - RLS por usuario vía `note_id` -> `notes.user_id`.
-  - Trigger en `notes` para insertar versión automáticamente en cada UPDATE.
+### Edge Function `ai-agent`
+- Quitar todas las tools de propuesta (`propose_create_note`, `propose_update_note`, `propose_create_category`).
+- Mantener solo una tool: `web_search`, implementada de verdad con una llamada al buscador (usaremos el mismo servicio de búsqueda web que ya tienes disponible en el gateway; si no está, se usa `google/gemini-3.5-flash` que trae grounding web nativo y ya devuelve resultados citados — este es el camino por defecto porque no requiere claves extra).
+- Modelo por defecto: `google/gemini-3.5-flash` (rápido, con acceso web nativo).
+- System prompt reescrito y reforzado:
+  - Rol: "compañero de pensamiento" que ayuda a explorar temas.
+  - Regla dura: **prohibido** proponer o simular acciones sobre notas.
+  - Cuando cite web, formato `- Fuente: [título](url)`.
+  - Concisión: respuestas por defecto en 4-8 líneas salvo que se pida más.
+- Devolver las citas de grounding al frontend como parte del stream (ya soportado por el AI SDK).
 
-### Edge Function: `ai-agent`
-- Reemplaza la edge function `chat` actual para soportar tool calling.
-- Modelo: `google/gemini-2.5-flash` con grounding web.
-- Herramientas:
-  - `search_web`: búsqueda en internet con citas.
-  - `create_note`: crea nota nueva.
-  - `create_category`: crea tema nuevo.
-  - `append_to_note`: propone añadir contenido a nota existente.
-- Todas las herramientas de escritura devuelven propuesta al frontend; no persisten directamente.
+### Frontend `ChatPanel.tsx`
+- Quitar el renderizado de "propuestas con botones Aplicar/Descartar" y toda la lógica de `applyAiAction`.
+- Añadir renderizado de **fuentes** al final de los mensajes que las incluyan (lista de enlaces clicables, `target="_blank" rel="noopener"`).
+- Añadir un indicador sutil "Buscando en internet…" mientras se ejecuta la tool.
+- Placeholder del input: "Pregunta, debate o pide ideas…".
 
-### Frontend
-- `ChatPanel.tsx`: actualizar para renderizar propuestas de acción con botones Aplicar/Descartar.
-- `NotesContext.tsx`: añadir `applyAiAction()` y `restoreVersion()`.
-- Nuevo componente `NoteVersionHistory.tsx`: modal de historial desde el post-it.
-- Mostrar citas de fuentes web en las respuestas del asistente.
+### Historial de versiones y tools de escritura
+- **Se mantiene** el historial de versiones de notas por si editas tú a mano (útil aunque la IA no toque nada).
+- La Edge Function `ai-agent` deja de tener capacidad de escritura, así que la tabla `note_versions` y el trigger siguen funcionando solo para cambios manuales.
 
-## Implementación paso a paso
+## Fuera de alcance
+- Crear, editar o borrar notas desde la IA.
+- API key propia de OpenAI (se puede añadir después si quieres cambiar de modelo).
+- Guardar el historial del chat entre sesiones (sigue como está: efímero).
 
-1. **Migración** de base de datos para `note_versions` y trigger.
-2. **Refactorizar** edge function `chat` a `ai-agent` con tools y grounding.
-3. **Actualizar** `ChatPanel` para manejar propuestas de acción.
-4. **Añadir** historial de versiones en el post-it.
-5. **Probar** flujo: pedir a la IA crear una nota, buscar info, añadir contenido, deshacer desde historial.
-
-## Limitaciones iniciales
-
-- Edición y borrado de notas existentes por IA quedan fuera de alcance por seguridad.
-- No se integra n8n ni cuenta OpenAI propia.
+## Pasos
+1. Reescribir `supabase/functions/ai-agent/index.ts`: nuevo system prompt, quitar tools de escritura, dejar solo búsqueda web, activar grounding de Gemini.
+2. Simplificar `ChatPanel.tsx`: eliminar UI de propuestas, añadir render de fuentes y estado "buscando".
+3. Probar: preguntar "¿qué novedades hay sobre X esta semana?" y verificar que responde con enlaces; pedirle "crea una nota" y verificar que se niega amablemente y da el contenido para copiar.

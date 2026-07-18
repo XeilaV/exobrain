@@ -1,22 +1,13 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNotes } from "@/contexts/NotesContext";
 import { useAuth } from "@/hooks/useAuth";
-import { Send, X, Sparkles, Loader2, Image, Mic, MicOff, Paperclip, Check, Trash2 } from "lucide-react";
+import { Send, X, Sparkles, Loader2, Image, Mic, MicOff } from "lucide-react";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import type { UIMessage, ToolUIPart } from "ai";
-
-type ProposalState = "applied" | "discarded";
-type AppliedProposals = { [key: string]: ProposalState };
-
-const isProposalTool = (part: UIMessage["parts"][number]): part is ToolUIPart =>
-  part.type === "tool-propose_create_note" ||
-  part.type === "tool-propose_update_note" ||
-  part.type === "tool-propose_create_category";
 
 const ChatPanel = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -24,13 +15,12 @@ const ChatPanel = () => {
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [attachedAudio, setAttachedAudio] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [appliedProposals, setAppliedProposals] = useState<AppliedProposals>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const { notes, categories, applyAiAction } = useNotes();
+  const { notes, categories } = useNotes();
   const { session } = useAuth();
   const isMobile = useIsMobile();
   const dragControls = useDragControls();
@@ -73,7 +63,6 @@ const ChatPanel = () => {
     sendMessage,
     status,
     error,
-    setMessages,
   } = useChat({
     transport,
     onError: (err) => {
@@ -173,112 +162,6 @@ const ChatPanel = () => {
     }
   };
 
-  const handleApply = async (part: ToolUIPart) => {
-    if (part.state !== "output-available") return;
-    const result = part.output as any;
-    if (!result?.action) return;
-
-    const payload = {
-      action: result.action,
-      title: result.title,
-      name: result.name,
-      content: result.content,
-      noteType: result.noteType,
-      categoryId: result.categoryId,
-      parentNoteId: result.parentNoteId,
-      noteId: result.noteId,
-      appendContent: result.appendContent,
-      replaceContent: result.replaceContent,
-      addChecklistItems: result.addChecklistItems,
-      color: result.color,
-      icon: result.icon,
-    };
-
-    const applied = await applyAiAction(payload);
-    if (applied) {
-      setAppliedProposals((prev) => ({ ...prev, [part.toolCallId]: "applied" }));
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: "He aplicado la acción que propusiste. Confírmame el resultado." }] } as UIMessage,
-      ]);
-      toast.success("Acción aplicada");
-    } else {
-      toast.error("No se pudo aplicar la acción");
-    }
-  };
-
-  const handleDiscard = (part: ToolUIPart) => {
-    setAppliedProposals((prev) => ({ ...prev, [part.toolCallId]: "discarded" }));
-    setMessages((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: "He descartado la acción que propusiste." }] } as UIMessage,
-    ]);
-  };
-
-  const renderProposalCard = (part: ToolUIPart) => {
-    if (part.state !== "output-available") {
-      return (
-        <div className="bg-muted/60 rounded-lg p-3 text-sm text-muted-foreground flex items-center gap-2">
-          <Loader2 size={14} className="animate-spin" />
-          Preparando propuesta...
-        </div>
-      );
-    }
-    const result = part.output as any;
-    const action = result?.action as string;
-    const state = appliedProposals[part.toolCallId];
-
-    let title = "Propuesta";
-    let details = "";
-    if (action === "create_note") {
-      title = "Crear nota";
-      details = `Título: ${result.title || "Sin título"}\nTipo: ${result.noteType === "checklist" ? "Lista de tareas" : "Texto"}`;
-      if (result.content) details += `\nContenido: ${result.content.slice(0, 120)}${result.content.length > 120 ? "..." : ""}`;
-    } else if (action === "update_note") {
-      title = "Actualizar nota";
-      details = `Nota: ${result.noteId ? notes.find((n) => n.id === result.noteId)?.title || "Nota" : "Nota"}`;
-      if (result.title) details += `\nNuevo título: ${result.title}`;
-      if (result.appendContent) details += `\nAñadir: ${result.appendContent.slice(0, 120)}${result.appendContent.length > 120 ? "..." : ""}`;
-      if (result.addChecklistItems?.length) details += `\nItems: ${result.addChecklistItems.join(", ")}`;
-    } else if (action === "create_category") {
-      title = "Crear tema";
-      details = `Nombre: ${result.name || "Nuevo tema"}\nIcono: ${result.icon || "📌"}`;
-    }
-
-    return (
-      <div className="bg-muted/60 border border-border rounded-lg p-3 my-2 space-y-2">
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Sparkles size={14} className="text-primary" />
-          {title}
-        </div>
-        <div className="text-xs text-muted-foreground whitespace-pre-line font-body">{details}</div>
-        {state === "applied" ? (
-          <div className="flex items-center gap-1 text-xs text-green-600 font-medium">
-            <Check size={12} /> Aplicada
-          </div>
-        ) : state === "discarded" ? (
-          <div className="flex items-center gap-1 text-xs text-destructive font-medium">
-            <Trash2 size={12} /> Descartada
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleApply(part)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90"
-            >
-              <Check size={12} /> Aplicar
-            </button>
-            <button
-              onClick={() => handleDiscard(part)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-muted text-muted-foreground text-xs font-medium hover:bg-muted/80"
-            >
-              <X size={12} /> Descartar
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const panelClasses = isMobile
     ? "fixed bottom-4 left-3 right-3 h-[70vh] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden z-50"
@@ -377,9 +260,9 @@ const ChatPanel = () => {
               {messages.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
                   <Sparkles size={32} className="mx-auto mb-3 text-primary/40" />
-                  <p className="text-sm font-body">¡Hola! Soy tu asistente.</p>
+                  <p className="text-sm font-body">Tu compañero de ideas.</p>
                   <p className="text-xs mt-1">
-                    Puedes pedirme ideas, buscar información actual o proponer cambios en tus notas. Confirmarás cada acción antes de aplicarla.
+                    Pregúntame lo que sea: puedo buscar en internet, resumir temas y debatir contigo. No modifico tus notas.
                   </p>
                 </div>
               )}
@@ -405,9 +288,6 @@ const ChatPanel = () => {
                             <ReactMarkdown>{part.text}</ReactMarkdown>
                           </div>
                         );
-                      }
-                      if (isProposalTool(part)) {
-                        return <div key={idx}>{renderProposalCard(part)}</div>;
                       }
                       return null;
                     })}
@@ -474,7 +354,7 @@ const ChatPanel = () => {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Escribe un mensaje..."
+                  placeholder="Pregunta, debate o pide ideas…"
                   rows={1}
                   className="flex-1 bg-background rounded-xl px-3.5 py-2.5 text-sm outline-none text-foreground placeholder:text-muted-foreground font-body focus:ring-1 focus:ring-ring resize-none max-h-[120px] overflow-y-auto"
                   disabled={status === "submitted" || status === "streaming"}
