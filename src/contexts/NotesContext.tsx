@@ -89,6 +89,7 @@ const dbToNote = (row: any): Note => ({
   checklist: (row.checklist as ChecklistItem[]) ?? [],
   noteType: (row.note_type as NoteType) ?? "text",
   isCollapsed: row.is_collapsed ?? true,
+  icon: row.icon ?? null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
