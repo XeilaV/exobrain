@@ -354,7 +354,7 @@ const ChatPanel = () => {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Escribe un mensaje..."
+                  placeholder="Pregunta, debate o pide ideas…"
                   rows={1}
                   className="flex-1 bg-background rounded-xl px-3.5 py-2.5 text-sm outline-none text-foreground placeholder:text-muted-foreground font-body focus:ring-1 focus:ring-ring resize-none max-h-[120px] overflow-y-auto"
                   disabled={status === "submitted" || status === "streaming"}
