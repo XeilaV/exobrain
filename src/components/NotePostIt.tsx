@@ -1,9 +1,9 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight, Check, Calendar as CalendarIcon, MoreHorizontal, Dot } from "lucide-react";
+import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight, Check, Calendar as CalendarIcon, MoreHorizontal, Dot } from "lucide-react";
 
 import { useNoteAttachments } from "@/hooks/useNoteAttachments";
-import { motion, Reorder } from "framer-motion";
+import { motion, Reorder, useDragControls } from "framer-motion";
 import { toast } from "sonner";
 import RichTextEditor from "./RichTextEditor";
 import NameInputDialog from "./NameInputDialog";
@@ -17,9 +17,6 @@ interface PostItChecklistItemProps {
   item: ChecklistItem;
   noteId: string;
   mobile: boolean;
-  isFirst?: boolean;
-  isLast?: boolean;
-  onMove?: (dir: -1 | 1) => void;
   onOpenSheet?: () => void;
   subtaskCount?: number;
 }
@@ -31,7 +28,8 @@ const dueLabel = (iso: string, hasTime?: boolean) => {
   return hasTime ? format(d, "d MMM HH:mm", { locale: es }) : format(d, "d MMM", { locale: es });
 };
 
-const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, onOpenSheet, subtaskCount = 0 }: PostItChecklistItemProps) => {
+const PostItChecklistItem = ({ item, noteId, mobile, onOpenSheet, subtaskCount = 0 }: PostItChecklistItemProps) => {
+  const dragControls = useDragControls();
   const { toggleChecklistItem, deleteChecklistItem, updateNote, selectedNote } = useNotes();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
@@ -86,7 +84,21 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
   if (mobile) {
     const overdue = item.dueAt && !item.completed && isPast(new Date(item.dueAt)) && !isToday(new Date(item.dueAt));
     return (
-      <div className="flex items-center gap-1 bg-background/50 rounded-md px-1 py-1 min-h-14">
+      <Reorder.Item
+        value={item}
+        id={item.id}
+        dragListener={false}
+        dragControls={dragControls}
+        className="flex items-center gap-1 bg-background/50 rounded-md px-1 py-1 min-h-14"
+      >
+        <div
+          onPointerDown={(e) => { e.preventDefault(); dragControls.start(e); }}
+          style={{ touchAction: "none" }}
+          aria-label="Arrastrar para reordenar"
+          className="shrink-0 w-8 h-11 flex items-center justify-center text-muted-foreground/60 cursor-grab active:cursor-grabbing"
+        >
+          <GripVertical size={18} />
+        </div>
         <div className="shrink-0 w-9 h-9 flex items-center justify-center">
           {isBullet ? (
             <button onClick={toggleStyle} aria-label="Cambiar a tarea" className="text-primary w-9 h-9 flex items-center justify-center">
@@ -123,13 +135,7 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
             </span>
           )}
         </button>
-        <div className="shrink-0 flex flex-col items-center justify-center -space-y-1">
-          <button onClick={e => { e.stopPropagation(); onMove?.(-1); }} disabled={isFirst} aria-label="Subir"
-            className="text-muted-foreground disabled:opacity-20 w-8 h-7 flex items-center justify-center"><ChevronUp size={16} /></button>
-          <button onClick={e => { e.stopPropagation(); onMove?.(1); }} disabled={isLast} aria-label="Bajar"
-            className="text-muted-foreground disabled:opacity-20 w-8 h-7 flex items-center justify-center"><ChevronDown size={16} /></button>
-        </div>
-      </div>
+      </Reorder.Item>
     );
   }
 
@@ -169,8 +175,21 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
   );
 
   return (
-    <Reorder.Item value={item} className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1 touch-none" id={item.id} style={{ touchAction: "none" }}>
-      <GripVertical size={14} className="text-muted-foreground/40 shrink-0 pointer-events-none" />
+    <Reorder.Item
+      value={item}
+      id={item.id}
+      dragListener={false}
+      dragControls={dragControls}
+      className="flex items-center gap-1.5 group bg-background/50 rounded px-1.5 py-1"
+    >
+      <div
+        onPointerDown={(e) => { e.preventDefault(); dragControls.start(e); }}
+        style={{ touchAction: "none" }}
+        aria-label="Arrastrar para reordenar"
+        className="shrink-0 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical size={14} />
+      </div>
       {checkbox}{textEl}{actions}
     </Reorder.Item>
   );
@@ -356,32 +375,28 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
               )}
             </h3>
             {isMobile ? (
-              <div className="space-y-1">
-                {note.checklist.filter(i => !i.parentId).map((item, idx, arr) => {
+              <Reorder.Group
+                axis="y"
+                values={note.checklist.filter(i => !i.parentId)}
+                onReorder={(newTops: ChecklistItem[]) => {
+                  const rebuilt: ChecklistItem[] = [];
+                  newTops.forEach(t => {
+                    rebuilt.push(t);
+                    note.checklist.filter(s => s.parentId === t.id).forEach(s => rebuilt.push(s));
+                  });
+                  updateNote(noteId, { checklist: rebuilt });
+                }}
+                className="space-y-1"
+              >
+                {note.checklist.filter(i => !i.parentId).map((item) => {
                   const subCount = note.checklist.filter(s => s.parentId === item.id).length;
                   return (
                     <PostItChecklistItem key={item.id} item={item} noteId={noteId} mobile
                       subtaskCount={subCount}
-                      isFirst={idx === 0} isLast={idx === arr.length - 1}
-                      onMove={(dir) => {
-                        // Reorder within top-level items only, preserving subtasks
-                        const tops = note.checklist.filter(i => !i.parentId);
-                        const target = idx + dir;
-                        if (target < 0 || target >= tops.length) return;
-                        const newTops = [...tops];
-                        [newTops[idx], newTops[target]] = [newTops[target], newTops[idx]];
-                        // Rebuild: each top followed by its subtasks
-                        const rebuilt: ChecklistItem[] = [];
-                        newTops.forEach(t => {
-                          rebuilt.push(t);
-                          note.checklist.filter(s => s.parentId === t.id).forEach(s => rebuilt.push(s));
-                        });
-                        updateNote(noteId, { checklist: rebuilt });
-                      }}
                       onOpenSheet={() => setSheetTaskId(item.id)} />
                   );
                 })}
-              </div>
+              </Reorder.Group>
             ) : (
               <Reorder.Group axis="y" values={note.checklist} onReorder={handleReorder} className="space-y-1">
                 {note.checklist.map(item => (
@@ -586,6 +601,13 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
           [newSubs[idx], newSubs[target]] = [newSubs[target], newSubs[idx]];
           // Rebuild: keep non-subs where they are; splice new subs in place of old
           const parentIdx = note.checklist.findIndex(i => i.id === sheetTaskId);
+          const rebuilt = note.checklist.filter(i => i.parentId !== sheetTaskId);
+          const insertAt = rebuilt.findIndex(i => i.id === sheetTaskId) + 1;
+          rebuilt.splice(insertAt, 0, ...newSubs);
+          updateNote(noteId, { checklist: rebuilt });
+        }}
+        onReorderSubtasks={(newSubs) => {
+          if (!sheetTaskId) return;
           const rebuilt = note.checklist.filter(i => i.parentId !== sheetTaskId);
           const insertAt = rebuilt.findIndex(i => i.id === sheetTaskId) + 1;
           rebuilt.splice(insertAt, 0, ...newSubs);

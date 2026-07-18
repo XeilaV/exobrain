@@ -1,44 +1,27 @@
+# Drag-and-drop de items desde el asa lateral
+
 ## Objetivo
+Los items de una nota tipo lista (y las subtareas dentro de `TaskSheet`) se reordenan arrastrando desde el icono lateral izquierdo (`GripVertical`, los "cuatro puntos"). Un toque sobre el texto seguirá abriendo la edición. Se eliminan las flechas ▲/▼.
 
-Convertir el asistente en un **compañero de conversación con acceso a internet**. Solo lee, busca y debate — **no crea, ni edita, ni borra** nada en ExoBrain. Sirve para explorar temas, contrastar ideas y traer información actualizada de la web.
+## Cambios
 
-## Comportamiento
+### 1. `src/components/NotePostIt.tsx` — `PostItChecklistItem`
+- Unificar mobile y desktop en un único `Reorder.Item` con `dragListener={false}` y `dragControls = useDragControls()`.
+- El icono `GripVertical` (izquierda) recibe `onPointerDown={(e) => dragControls.start(e)}`, `style={{ touchAction: "none" }}` y `cursor-grab`. Tamaño táctil ampliado en mobile (~w-9 h-9).
+- Solo ese asa lleva `touch-none`; el resto del item deja de tenerlo para que el scroll vertical del panel siga funcionando en mobile.
+- Se eliminan los botones `ChevronUp`/`ChevronDown` y la prop `onMove`/`isFirst`/`isLast` de la rama mobile (y se retira su render).
+- Tap sobre el texto sigue abriendo la edición vía `onOpenSheet` (mobile) o `startEdit` (desktop) — sin cambios de comportamiento.
+- Se mantiene `Reorder.Group` existente (línea 386) que llama a `handleReorder`.
 
-- Responde siempre en español, tono cercano, estilo "brainstorming".
-- Tiene contexto de tus notas actuales (solo lectura) para referenciarlas cuando venga al caso ("según tu nota 'Recetas'…").
-- Puede buscar en internet cuando el tema lo pida (noticias, datos actuales, referencias, definiciones, ejemplos).
-- Cita fuentes cuando use resultados de la web (título + enlace).
-- Nunca modifica notas. Si le pides "añade esto a mi lista", responde con el texto listo para copiar y te sugiere que lo pegues tú.
+### 2. `src/components/TaskSheet.tsx` — lista de subtareas
+- Envolver las subtareas en un `Reorder.Group axis="y" values={subtasks} onReorder={...}` y cada fila en `Reorder.Item` con `dragListener={false}` + `useDragControls`.
+- Añadir un `GripVertical` a la izquierda de cada subtarea como asa (con `onPointerDown` → `controls.start(e)`).
+- Eliminar los botones `ChevronUp`/`ChevronDown` y la prop `onMoveSubtask` de la UI. Se conserva la función en el padre por ahora (llamada desde el nuevo `onReorder` que calcula los movimientos), o se sustituye por una acción de reorden equivalente que persista el nuevo orden en el mismo array `checklist` de la nota.
 
-## Cambios técnicos
+### 3. Limpieza
+- Quitar imports no usados (`ChevronUp`, `ChevronDown`) en ambos archivos si dejan de referenciarse.
+- Mantener `onMoveSubtask` en el padre si aún lo usa el flujo de reorden; si no, retirarlo también.
 
-### Edge Function `ai-agent`
-- Quitar todas las tools de propuesta (`propose_create_note`, `propose_update_note`, `propose_create_category`).
-- Mantener solo una tool: `web_search`, implementada de verdad con una llamada al buscador (usaremos el mismo servicio de búsqueda web que ya tienes disponible en el gateway; si no está, se usa `google/gemini-3.5-flash` que trae grounding web nativo y ya devuelve resultados citados — este es el camino por defecto porque no requiere claves extra).
-- Modelo por defecto: `google/gemini-3.5-flash` (rápido, con acceso web nativo).
-- System prompt reescrito y reforzado:
-  - Rol: "compañero de pensamiento" que ayuda a explorar temas.
-  - Regla dura: **prohibido** proponer o simular acciones sobre notas.
-  - Cuando cite web, formato `- Fuente: [título](url)`.
-  - Concisión: respuestas por defecto en 4-8 líneas salvo que se pida más.
-- Devolver las citas de grounding al frontend como parte del stream (ya soportado por el AI SDK).
-
-### Frontend `ChatPanel.tsx`
-- Quitar el renderizado de "propuestas con botones Aplicar/Descartar" y toda la lógica de `applyAiAction`.
-- Añadir renderizado de **fuentes** al final de los mensajes que las incluyan (lista de enlaces clicables, `target="_blank" rel="noopener"`).
-- Añadir un indicador sutil "Buscando en internet…" mientras se ejecuta la tool.
-- Placeholder del input: "Pregunta, debate o pide ideas…".
-
-### Historial de versiones y tools de escritura
-- **Se mantiene** el historial de versiones de notas por si editas tú a mano (útil aunque la IA no toque nada).
-- La Edge Function `ai-agent` deja de tener capacidad de escritura, así que la tabla `note_versions` y el trigger siguen funcionando solo para cambios manuales.
-
-## Fuera de alcance
-- Crear, editar o borrar notas desde la IA.
-- API key propia de OpenAI (se puede añadir después si quieres cambiar de modelo).
-- Guardar el historial del chat entre sesiones (sigue como está: efímero).
-
-## Pasos
-1. Reescribir `supabase/functions/ai-agent/index.ts`: nuevo system prompt, quitar tools de escritura, dejar solo búsqueda web, activar grounding de Gemini.
-2. Simplificar `ChatPanel.tsx`: eliminar UI de propuestas, añadir render de fuentes y estado "buscando".
-3. Probar: preguntar "¿qué novedades hay sobre X esta semana?" y verificar que responde con enlaces; pedirle "crea una nota" y verificar que se niega amablemente y da el contenido para copiar.
+## Notas técnicas
+- `Reorder.Item` con `dragListener={false}` + `useDragControls` es el patrón oficial de Framer Motion para "drag por asa", evitando conflictos con el scroll y con el tap-para-editar.
+- `touchAction: "none"` se limita al asa: así en mobile el usuario puede desplazar la lista con el dedo sobre el texto y solo entra en modo arrastre al presionar el asa.

@@ -1,12 +1,45 @@
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Calendar as CalendarIcon, Clock, Trash2, Plus, CornerDownRight, CheckSquare, Square, ChevronUp, ChevronDown, CalendarPlus, CalendarCheck2, CalendarX, Dot, ListChecks, Copy } from "lucide-react";
+import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion";
+import { X, Calendar as CalendarIcon, Clock, Trash2, Plus, CornerDownRight, CheckSquare, Square, GripVertical, CalendarPlus, CalendarCheck2, CalendarX, Dot, ListChecks, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 import { ChecklistItem } from "@/types/notes";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
+
+const SubtaskRow = ({ item, onToggle, onDelete }: { item: ChecklistItem; onToggle: () => void; onDelete: () => void }) => {
+  const controls = useDragControls();
+  return (
+    <Reorder.Item
+      value={item}
+      id={item.id}
+      dragListener={false}
+      dragControls={controls}
+      className="flex items-center gap-1 bg-background/60 rounded px-1 min-h-11"
+    >
+      <div
+        onPointerDown={(e) => { e.preventDefault(); controls.start(e); }}
+        style={{ touchAction: "none" }}
+        aria-label="Arrastrar para reordenar"
+        className="shrink-0 w-8 h-11 flex items-center justify-center text-muted-foreground/60 cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical size={16} />
+      </div>
+      <button onClick={onToggle} aria-label="Completar"
+        className="text-primary min-h-11 min-w-11 flex items-center justify-center">
+        {item.completed ? <CheckSquare size={18} /> : <Square size={18} />}
+      </button>
+      <span className={`flex-1 text-sm font-body ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
+        {item.text}
+      </span>
+      <button onClick={onDelete} aria-label="Borrar"
+        className="text-destructive min-h-11 min-w-11 flex items-center justify-center">
+        <Trash2 size={16} />
+      </button>
+    </Reorder.Item>
+  );
+};
 
 interface TaskSheetProps {
   open: boolean;
@@ -19,12 +52,13 @@ interface TaskSheetProps {
   onToggleSubtask: (id: string) => void;
   onDeleteSubtask: (id: string) => void;
   onMoveSubtask: (id: string, dir: -1 | 1) => void;
+  onReorderSubtasks?: (newOrder: ChecklistItem[]) => void;
   onClose: () => void;
 }
 
 const TaskSheet = ({
   open, noteId, task, allItems, onChange, onDelete,
-  onAddSubtask, onToggleSubtask, onDeleteSubtask, onMoveSubtask, onClose,
+  onAddSubtask, onToggleSubtask, onDeleteSubtask, onMoveSubtask, onReorderSubtasks, onClose,
 }: TaskSheetProps) => {
   const gcal = useGoogleCalendar();
   const [title, setTitle] = useState("");
@@ -266,31 +300,21 @@ const TaskSheet = ({
                 <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider font-body flex items-center gap-1">
                   <CornerDownRight size={12} /> Subtareas {subtasks.length > 0 && <span className="text-muted-foreground/60">({subtasks.filter(s => s.completed).length}/{subtasks.length})</span>}
                 </label>
-                <div className="mt-1 space-y-1">
-                  {subtasks.map((s, i) => (
-                    <div key={s.id} className="flex items-center gap-1.5 bg-background/60 rounded px-2 min-h-11">
-                      <button onClick={() => onToggleSubtask(s.id)} aria-label="Completar"
-                        className="text-primary min-h-11 min-w-11 flex items-center justify-center">
-                        {s.completed ? <CheckSquare size={18} /> : <Square size={18} />}
-                      </button>
-                      <span className={`flex-1 text-sm font-body ${s.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                        {s.text}
-                      </span>
-                      <button onClick={() => onMoveSubtask(s.id, -1)} disabled={i === 0} aria-label="Subir"
-                        className="text-muted-foreground disabled:opacity-20 min-h-11 min-w-11 flex items-center justify-center">
-                        <ChevronUp size={18} />
-                      </button>
-                      <button onClick={() => onMoveSubtask(s.id, 1)} disabled={i === subtasks.length - 1} aria-label="Bajar"
-                        className="text-muted-foreground disabled:opacity-20 min-h-11 min-w-11 flex items-center justify-center">
-                        <ChevronDown size={18} />
-                      </button>
-                      <button onClick={() => onDeleteSubtask(s.id)} aria-label="Borrar"
-                        className="text-destructive min-h-11 min-w-11 flex items-center justify-center">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+                <Reorder.Group
+                  axis="y"
+                  values={subtasks}
+                  onReorder={(newOrder: ChecklistItem[]) => onReorderSubtasks?.(newOrder)}
+                  className="mt-1 space-y-1"
+                >
+                  {subtasks.map((s) => (
+                    <SubtaskRow
+                      key={s.id}
+                      item={s}
+                      onToggle={() => onToggleSubtask(s.id)}
+                      onDelete={() => onDeleteSubtask(s.id)}
+                    />
                   ))}
-                </div>
+                </Reorder.Group>
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <input
                     value={newSub}
