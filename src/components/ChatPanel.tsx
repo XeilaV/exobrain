@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNotes } from "@/contexts/NotesContext";
 import { useAuth } from "@/hooks/useAuth";
-import { Send, X, Sparkles, Loader2, Image, Mic, MicOff, MoreHorizontal, RefreshCw } from "lucide-react";
+import { Send, X, Sparkles, Loader2, Image, Mic, MicOff, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { useIsMobile } from "@/hooks/use-mobile";
