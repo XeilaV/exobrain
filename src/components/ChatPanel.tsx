@@ -1,33 +1,86 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNotes } from "@/contexts/NotesContext";
-import { ChatMessage } from "@/types/notes";
-import { Send, X, Sparkles, Loader2, Image, Mic, MicOff, Paperclip } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Send, X, Sparkles, Loader2, Image, Mic, MicOff, Paperclip, Check, Trash2 } from "lucide-react";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import type { UIMessage, ToolUIPart } from "ai";
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+type ProposalState = "applied" | "discarded";
+type AppliedProposals = { [key: string]: ProposalState };
 
-interface ChatMessageWithMedia extends ChatMessage {
-  imageUrl?: string;
-}
+const isProposalTool = (part: UIMessage["parts"][number]): part is ToolUIPart =>
+  part.type === "tool-propose_create_note" ||
+  part.type === "tool-propose_update_note" ||
+  part.type === "tool-propose_create_category";
 
 const ChatPanel = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessageWithMedia[]>([]);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [attachedAudio, setAttachedAudio] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [appliedProposals, setAppliedProposals] = useState<AppliedProposals>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const { notes, categories } = useNotes();
+  const { notes, categories, applyAiAction } = useNotes();
+  const { session } = useAuth();
   const isMobile = useIsMobile();
   const dragControls = useDragControls();
+
+  const notesContext = useMemo(
+    () =>
+      notes.map((note) => {
+        const cat = categories.find((c) => c.id === note.categoryId);
+        return {
+          id: note.id,
+          title: note.title,
+          category: cat?.name || "Sin categoría",
+          noteType: note.noteType,
+          content: note.content.slice(0, 800),
+          checklist: note.checklist.map((item) => ({ text: item.text, completed: item.completed })),
+        };
+      }),
+    [notes, categories],
+  );
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-agent`,
+        headers: {
+          Authorization: `Bearer ${session?.access_token || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: {
+          notesContext,
+          image: attachedImage || undefined,
+          audio: attachedAudio || undefined,
+        },
+      }),
+    [session?.access_token, notesContext, attachedImage, attachedAudio],
+  );
+
+  const {
+    messages,
+    sendMessage,
+    status,
+    error,
+    setMessages,
+  } = useChat({
+    transport,
+    onError: (err) => {
+      console.error("Chat error:", err);
+      toast.error("Error del asistente. Inténtalo de nuevo.");
+    },
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -40,19 +93,11 @@ const ChatPanel = () => {
     }
   }, [input]);
 
-  const buildNotesContext = () => {
-    return notes.map((note) => {
-      const cat = categories.find((c) => c.id === note.categoryId);
-      const checklistText = note.checklist.length > 0
-        ? "\nChecklist:\n" + note.checklist.map((item) => `- [${item.completed ? "x" : " "}] ${item.text}`).join("\n")
-        : "";
-      return {
-        title: note.title,
-        category: cat?.name || "Sin categoría",
-        content: note.content.slice(0, 500) + checklistText,
-      };
-    });
-  };
+  useEffect(() => {
+    if (error) {
+      toast.error("Error al comunicarse con el asistente");
+    }
+  }, [error]);
 
   const handleImageAttach = () => {
     fileInputRef.current?.click();
@@ -98,9 +143,7 @@ const ChatPanel = () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         const reader = new FileReader();
         reader.onload = () => {
-          const base64 = reader.result as string;
-          // Send audio as a message to the AI
-          sendWithMedia(input.trim() || "He enviado un audio. Transcríbelo o responde según su contenido.", undefined, base64);
+          setAttachedAudio(reader.result as string);
         };
         reader.readAsDataURL(blob);
       };
@@ -113,107 +156,128 @@ const ChatPanel = () => {
     }
   };
 
-  const sendWithMedia = async (text: string, imageData?: string, audioData?: string) => {
-    if ((!text && !imageData && !audioData) || isLoading) return;
-
-    const displayContent = text || (imageData ? "📷 Imagen enviada" : "🎤 Audio enviado");
-    const userMsg: ChatMessageWithMedia = { role: "user", content: displayContent, imageUrl: imageData };
+  const onSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!input.trim() && !attachedImage && !attachedAudio) return;
+    const text = input.trim() || (attachedImage ? "Describe la imagen adjunta" : "Escucha el audio adjunto");
+    await sendMessage({ text });
     setInput("");
     setAttachedImage(null);
-    setMessages((prev) => [...prev, userMsg]);
-    setIsLoading(true);
-
-    let assistantSoFar = "";
-
-    try {
-      const allMessages = [...messages, { role: "user" as const, content: text || "" }];
-
-      const resp = await fetch(CHAT_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({
-          messages: allMessages,
-          notesContext: buildNotesContext(),
-          image: imageData || undefined,
-          audio: audioData || undefined,
-        }),
-      });
-
-      if (!resp.ok || !resp.body) {
-        if (resp.status === 429) {
-          toast.error("Demasiadas solicitudes. Espera un momento.");
-        } else if (resp.status === 402) {
-          toast.error("Créditos agotados.");
-        }
-        throw new Error(`Error: ${resp.status}`);
-      }
-
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let textBuffer = "";
-
-      const upsertAssistant = (chunk: string) => {
-        assistantSoFar += chunk;
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.role === "assistant") {
-            return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
-          }
-          return [...prev, { role: "assistant", content: assistantSoFar }];
-        });
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        textBuffer += decoder.decode(value, { stream: true });
-
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (line.startsWith(":") || line.trim() === "") continue;
-          if (!line.startsWith("data: ")) continue;
-
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") break;
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) upsertAssistant(content);
-          } catch {
-            textBuffer = line + "\n" + textBuffer;
-            break;
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Chat error:", error);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Lo siento, ha ocurrido un error. Inténtalo de nuevo." },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const send = async () => {
-    const text = input.trim();
-    if (!text && !attachedImage) return;
-    await sendWithMedia(text, attachedImage || undefined);
+    setAttachedAudio(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      send();
+      onSubmit();
     }
+  };
+
+  const handleApply = async (part: ToolUIPart) => {
+    if (part.state !== "output-available") return;
+    const result = part.output as any;
+    if (!result?.action) return;
+
+    const payload = {
+      action: result.action,
+      title: result.title,
+      name: result.name,
+      content: result.content,
+      noteType: result.noteType,
+      categoryId: result.categoryId,
+      parentNoteId: result.parentNoteId,
+      noteId: result.noteId,
+      appendContent: result.appendContent,
+      replaceContent: result.replaceContent,
+      addChecklistItems: result.addChecklistItems,
+      color: result.color,
+      icon: result.icon,
+    };
+
+    const applied = await applyAiAction(payload);
+    if (applied) {
+      setAppliedProposals((prev) => ({ ...prev, [part.toolCallId]: "applied" }));
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: "He aplicado la acción que propusiste. Confírmame el resultado." }] } as UIMessage,
+      ]);
+      toast.success("Acción aplicada");
+    } else {
+      toast.error("No se pudo aplicar la acción");
+    }
+  };
+
+  const handleDiscard = (part: ToolUIPart) => {
+    setAppliedProposals((prev) => ({ ...prev, [part.toolCallId]: "discarded" }));
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: "He descartado la acción que propusiste." }] } as UIMessage,
+    ]);
+  };
+
+  const renderProposalCard = (part: ToolUIPart) => {
+    if (part.state !== "output-available") {
+      return (
+        <div className="bg-muted/60 rounded-lg p-3 text-sm text-muted-foreground flex items-center gap-2">
+          <Loader2 size={14} className="animate-spin" />
+          Preparando propuesta...
+        </div>
+      );
+    }
+    const result = part.output as any;
+    const action = result?.action as string;
+    const state = appliedProposals[part.toolCallId];
+
+    let title = "Propuesta";
+    let details = "";
+    if (action === "create_note") {
+      title = "Crear nota";
+      details = `Título: ${result.title || "Sin título"}\nTipo: ${result.noteType === "checklist" ? "Lista de tareas" : "Texto"}`;
+      if (result.content) details += `\nContenido: ${result.content.slice(0, 120)}${result.content.length > 120 ? "..." : ""}`;
+    } else if (action === "update_note") {
+      title = "Actualizar nota";
+      details = `Nota: ${result.noteId ? notes.find((n) => n.id === result.noteId)?.title || "Nota" : "Nota"}`;
+      if (result.title) details += `\nNuevo título: ${result.title}`;
+      if (result.appendContent) details += `\nAñadir: ${result.appendContent.slice(0, 120)}${result.appendContent.length > 120 ? "..." : ""}`;
+      if (result.addChecklistItems?.length) details += `\nItems: ${result.addChecklistItems.join(", ")}`;
+    } else if (action === "create_category") {
+      title = "Crear tema";
+      details = `Nombre: ${result.name || "Nuevo tema"}\nIcono: ${result.icon || "📌"}`;
+    }
+
+    return (
+      <div className="bg-muted/60 border border-border rounded-lg p-3 my-2 space-y-2">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Sparkles size={14} className="text-primary" />
+          {title}
+        </div>
+        <div className="text-xs text-muted-foreground whitespace-pre-line font-body">{details}</div>
+        {state === "applied" ? (
+          <div className="flex items-center gap-1 text-xs text-green-600 font-medium">
+            <Check size={12} /> Aplicada
+          </div>
+        ) : state === "discarded" ? (
+          <div className="flex items-center gap-1 text-xs text-destructive font-medium">
+            <Trash2 size={12} /> Descartada
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleApply(part)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90"
+            >
+              <Check size={12} /> Aplicar
+            </button>
+            <button
+              onClick={() => handleDiscard(part)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-muted text-muted-foreground text-xs font-medium hover:bg-muted/80"
+            >
+              <X size={12} /> Descartar
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   const panelClasses = isMobile
@@ -250,7 +314,6 @@ const ChatPanel = () => {
               bottom: 20,
             }}
             onClick={(e) => {
-              // avoid opening if it was a drag
               const target = e.target as HTMLElement;
               if (target.dataset.dragged === "1") {
                 target.dataset.dragged = "";
@@ -316,44 +379,43 @@ const ChatPanel = () => {
                   <Sparkles size={32} className="mx-auto mb-3 text-primary/40" />
                   <p className="text-sm font-body">¡Hola! Soy tu asistente.</p>
                   <p className="text-xs mt-1">
-                    Puedo responder preguntas sobre tus notas, checklists e imágenes.
+                    Puedes pedirme ideas, buscar información actual o proponer cambios en tus notas. Confirmarás cada acción antes de aplicarla.
                   </p>
                 </div>
               )}
 
-              {messages.map((msg, i) => (
+              {messages.map((msg) => (
                 <motion.div
-                  key={i}
+                  key={msg.id}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm font-body ${
+                    className={`max-w-[90%] rounded-2xl px-3.5 py-2.5 text-sm font-body ${
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground rounded-br-md"
                         : "bg-chat-ai text-foreground rounded-bl-md"
                     }`}
                   >
-                    {msg.imageUrl && (
-                      <img
-                        src={msg.imageUrl}
-                        alt="Imagen adjunta"
-                        className="max-w-full max-h-40 rounded-lg mb-2"
-                      />
-                    )}
-                    {msg.role === "assistant" ? (
-                      <div className="prose prose-sm max-w-none [&>p]:m-0 [&>ul]:my-1 [&>ol]:my-1">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
-                      </div>
-                    ) : (
-                      <span className="whitespace-pre-wrap">{msg.content}</span>
-                    )}
+                    {msg.parts?.map((part, idx) => {
+                      if (part.type === "text") {
+                        return (
+                          <div key={idx} className="prose prose-sm max-w-none [&>p]:m-0 [&>ul]:my-1 [&>ol]:my-1">
+                            <ReactMarkdown>{part.text}</ReactMarkdown>
+                          </div>
+                        );
+                      }
+                      if (isProposalTool(part)) {
+                        return <div key={idx}>{renderProposalCard(part)}</div>;
+                      }
+                      return null;
+                    })}
                   </div>
                 </motion.div>
               ))}
 
-              {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
+              {(status === "submitted" || status === "streaming") && messages[messages.length - 1]?.role !== "assistant" && (
                 <div className="flex justify-start">
                   <div className="bg-chat-ai rounded-2xl rounded-bl-md px-4 py-3">
                     <Loader2 size={16} className="animate-spin text-muted-foreground" />
@@ -364,11 +426,21 @@ const ChatPanel = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Attached image preview */}
-            {attachedImage && (
+            {/* Attached media preview */}
+            {(attachedImage || attachedAudio) && (
               <div className="px-3 pb-1 flex items-center gap-2">
-                <img src={attachedImage} alt="Preview" className="h-12 w-12 rounded-lg object-cover border border-border" />
-                <button onClick={() => setAttachedImage(null)} className="text-xs text-destructive hover:underline">
+                {attachedImage && (
+                  <img src={attachedImage} alt="Preview" className="h-12 w-12 rounded-lg object-cover border border-border" />
+                )}
+                {attachedAudio && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Mic size={12} /> Audio adjunto
+                  </span>
+                )}
+                <button
+                  onClick={() => { setAttachedImage(null); setAttachedAudio(null); }}
+                  className="text-xs text-destructive hover:underline"
+                >
                   Quitar
                 </button>
               </div>
@@ -405,11 +477,11 @@ const ChatPanel = () => {
                   placeholder="Escribe un mensaje..."
                   rows={1}
                   className="flex-1 bg-background rounded-xl px-3.5 py-2.5 text-sm outline-none text-foreground placeholder:text-muted-foreground font-body focus:ring-1 focus:ring-ring resize-none max-h-[120px] overflow-y-auto"
-                  disabled={isLoading}
+                  disabled={status === "submitted" || status === "streaming"}
                 />
                 <button
-                  onClick={send}
-                  disabled={isLoading || (!input.trim() && !attachedImage)}
+                  onClick={onSubmit}
+                  disabled={status === "submitted" || status === "streaming" || (!input.trim() && !attachedImage && !attachedAudio)}
                   className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40 shrink-0"
                 >
                   <Send size={16} />

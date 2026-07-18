@@ -1,6 +1,6 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight, Check, Calendar as CalendarIcon, MoreHorizontal, Dot } from "lucide-react";
+import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight, Check, Calendar as CalendarIcon, MoreHorizontal, Dot, History } from "lucide-react";
 
 import { useNoteAttachments } from "@/hooks/useNoteAttachments";
 import { motion, Reorder } from "framer-motion";
@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import RichTextEditor from "./RichTextEditor";
 import NameInputDialog from "./NameInputDialog";
 import TaskSheet from "./TaskSheet";
+import NoteVersionHistory from "./NoteVersionHistory";
 import { format, isToday, isTomorrow, isPast } from "date-fns";
 import { es } from "date-fns/locale";
 import { ChecklistItem } from "@/types/notes";
@@ -194,6 +195,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
   const [maximized, setMaximized] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { attachments, uploading, uploadFile, deleteAttachment } = useNoteAttachments(noteId);
   const [newChildDialog, setNewChildDialog] = useState<null | "text" | "checklist">(null);
@@ -270,6 +272,9 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
             {isChecklistNote ? "Lista" : "Texto"}
           </span>
         </div>
+        <button onClick={() => setShowHistory(true)} aria-label="Historial de versiones" className="rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1 flex items-center justify-center">
+          <History size={isMobile ? 20 : 16} />
+        </button>
         {!isMobile && (
           <button onClick={() => setMaximized(m => !m)} aria-label={maximized ? "Restaurar" : "Maximizar"} className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0">
             {maximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
@@ -590,6 +595,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
           updateNote(noteId, { checklist: rebuilt });
         }}
       />
+      <NoteVersionHistory noteId={noteId} isOpen={showHistory} onClose={() => setShowHistory(false)} />
     </motion.div>
   );
 };
