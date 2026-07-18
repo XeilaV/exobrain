@@ -2,6 +2,15 @@ export interface ChecklistItem {
   id: string;
   text: string;
   completed: boolean;
+  // Task-style extensions (optional for backwards compatibility)
+  notes?: string;
+  dueAt?: string | null;      // ISO date or datetime
+  hasTime?: boolean;
+  remindAt?: string | null;
+  parentId?: string | null;   // nested subtasks within the list
+  googleTaskId?: string;
+  googleEventId?: string;
+  updatedAt?: string;
 }
 
 export type NoteType = "text" | "checklist";
