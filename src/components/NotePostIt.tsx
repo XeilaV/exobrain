@@ -303,23 +303,74 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
 
       {/* Title + actions */}
       <div className="px-3 pt-2 shrink-0">
-        <input
-          value={note.title}
-          onChange={e => updateNote(noteId, { title: e.target.value })}
-          className="w-full font-display text-xl font-bold bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
-          placeholder="Título..."
-        />
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
-          {note.parentNoteId ? (
-            <span className="text-xs md:text-[10px] bg-muted text-muted-foreground rounded px-2 py-1 md:px-1.5 md:py-0.5 font-body">
-              {categories.find(c => c.id === note.categoryId)?.icon} heredada
-            </span>
-          ) : (
-            <select value={note.categoryId} onChange={e => updateNote(noteId, { categoryId: e.target.value })}
-              className="text-xs md:text-[10px] bg-muted text-muted-foreground rounded px-2 py-1.5 md:px-1.5 md:py-0.5 outline-none font-body min-h-11 md:min-h-0">
-              {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-            </select>
-          )}
+        {(() => {
+          // Compute descendant set to exclude from parent options
+          const descendants = new Set<string>();
+          const walk = (id: string) => {
+            for (const n of notes) if (n.parentNoteId === id && !descendants.has(n.id)) { descendants.add(n.id); walk(n.id); }
+          };
+          walk(noteId);
+          const siblingCandidates = notes.filter(n =>
+            n.id !== noteId && n.categoryId === note.categoryId && !descendants.has(n.id)
+          );
+          const currentCat = categories.find(c => c.id === note.categoryId);
+          return (
+            <div className="flex items-start gap-2">
+              <button
+                onClick={() => setShowIconPicker(v => !v)}
+                aria-label="Cambiar icono"
+                className="shrink-0 h-10 w-10 rounded-md hover:bg-muted flex items-center justify-center text-xl"
+                title="Cambiar icono"
+              >
+                {note.icon || (isChecklistNote ? "☑️" : "📝")}
+              </button>
+              <input
+                value={note.title}
+                onChange={e => updateNote(noteId, { title: e.target.value })}
+                className="flex-1 min-w-0 font-display text-xl font-bold bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
+                placeholder="Título..."
+              />
+              <select
+                value={note.parentNoteId ?? `cat:${note.categoryId}`}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val.startsWith("cat:")) {
+                    updateNote(noteId, { parentNoteId: null, categoryId: val.slice(4) });
+                  } else {
+                    const parent = notes.find(n => n.id === val);
+                    updateNote(noteId, { parentNoteId: val, categoryId: parent?.categoryId ?? note.categoryId });
+                  }
+                }}
+                className="shrink-0 max-w-[45%] text-xs bg-muted text-muted-foreground rounded px-2 py-1.5 outline-none font-body truncate"
+                title="Depende de..."
+              >
+                <optgroup label="Directo al tema">
+                  {categories.map(c => (
+                    <option key={c.id} value={`cat:${c.id}`}>{c.icon} {c.name}</option>
+                  ))}
+                </optgroup>
+                {siblingCandidates.length > 0 && (
+                  <optgroup label="Hija de la nota">
+                    {siblingCandidates.map(n => (
+                      <option key={n.id} value={n.id}>↳ {n.title || "Sin título"}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+          );
+        })()}
+        {showIconPicker && (
+          <div className="mt-2 bg-popover border border-border rounded-lg shadow-lg p-2 relative z-10">
+            <EmojiPicker
+              value={note.icon}
+              onChange={(emoji) => { updateNote(noteId, { icon: emoji } as any); setShowIconPicker(false); }}
+              onClear={() => { updateNote(noteId, { icon: null } as any); setShowIconPicker(false); }}
+            />
+          </div>
+        )}
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+
           <button onClick={() => setShowLinkPicker(!showLinkPicker)}
             className="flex items-center gap-1 text-xs md:text-[10px] text-muted-foreground hover:text-foreground font-body min-h-11 md:min-h-0 px-2 md:px-0">
             <Link2 size={14} className="md:size-2.5" />Enlazar
