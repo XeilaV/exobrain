@@ -15,7 +15,7 @@ interface NoteVersionHistoryProps {
 
 const sourceLabel = (source: string) => {
   if (source === "ai") return { icon: <Bot size={12} />, label: "IA" };
-  if (source === "manual") return { icon: <FileEdit size={12} />, label: "Manual" };
+  if (source === "manual" || source === "user") return { icon: <FileEdit size={12} />, label: "Manual" };
   return { icon: <Clock size={12} />, label: "Auto" };
 };
 
