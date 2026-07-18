@@ -1,12 +1,16 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight, Check } from "lucide-react";
+import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight, Check, Calendar as CalendarIcon, MoreHorizontal } from "lucide-react";
 
 import { useNoteAttachments } from "@/hooks/useNoteAttachments";
 import { motion, Reorder } from "framer-motion";
 import { toast } from "sonner";
 import RichTextEditor from "./RichTextEditor";
 import NameInputDialog from "./NameInputDialog";
+import TaskSheet from "./TaskSheet";
+import { format, isToday, isTomorrow, isPast } from "date-fns";
+import { es } from "date-fns/locale";
+import { ChecklistItem } from "@/types/notes";
 
 interface PostItChecklistItemProps {
   item: { id: string; text: string; completed: boolean };
