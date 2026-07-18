@@ -264,12 +264,12 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
           <div className="bg-muted rounded-lg p-1.5 space-y-1">
             <input value={linkSearch} onChange={e => setLinkSearch(e.target.value)}
               placeholder="Buscar nota..." autoFocus
-              className="w-full text-[10px] bg-background rounded px-2 py-1 outline-none text-foreground font-body" />
-            <div className="max-h-24 overflow-y-auto space-y-0.5 scrollbar-thin">
+              className="w-full text-base md:text-[10px] bg-background rounded px-2 py-2 md:py-1 outline-none text-foreground font-body" />
+            <div className="max-h-32 md:max-h-24 overflow-y-auto space-y-0.5 scrollbar-thin">
               {availableToLink.slice(0, 6).map(n => (
                 <button key={n.id} onClick={() => { linkNotes(noteId, n.id); setShowLinkPicker(false); setLinkSearch(""); }}
-                  className="w-full text-left text-[10px] px-2 py-1 rounded hover:bg-background/80 text-foreground font-body flex items-center gap-1">
-                  <Link2 size={8} className="text-muted-foreground shrink-0" /><span className="truncate">{n.title}</span>
+                  className="w-full text-left text-sm md:text-[10px] px-2 py-2 md:py-1 rounded hover:bg-background/80 text-foreground font-body flex items-center gap-1.5 min-h-11 md:min-h-0">
+                  <Link2 size={14} className="md:size-2 text-muted-foreground shrink-0" /><span className="truncate">{n.title}</span>
                 </button>
               ))}
             </div>
