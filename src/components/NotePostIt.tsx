@@ -84,12 +84,10 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
 
   const actions = mobile ? (
     <>
-      <button onClick={() => onMove?.(-1)} disabled={isFirst} aria-label="Subir"
+      <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onMove?.(-1); }} disabled={isFirst} aria-label="Subir"
         className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-11 flex items-center justify-center"><ChevronUp size={20} /></button>
-      <button onClick={() => onMove?.(1)} disabled={isLast} aria-label="Bajar"
+      <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onMove?.(1); }} disabled={isLast} aria-label="Bajar"
         className="text-muted-foreground disabled:opacity-20 shrink-0 min-h-11 min-w-11 flex items-center justify-center"><ChevronDown size={20} /></button>
-      <button onClick={() => deleteChecklistItem(noteId, item.id)} aria-label="Borrar"
-        className="text-destructive/80 shrink-0 min-h-11 min-w-11 flex items-center justify-center"><Trash2 size={18} /></button>
     </>
   ) : (
     <>
@@ -101,9 +99,49 @@ const PostItChecklistItem = ({ item, noteId, mobile, isFirst, isLast, onMove, on
   );
 
   if (mobile) {
+    const cancelLongPress = () => {
+      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    };
+    const startLongPress = () => {
+      longPressedRef.current = false;
+      cancelLongPress();
+      longPressTimer.current = setTimeout(() => {
+        longPressedRef.current = true;
+        setShowActions(true);
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, 450);
+    };
     return (
-      <div className="flex items-center gap-1.5 group bg-background/50 rounded px-2 py-1.5 min-h-11">
-        {checkbox}{textEl}{actions}
+      <div className="relative">
+        <div
+          className="flex items-center gap-1.5 group bg-background/50 rounded px-2 py-1.5 min-h-11 select-none"
+          onPointerDown={startLongPress}
+          onPointerMove={cancelLongPress}
+          onPointerUp={cancelLongPress}
+          onPointerCancel={cancelLongPress}
+          onContextMenu={e => e.preventDefault()}
+        >
+          {checkbox}{textEl}{actions}
+        </div>
+        {showActions && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowActions(false)} />
+            <div className="absolute right-2 top-full mt-1 z-50 bg-popover border border-border rounded-lg shadow-xl overflow-hidden min-w-[180px]">
+              <button onClick={() => { setShowActions(false); onDuplicate?.(); }}
+                className="w-full flex items-center gap-2 px-3 py-3 text-sm text-foreground hover:bg-muted min-h-11 text-left">
+                <Copy size={16} className="text-muted-foreground" /> Duplicar
+              </button>
+              <button onClick={() => { setShowActions(false); onAddSubtask?.(); }}
+                className="w-full flex items-center gap-2 px-3 py-3 text-sm text-foreground hover:bg-muted min-h-11 text-left">
+                <CornerDownRight size={16} className="text-muted-foreground" /> Subtarea
+              </button>
+              <button onClick={() => { setShowActions(false); deleteChecklistItem(noteId, item.id); }}
+                className="w-full flex items-center gap-2 px-3 py-3 text-sm text-destructive hover:bg-muted min-h-11 text-left">
+                <Trash2 size={16} /> Borrar
+              </button>
+            </div>
+          </>
+        )}
       </div>
     );
   }
