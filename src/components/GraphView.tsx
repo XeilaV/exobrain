@@ -835,13 +835,13 @@ const GraphView = () => {
               onPointerLeave={cancelLongPress}
               onClick={e => { e.stopPropagation(); handleNodeClick(node.id, e.clientX, e.clientY); }}
             >
-              {/* Label below circle for category (tree is inverted) */}
-              {isCat && (
+              {/* Label below circle for main branches (tree is inverted) */}
+              {isMainNote && (
                 <span
                   className="absolute whitespace-nowrap font-display text-xs font-semibold text-foreground"
                   style={{ top: r * 2 + 6, left: '50%', transform: 'translateX(-50%)' }}
                 >
-                  {cat ? `${cat.icon} ` : ""}{node.label}
+                  {nodeNote?.icon ? `${nodeNote.icon} ` : ""}{node.label}
                 </span>
               )}
 
@@ -885,7 +885,7 @@ const GraphView = () => {
               )}
 
               {/* Label above circle for notes (children grow upward) */}
-              {node.type === "note" && (
+              {node.type === "note" && !isMainNote && (
                 <span
                   className="absolute font-body text-[9px] leading-tight text-foreground/80 whitespace-nowrap overflow-hidden text-ellipsis text-center block"
                   style={{ bottom: r * 2 + 3, left: '50%', transform: 'translateX(-50%)', width: 54 }}
@@ -919,60 +919,6 @@ const GraphView = () => {
               </button>
             )}
 
-            {contextMenu.nodeId.startsWith("cat-") && (() => {
-              const catId = contextMenu.nodeId.replace("cat-", "");
-              return (
-                <>
-                  <button
-                    onClick={() => { setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "text" }); setContextMenu(null); }}
-                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    <FileText size={12} />Añadir nota
-                  </button>
-                  <button
-                    onClick={() => { setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "checklist" }); setContextMenu(null); }}
-                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    <ListChecks size={12} />Añadir lista
-                  </button>
-                  <button
-                    onClick={() => {
-                      const cat = categories.find(c => c.id === catId);
-                      if (cat) setEditingCat({ id: catId, name: cat.name });
-                      setContextMenu(null);
-                    }}
-                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    <Pencil size={12} />Renombrar tema
-                  </button>
-                  <button
-                    onClick={() => { setColorPickerCat({ id: catId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
-                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    <Palette size={12} />Cambiar color
-                  </button>
-                  <button
-                    onClick={() => { setIconPickerCat({ id: catId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
-                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    <span className="text-sm leading-none">🙂</span>Cambiar icono
-                  </button>
-                  <button
-                    onClick={() => {
-                      setConfirmDialog({
-                        message: "¿Eliminar este tema y sus notas?",
-                        onConfirm: () => { deleteCategory(catId); setConfirmDialog(null); },
-                      });
-                      setContextMenu(null);
-                    }}
-                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
-                  >
-                    <Trash2 size={12} />Eliminar tema
-                  </button>
-                </>
-              );
-            })()}
-
             {contextMenu.nodeId.startsWith("note-") && (() => {
               const nId = contextMenu.nodeId.replace("note-", "");
               const note = notes.find(n => n.id === nId);
@@ -980,16 +926,42 @@ const GraphView = () => {
               return (
                 <>
                   <button
-                    onClick={() => { setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "text" }); setContextMenu(null); }}
+                    onClick={() => { setNewNoteDialog({ parentNoteId: nId, type: "text" }); setContextMenu(null); }}
                     className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <FileText size={12} />Añadir hija (texto)
                   </button>
                   <button
-                    onClick={() => { setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "checklist" }); setContextMenu(null); }}
+                    onClick={() => { setNewNoteDialog({ parentNoteId: nId, type: "checklist" }); setContextMenu(null); }}
                     className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <ListChecks size={12} />Añadir hija (lista)
+                  </button>
+                  <button
+                    onClick={() => { setMovingNoteId(nId); setContextMenu(null); }}
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <Move size={12} />Mover a...
+                  </button>
+                  <button
+                    onClick={() => { setEditingCat({ id: nId, name: note.title }); setContextMenu(null); }}
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <Pencil size={12} />Renombrar
+                  </button>
+                  {!note.parentNoteId && (
+                    <button
+                      onClick={() => { setColorPickerCat({ id: nId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
+                      className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    >
+                      <Palette size={12} />Cambiar color
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setIconPickerCat({ id: nId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <span className="text-sm leading-none">🙂</span>Cambiar icono
                   </button>
                   <button
                     onClick={() => { setLinkingNoteId(nId); setContextMenu(null); toast.info("Pulsa otra nota para enlazar"); }}
