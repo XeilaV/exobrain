@@ -65,48 +65,58 @@
 
 
   .dark {
-    --background: 30 12% 8%;
-    --foreground: 40 25% 92%;
+    --background: 232 20% 9%;
+    --foreground: 225 25% 94%;
 
-    --card: 30 10% 12%;
-    --card-foreground: 40 25% 92%;
+    --card: 232 18% 13%;
+    --card-foreground: 225 25% 94%;
 
-    --popover: 30 12% 10%;
-    --popover-foreground: 40 25% 92%;
+    --popover: 232 18% 12%;
+    --popover-foreground: 225 25% 94%;
 
-    --primary: 30 80% 58%;
-    --primary-foreground: 30 15% 10%;
+    --primary: 258 78% 70%;
+    --primary-foreground: 232 20% 10%;
 
-    --secondary: 30 8% 18%;
-    --secondary-foreground: 40 20% 88%;
+    --secondary: 232 14% 20%;
+    --secondary-foreground: 225 20% 90%;
 
-    --muted: 30 8% 16%;
-    --muted-foreground: 35 12% 62%;
+    --muted: 232 14% 18%;
+    --muted-foreground: 225 12% 66%;
 
-    --accent: 30 60% 55%;
-    --accent-foreground: 30 15% 10%;
+    --accent: 190 70% 58%;
+    --accent-foreground: 232 20% 10%;
 
-    --destructive: 0 65% 55%;
-    --destructive-foreground: 40 25% 95%;
+    --destructive: 0 65% 58%;
+    --destructive-foreground: 225 25% 95%;
 
-    --border: 30 8% 22%;
-    --input: 30 8% 22%;
-    --ring: 30 80% 58%;
+    --border: 232 12% 24%;
+    --input: 232 12% 24%;
+    --ring: 258 78% 70%;
 
-    --sidebar-background: 30 10% 11%;
-    --sidebar-foreground: 40 20% 88%;
-    --sidebar-primary: 30 80% 58%;
-    --sidebar-primary-foreground: 30 15% 10%;
-    --sidebar-accent: 30 10% 18%;
-    --sidebar-accent-foreground: 40 20% 88%;
-    --sidebar-border: 30 8% 22%;
-    --sidebar-ring: 30 80% 58%;
+    --sidebar-background: 232 18% 12%;
+    --sidebar-foreground: 225 20% 90%;
+    --sidebar-primary: 258 78% 70%;
+    --sidebar-primary-foreground: 232 20% 10%;
+    --sidebar-accent: 232 14% 19%;
+    --sidebar-accent-foreground: 225 20% 90%;
+    --sidebar-border: 232 12% 24%;
+    --sidebar-ring: 258 78% 70%;
 
-    --chat-bg: 30 10% 13%;
-    --chat-user: 30 80% 55%;
-    --chat-ai: 30 10% 18%;
+    --chat-bg: 232 18% 13%;
+    --chat-user: 258 78% 66%;
+    --chat-ai: 232 14% 19%;
+
+    --glass: 232 18% 14% / 0.72;
+    --glass-strong: 232 18% 14% / 0.9;
+    --canvas-wash: radial-gradient(1200px 800px at 50% 60%, hsl(258 78% 70% / 0.12), transparent 70%),
+                   radial-gradient(900px 700px at 15% 20%, hsl(190 70% 58% / 0.08), transparent 70%),
+                   linear-gradient(180deg, hsl(232 20% 10%), hsl(232 20% 8%));
+    --shadow-soft: 0 1px 2px hsl(0 0% 0% / 0.3), 0 8px 24px -12px hsl(0 0% 0% / 0.55);
+    --shadow-float: 0 2px 6px hsl(0 0% 0% / 0.35), 0 24px 48px -20px hsl(0 0% 0% / 0.6);
+    --shadow-node: 0 2px 8px hsl(0 0% 0% / 0.45);
   }
 }
+
 
 @layer base {
   * {
