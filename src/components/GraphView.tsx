@@ -2,7 +2,7 @@ import { useNotes } from "@/contexts/NotesContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine, Sun, Moon, History } from "lucide-react";
+import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine, Sun, Moon, History, Download } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
@@ -12,6 +12,7 @@ import ColorPicker from "./ColorPicker";
 import EmojiPicker from "./EmojiPicker";
 import GoogleCalendarMenuItem from "./GoogleCalendarMenuItem";
 import HistoryDialog from "./HistoryDialog";
+import ExportDialog from "./ExportDialog";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
@@ -53,6 +54,7 @@ const GraphView = () => {
   const { theme, toggleTheme } = useTheme();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 1200, h: 800 });
   const [openPostIt, setOpenPostIt] = useState<{ noteId: string; x: number; y: number } | null>(null);
@@ -1149,6 +1151,12 @@ const GraphView = () => {
                     <History size={12} />Historial
                   </button>
                   <button
+                    onClick={() => { setShowProfileMenu(false); setShowExportDialog(true); }}
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <Download size={12} />Descargar mis notas
+                  </button>
+                  <button
                     onClick={async () => { setShowProfileMenu(false); await signOut(); navigate("/auth"); }}
                     className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
                   >
@@ -1336,6 +1344,8 @@ const GraphView = () => {
       />
 
       <HistoryDialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog} />
+
+      <ExportDialog open={showExportDialog} onOpenChange={setShowExportDialog} />
 
       {/* Post-it overlay */}
       <AnimatePresence>
