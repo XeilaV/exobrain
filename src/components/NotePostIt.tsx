@@ -239,7 +239,16 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   const parentNote = getParentNote(noteId);
   const childNotes = getChildNotes(noteId);
   const linkedNotes = getLinkedNotes(noteId);
-  const categoryPath = getCategoryPath(note.categoryId);
+  // Ruta jerárquica de ancestros (Brain > rama > subrama)
+  const ancestorPath: { id: string; icon?: string | null; title: string }[] = (() => {
+    const chain: { id: string; icon?: string | null; title: string }[] = [];
+    let cur = note.parentNoteId ? notes.find(n => n.id === note.parentNoteId) : undefined;
+    while (cur) {
+      chain.unshift({ id: cur.id, icon: cur.icon, title: cur.title });
+      cur = cur.parentNoteId ? notes.find(n => n.id === cur!.parentNoteId) : undefined;
+    }
+    return chain;
+  })();
   const completedCount = note.checklist.filter(i => i.completed).length;
 
   const availableToLink = notes.filter(n =>
@@ -278,10 +287,11 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/50 shrink-0">
         <div className="flex items-center gap-1 text-xs md:text-[10px] text-muted-foreground font-body flex-1 min-w-0 flex-wrap">
-          {categoryPath.map((cat, i) => (
-            <span key={cat.id} className="flex items-center gap-0.5">
-              {i > 0 && <ChevronRight size={10} />}
-              {cat.icon} {cat.name}
+          <span className="flex items-center gap-0.5">{brainName || "ExoBrain"}</span>
+          {ancestorPath.map((a) => (
+            <span key={a.id} className="flex items-center gap-0.5">
+              <ChevronRight size={10} />
+              {a.icon || ""} {a.title}
             </span>
           ))}
           {parentNote && (
