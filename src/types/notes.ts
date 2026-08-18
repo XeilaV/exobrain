@@ -22,8 +22,9 @@ export interface Note {
   id: string;
   title: string;
   content: string;
-  categoryId: string;
+  categoryId: string | null;
   parentNoteId: string | null;
+  color?: string | null;
   linkedNoteIds: string[];
   checklist: ChecklistItem[];
   noteType: NoteType;
