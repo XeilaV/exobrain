@@ -12,6 +12,7 @@ import ColorPicker from "./ColorPicker";
 import EmojiPicker from "./EmojiPicker";
 import GoogleCalendarMenuItem from "./GoogleCalendarMenuItem";
 import HistoryDialog from "./HistoryDialog";
+import ExportDialog from "./ExportDialog";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
