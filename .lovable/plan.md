@@ -1,52 +1,27 @@
-Plan para convertir el historial en una recuperación real y segura:
+# Exportar / descargar tus notas
 
-1. **Proteger lo que hay ahora**
-   - Antes de tocar la lógica, hacer una copia/export interno de las notas y versiones actuales.
-   - Confirmado: hay versiones guardadas; `Refraneiro` aún tiene 11 snapshots recuperables.
+Añadir una opción "Descargar mis datos" en el menú de perfil (junto a Historial) que genera y descarga un archivo con todos tus temas y notas actuales, con su contenido completo.
 
-2. **Cambiar el historial de “cambios parciales” a snapshots reales**
-   - Ampliar `note_versions` para guardar toda la nota, no solo `content` y `checklist`:
-     - título
-     - contenido
-     - checklist
-     - tipo de nota
-     - tema/categoría
-     - madre/padre
-     - enlaces
-     - icono
-     - posición/estado relevante si aplica
-   - Dejar de borrar versiones importantes tan agresivamente; el límite actual de 30 por nota puede cargarse historial útil.
+## Qué incluye la exportación
 
-3. **Restaurar de verdad, sin crear un cambio normal encima**
-   - Sustituir el botón actual de restaurar, que usa `updateNote`, por una restauración backend atómica.
-   - La restauración debe:
-     - guardar primero el estado actual como “antes de restaurar”
-     - aplicar exactamente la versión elegida
-     - marcarla como `restore`, no como edición normal
-     - refrescar la nota en pantalla desde la base de datos
-   - Así “restaurar” será deshacer/volver a esa versión, no una edición más confusa.
+- Temas (nombre, icono, color)
+- Notas: título, icono, tipo (texto o lista), contenido, ítems de la lista con sus subtareas y fechas, nota madre, notas enlazadas y fechas de creación/actualización
 
-4. **Recuperación de notas eliminadas**
-   - Cambiar el historial para que las versiones no desaparezcan al borrar una nota.
-   - Añadir snapshots de borrado, para poder ver y recuperar notas eliminadas.
-   - Mostrar notas borradas en el historial con opción **Recuperar como nota nueva**.
+Se exportan dos formatos en la misma acción:
+- **JSON**: copia fiel y completa, apta para respaldo o reimportación futura
+- **Markdown**: un archivo legible con los temas como secciones y las notas debajo
 
-5. **Historial usable y claro**
-   - El historial mostrará por nota:
-     - fecha
-     - título en ese momento
-     - tipo de evento: edición, restauración, borrado
-     - previsualización real
-     - botón **Vista previa**
-     - botón **Restaurar esta versión**
-   - En móvil ocupará casi toda la pantalla para poder leer antes de restaurar.
+## Cómo funciona
 
-6. **Caso inmediato de Refraneiro**
-   - Añadir una pantalla/flujo que permita abrir las 11 versiones existentes de `Refraneiro` y restaurar una concreta.
-   - Las versiones ya existentes solo tienen contenido/checklist, no estructura completa, pero sirven para recuperar el texto guardado.
+- Botón en el menú de perfil: "Descargar mis notas"
+- Un pequeño diálogo permite elegir formato (JSON o Markdown) antes de descargar
+- La descarga se genera en el navegador a partir de tus datos ya cargados y de una consulta de respaldo a la base de datos, así que siempre refleja el estado actual
+- Solo se descargan tus propios datos (las reglas de acceso ya limitan cada usuario a lo suyo)
 
-7. **Verificación**
-   - Probar crear/editar/restaurar una nota.
-   - Probar restaurar `Refraneiro` desde una versión anterior.
-   - Probar que restaurar no genera una cadena de cambios confusa.
-   - Probar que borrar una nota deja una versión recuperable.
+## Detalles técnicos
+
+- Nuevo `src/lib/exportNotes.ts`: consulta `categories` y `notes` del usuario, construye el JSON y el Markdown, y dispara la descarga vía `Blob` + enlace temporal
+- Nuevo `src/components/ExportDialog.tsx`: selector de formato y botón de descarga
+- `src/components/GraphView.tsx`: añadir la entrada de menú y montar el diálogo junto a `HistoryDialog`
+- Nombre de archivo: `exobrain-<brain_name>-YYYY-MM-DD.json` / `.md`
+- Sin cambios en la base de datos
