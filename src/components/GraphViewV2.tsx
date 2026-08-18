@@ -19,6 +19,7 @@ import {
   Moon,
   History,
   Download,
+  Move,
 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import NotePostIt from "./NotePostIt";
@@ -30,12 +31,13 @@ import EmojiPicker from "./EmojiPicker";
 import GoogleCalendarMenuItem from "./GoogleCalendarMenuItem";
 import HistoryDialog from "./HistoryDialog";
 import ExportDialog from "./ExportDialog";
+import MoveToDialog from "./MoveToDialog";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
-type NodeType = "root" | "category" | "note" | "anchor";
+type NodeType = "root" | "category" | "note";
 
 interface NodePos {
   id: string;
@@ -50,15 +52,18 @@ interface NodePos {
   noteType?: "text" | "checklist";
   hasChildren?: boolean;
   isCollapsed?: boolean;
+  isMain?: boolean;
   depth: number;
-  hidden?: boolean;
+  isVirtual?: boolean;
   branchRootId?: string;
-  zDepth?: number;
+  side?: -1 | 1;
+  z?: number;
 }
 
 interface Edge {
   from: string;
   to: string;
+  kind?: "trunk" | "branch";
 }
 
 const ROOT_R = 30;
@@ -70,15 +75,12 @@ const GraphView = () => {
     notes,
     categories,
     addNote,
-    addCategory,
     deleteNote,
-    deleteCategory,
-    updateCategory,
+    moveNote,
+    canMoveTo,
     updateNote,
     linkNotes,
-    unlinkNotes,
     toggleNoteCollapsed,
-    toggleCategoryCollapsed,
     setSelectedNoteId,
     selectedNoteId,
     brainName,
@@ -101,15 +103,13 @@ const GraphView = () => {
   const [colorPickerCat, setColorPickerCat] = useState<{ id: string; x: number; y: number } | null>(null);
   const [iconPickerCat, setIconPickerCat] = useState<{ id: string; x: number; y: number } | null>(null);
   const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
-  const [isAddingCat, setIsAddingCat] = useState(false);
-  const [newCatName, setNewCatName] = useState("");
-  const [newCatIcon, setNewCatIcon] = useState("📌");
-  const [newCatColor, setNewCatColor] = useState(DEFAULT_CATEGORY_COLOR);
+  const [movingNoteId, setMovingNoteId] = useState<string | null>(null);
+  const [pickTargetForId, setPickTargetForId] = useState<string | null>(null);
   const [showBrainDialog, setShowBrainDialog] = useState(false);
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
+  const [focusNoteId, setFocusNoteId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [newNoteDialog, setNewNoteDialog] = useState<{
-    categoryId: string;
     parentNoteId: string | null;
     type: "text" | "checklist";
   } | null>(null);
@@ -119,7 +119,6 @@ const GraphView = () => {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [viewZoom, setViewZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
-  const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
@@ -148,13 +147,14 @@ const GraphView = () => {
     centerY: number;
   } | null>(null);
 
-  // Hidden category filter
+  // Hidden main-branch filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
   const [showFilterPanel, setShowFilterPanel] = useState(false);
 
-  const visibleCategories = useMemo(
-    () => categories.filter((c) => !hiddenCategoryIds.has(c.id)),
-    [categories, hiddenCategoryIds],
+  const rootNotes = useMemo(() => notes.filter((n) => !n.parentNoteId), [notes]);
+  const visibleRoots = useMemo(
+    () => rootNotes.filter((n) => !hiddenCategoryIds.has(n.id)),
+    [rootNotes, hiddenCategoryIds],
   );
 
   // Resize observer
@@ -186,10 +186,8 @@ const GraphView = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNoteId]);
 
-  // Build a real tree-shaped layout from the NOTE hierarchy.
-  // Important: the latest data uses notes with parentNoteId=null as the real
-  // first-level branches (Ideas, Reflexiones, Psico, Tareas, etc.). Categories
-  // remain useful for color/filtering, but are no longer rendered as giant nodes.
+  // Build a real tree: one shared trunk, main branches emerging at different
+  // heights, and descendants fanning out as smaller ramifications.
   const { positions, edges, parentMap } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
@@ -198,168 +196,231 @@ const GraphView = () => {
     const H = size.h;
     const isMobile = W < 640;
 
-    const visibleNote = (note: Note) => !hiddenCategoryIds.has(note.categoryId);
-    const noteColor = (note: Note) => categories.find((c) => c.id === note.categoryId)?.color || DEFAULT_CATEGORY_COLOR;
+    if (rootNotes.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
-    const childrenOf = (noteId: string) => notes.filter((n) => n.parentNoteId === noteId && visibleNote(n));
+    const fallbackPalette = [
+      "262 62% 62%", // violet
+      "196 58% 50%", // cyan
+      "24 78% 58%", // orange
+      "332 62% 60%", // pink
+      "145 42% 50%", // green
+      "220 68% 62%", // blue
+    ];
 
-    const rootNotes = notes
-      .filter((n) => !n.parentNoteId && visibleNote(n))
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const colorForRoot = (root: Note, index: number) => {
+      const legacyCategory = categories.find((c) => c.id === root.categoryId);
+      return root.color || legacyCategory?.color || fallbackPalette[index % fallbackPalette.length];
+    };
 
-    // Base + ONE common trunk.
-    const rootX = W * 0.5;
-    const rootY = isMobile ? H - 92 : H - 72;
-    const trunkBottomY = rootY - (isMobile ? 24 : 28);
-    const trunkTopY = Math.max(isMobile ? 170 : 190, H * (isMobile ? 0.24 : 0.28));
-    const trunkHeight = trunkBottomY - trunkTopY;
+    const descendantsCount = (noteId: string): number => {
+      const children = notes.filter((n) => n.parentNoteId === noteId);
+      return children.reduce((sum, child) => sum + 1 + descendantsCount(child.id), 0);
+    };
+
+    // Shared vertical trunk. Exobrain is the base, not a radial hub.
+    const trunkX = W / 2;
+    const rootY = isMobile ? H - 88 : H - 72;
+    const trunkTopY = isMobile ? Math.max(96, H * 0.18) : Math.max(96, H * 0.16);
+    const trunkBottomY = rootY - (isMobile ? 34 : 38);
 
     pos.push({
       id: "root",
-      x: rootX,
+      x: trunkX,
       y: rootY,
       type: "root",
       label: brainName || "ExoBrain",
-      color: "252 32% 52%",
+      color: "265 24% 44%",
       depth: -1,
-      zDepth: 0,
+      z: 1,
     });
 
-    // Invisible points create a single slightly organic trunk. Main branches
-    // attach to these points instead of all starting at the Exobrain label.
-    const anchorCount = Math.max(7, rootNotes.length + 4);
-    let previousId = "root";
-    for (let i = 0; i < anchorCount; i++) {
-      const t = i / (anchorCount - 1); // bottom -> top
-      const y = trunkBottomY - t * trunkHeight;
-      const x = rootX + Math.sin(t * Math.PI * 1.35) * (isMobile ? 2 : 5);
-      const id = `trunk-${i}`;
-      pos.push({
-        id,
-        x,
-        y,
-        type: "anchor",
-        label: "",
-        color: "252 26% 58%",
-        depth: -1,
-        hidden: true,
-        zDepth: 0,
-      });
-      parent[id] = previousId;
-      eds.push({ from: previousId, to: id });
-      previousId = id;
-    }
+    // One virtual point at the crown so SVG can draw the uninterrupted trunk.
+    pos.push({
+      id: "trunk-top",
+      x: trunkX,
+      y: trunkTopY,
+      type: "category",
+      label: "",
+      color: "262 35% 58%",
+      depth: -1,
+      isVirtual: true,
+      z: 0.9,
+    });
+    parent["trunk-top"] = "root";
+    eds.push({ from: "root", to: "trunk-top", kind: "trunk" });
 
-    const anchorForT = (t: number) => {
-      const index = Math.max(0, Math.min(anchorCount - 1, Math.round(t * (anchorCount - 1))));
-      return pos.find((p) => p.id === `trunk-${index}`)!;
+    // Balance heavy subtrees between both sides so the crown does not become a list.
+    const weightedRoots = visibleRoots.map((root, originalIndex) => ({
+      root,
+      originalIndex,
+      weight: 1 + descendantsCount(root.id),
+    }));
+
+    const left: typeof weightedRoots = [];
+    const right: typeof weightedRoots = [];
+    let leftWeight = 0;
+    let rightWeight = 0;
+    weightedRoots
+      .slice()
+      .sort((a, b) => b.weight - a.weight)
+      .forEach((item) => {
+        if (leftWeight <= rightWeight) {
+          left.push(item);
+          leftWeight += item.weight;
+        } else {
+          right.push(item);
+          rightWeight += item.weight;
+        }
+      });
+
+    // Restore chronological/visual order inside each side.
+    left.sort((a, b) => a.originalIndex - b.originalIndex);
+    right.sort((a, b) => a.originalIndex - b.originalIndex);
+
+    const allBySide = [
+      ...left.map((item, i) => ({ ...item, side: -1 as const, sideIndex: i, sideCount: left.length })),
+      ...right.map((item, i) => ({ ...item, side: 1 as const, sideIndex: i, sideCount: right.length })),
+    ];
+
+    const trunkSpan = Math.max(180, trunkBottomY - trunkTopY);
+    const attachLow = trunkBottomY - trunkSpan * 0.18;
+    const attachHigh = trunkTopY + trunkSpan * 0.18;
+
+    const clampUpperAngle = (angle: number, side: -1 | 1) => {
+      // Keep descendants in the crown: sideways/upwards, never hanging beneath the parent.
+      if (side === 1) return Math.max(-1.58, Math.min(0.08, angle));
+      return Math.max(-3.22, Math.min(-1.58, angle));
     };
 
-    // Recursively fan children out like smaller ramifications. They do NOT stack
-    // vertically; every generation grows farther out and mostly upward.
     const placeChildren = (
       parentNote: Note,
       parentX: number,
       parentY: number,
-      side: -1 | 1,
       outwardAngle: number,
+      color: string,
       depth: number,
       branchRootId: string,
-      zDepth: number,
+      side: -1 | 1,
+      branchZ: number,
     ) => {
-      const children = childrenOf(parentNote.id);
+      const children = notes.filter((n) => n.parentNoteId === parentNote.id);
       const expanded = parentNote.isCollapsed === false && children.length > 0;
       if (!expanded) return;
 
       const count = children.length;
-      const baseRadius = isMobile ? Math.max(80, 108 - depth * 8) : Math.max(105, 155 - depth * 15);
-      const radius = baseRadius + Math.min(44, count * 5);
-      const spread = Math.min(1.5, 0.58 + count * 0.15);
+      const spread = Math.min(depth === 1 ? 1.5 : 1.18, 0.5 + count * 0.12);
+      const baseRadius = isMobile
+        ? depth === 1
+          ? 92
+          : Math.max(68, 88 - depth * 5)
+        : depth === 1
+          ? 132
+          : Math.max(86, 116 - depth * 7);
+      const radius = baseRadius + Math.min(isMobile ? 42 : 88, count * (isMobile ? 5 : 8));
 
       children.forEach((child, i) => {
-        const centered = count === 1 ? 0 : i / (count - 1) - 0.5;
-        // Keep the fan biased upward. This gives the "copa" shape from the sketch.
-        const angle = outwardAngle + centered * spread;
-        const childX = parentX + Math.cos(angle) * radius;
-        const childY = parentY + Math.sin(angle) * radius;
-        const id = `note-${child.id}`;
-        const childColor = noteColor(child);
+        const t = count === 1 ? 0 : i / (count - 1) - 0.5;
+        // Small deterministic radius variation makes the crown less diagrammatic while
+        // preserving predictable positions between renders.
+        const radialJitter = ((i % 3) - 1) * (isMobile ? 8 : 15);
+        const rawAngle = outwardAngle + t * spread;
+        const angle = clampUpperAngle(rawAngle, side);
+        const childR = radius + radialJitter;
+        const x = parentX + Math.cos(angle) * childR;
+        const y = parentY + Math.sin(angle) * childR;
+        const childId = `note-${child.id}`;
+        const parentId = `note-${parentNote.id}`;
+        const childChildren = notes.filter((n) => n.parentNoteId === child.id);
+        const childExpanded = child.isCollapsed === false && childChildren.length > 0;
 
         pos.push({
-          id,
-          x: childX,
-          y: childY,
+          id: childId,
+          x,
+          y,
           type: "note",
           label: child.title,
-          color: childColor,
-          categoryId: child.categoryId,
+          color,
+          categoryId: child.categoryId ?? undefined,
           noteId: child.id,
           parentNoteId: child.parentNoteId,
           noteType: child.noteType,
-          hasChildren: childrenOf(child.id).length > 0,
-          isCollapsed: child.isCollapsed,
+          hasChildren: childChildren.length > 0,
+          isCollapsed: !childExpanded,
+          isMain: false,
           depth,
           branchRootId,
-          zDepth,
+          side,
+          z: Math.max(0.62, branchZ - depth * 0.035),
         });
+        parent[childId] = parentId;
+        eds.push({ from: parentId, to: childId, kind: "branch" });
 
-        parent[id] = `note-${parentNote.id}`;
-        eds.push({ from: `note-${parentNote.id}`, to: id });
-
-        // Continue outward in the direction of this child, with a slight upward bias.
-        const nextAngleRaw = Math.atan2(childY - parentY, childX - parentX);
-        const upwardBias = side === -1 ? -2.62 : -0.52;
-        const nextAngle = nextAngleRaw * 0.72 + upwardBias * 0.28;
-        placeChildren(child, childX, childY, side, nextAngle, depth + 1, branchRootId, zDepth);
+        placeChildren(child, x, y, angle, color, depth + 1, branchRootId, side, branchZ);
       });
     };
 
-    rootNotes.forEach((note, i) => {
-      // Alternate sides so branches share the same trunk and form a crown.
-      const side: -1 | 1 = i % 2 === 0 ? -1 : 1;
-      const row = Math.floor(i / 2);
-      const rows = Math.max(1, Math.ceil(rootNotes.length / 2));
+    allBySide.forEach((item, globalIndex) => {
+      const { root, side, sideIndex, sideCount, originalIndex } = item;
+      const color = colorForRoot(root, originalIndex);
+      const sideT = sideCount <= 1 ? 0.5 : sideIndex / (sideCount - 1);
 
-      // First ramifications begin around the middle of the trunk, never at the base.
-      const verticalT = rows === 1 ? 0.62 : 0.4 + (row / Math.max(1, rows - 1)) * 0.38;
-      const anchor = anchorForT(verticalT);
-
-      const horizontal = isMobile ? Math.min(W * 0.25, 112 + row * 12) : Math.min(W * 0.24, 205 + row * 22);
-      const rise = isMobile ? 42 + row * 12 : 68 + row * 18;
-      const nx = anchor.x + side * horizontal;
-      const ny = anchor.y - rise;
-      const id = `note-${note.id}`;
-      const color = noteColor(note);
-      const zDepth = (i % 3) - 1; // subtle pseudo-depth in general view
+      // Branches emerge from the middle / upper trunk at distinct heights.
+      const attachY = attachLow + (attachHigh - attachLow) * (0.22 + sideT * 0.68);
+      const attachId = `attach-${root.id}`;
+      const branchZ = 0.76 + ((originalIndex * 37) % 24) / 100; // 0.76..0.99
 
       pos.push({
-        id,
-        x: nx,
-        y: ny,
-        type: "note",
-        label: note.title,
+        id: attachId,
+        x: trunkX,
+        y: attachY,
+        type: "category",
+        label: "",
         color,
-        categoryId: note.categoryId,
-        noteId: note.id,
-        parentNoteId: null,
-        noteType: note.noteType,
-        hasChildren: childrenOf(note.id).length > 0,
-        isCollapsed: note.isCollapsed,
-        depth: 0,
-        branchRootId: note.id,
-        zDepth,
+        depth: -1,
+        isVirtual: true,
+        branchRootId: root.id,
+        side,
+        z: branchZ,
       });
+      parent[attachId] = "root";
 
-      parent[id] = anchor.id;
-      eds.push({ from: anchor.id, to: id });
+      // Main branches arc outward and upward from that shared trunk.
+      const horizontal = isMobile ? Math.min(W * 0.28, 128) : Math.min(W * 0.24, 250);
+      const vertical = isMobile ? 58 + sideT * 34 : 82 + sideT * 54;
+      const mainX = trunkX + side * horizontal;
+      const mainY = Math.max(trunkTopY + 42, attachY - vertical);
+      const mainAngle = Math.atan2(mainY - attachY, mainX - trunkX);
+      const children = notes.filter((n) => n.parentNoteId === root.id);
+      const expanded = root.isCollapsed === false && children.length > 0;
+      const mainId = `note-${root.id}`;
 
-      // Main branch direction: outward + upward, never downward.
-      const outwardAngle = side === -1 ? -2.56 : -0.58;
-      placeChildren(note, nx, ny, side, outwardAngle, 1, note.id, zDepth);
+      pos.push({
+        id: mainId,
+        x: mainX,
+        y: mainY,
+        type: "note",
+        label: root.title,
+        color,
+        categoryId: root.categoryId ?? undefined,
+        noteId: root.id,
+        parentNoteId: root.parentNoteId,
+        noteType: root.noteType,
+        hasChildren: children.length > 0,
+        isCollapsed: !expanded,
+        isMain: true,
+        depth: 0,
+        branchRootId: root.id,
+        side,
+        z: branchZ,
+      });
+      parent[mainId] = attachId;
+      eds.push({ from: attachId, to: mainId, kind: "branch" });
+
+      placeChildren(root, mainX, mainY, mainAngle, color, 1, root.id, side, branchZ);
     });
 
     return { positions: pos, edges: eds, parentMap: parent };
-  }, [notes, categories, hiddenCategoryIds, brainName, size.w, size.h]);
+  }, [notes, categories, rootNotes, visibleRoots, brainName, size.w, size.h]);
 
   // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
   // node moves its whole subtree along with it.
@@ -389,10 +450,9 @@ const GraphView = () => {
   const getPos = (id: string) => positionsWithOffsets.find((p) => p.id === id);
 
   const getNodeRadius = useCallback((node: NodePos) => {
-    if (node.hidden || node.type === "anchor") return 0;
+    if (node.isVirtual) return 0;
     if (node.type === "root") return ROOT_R;
-    if (node.id === "hub") return 6;
-    if (node.type === "category") return CAT_R;
+    if (node.type === "note" && node.isMain) return CAT_R;
     return NOTE_R;
   }, []);
 
@@ -421,19 +481,17 @@ const GraphView = () => {
 
   const getNodesBounds = useCallback(
     (nodes: NodePos[]) => {
-      const visibleNodes = nodes.filter((node) => !node.hidden && node.type !== "anchor");
-      if (visibleNodes.length === 0) return null;
-      return visibleNodes.reduce(
+      if (nodes.length === 0) return null;
+      return nodes.reduce(
         (bounds, node) => {
           const r = getNodeRadius(node);
-          const labelPadX = node.type === "note" ? 34 : node.type === "category" ? 54 : 72;
-          const labelPadTop = node.type === "note" ? 16 : 0;
-          const labelPadBottom = node.type === "note" ? 0 : 22;
+          const labelPadX = node.isVirtual ? 0 : node.type === "root" ? 86 : node.isMain ? 92 : 78;
+          const labelPadY = node.isVirtual ? 0 : node.type === "root" ? 24 : node.isMain ? 20 : 16;
           return {
             minX: Math.min(bounds.minX, node.x - Math.max(r, labelPadX)),
             maxX: Math.max(bounds.maxX, node.x + Math.max(r, labelPadX)),
-            minY: Math.min(bounds.minY, node.y - r - labelPadTop),
-            maxY: Math.max(bounds.maxY, node.y + r + labelPadBottom),
+            minY: Math.min(bounds.minY, node.y - Math.max(r, labelPadY)),
+            maxY: Math.max(bounds.maxY, node.y + Math.max(r, labelPadY)),
           };
         },
         { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity },
@@ -450,17 +508,21 @@ const GraphView = () => {
       if (!bounds) return;
 
       const isMobile = size.w < 640;
-      const topMargin = 48;
-      const bottomMargin = isMobile ? 100 : 80;
-      const targetX = size.w / 2;
-      const targetY = (topMargin + (size.h - bottomMargin)) / 2;
+      const panelReserve = !isMobile && openPostIt ? 390 : 0;
+      const availableW = Math.max(240, size.w - panelReserve - (isMobile ? 36 : 90));
+      const availableH = Math.max(240, size.h - (isMobile ? 120 : 100));
+      const branchW = Math.max(1, bounds.maxX - bounds.minX);
+      const branchH = Math.max(1, bounds.maxY - bounds.minY);
+      const zoom = Math.min(1.42, Math.max(0.88, Math.min(availableW / branchW, availableH / branchH) * 0.82));
+      const targetX = (size.w - panelReserve) / 2;
+      const targetY = size.h * 0.48;
       const branchCenterX = (bounds.minX + bounds.maxX) / 2;
       const branchCenterY = (bounds.minY + bounds.maxY) / 2;
 
-      setViewZoom(1);
-      setPan({ x: targetX - branchCenterX, y: targetY - branchCenterY });
+      setViewZoom(zoom);
+      setPan({ x: targetX - branchCenterX * zoom, y: targetY - branchCenterY * zoom });
     },
-    [getNodesBounds, getSubtreeIds, positionsWithOffsets, size.w, size.h],
+    [getNodesBounds, getSubtreeIds, positionsWithOffsets, size.w, size.h, openPostIt],
   );
 
   const fitFullTree = useCallback(() => {
@@ -696,21 +758,6 @@ const GraphView = () => {
     };
   }, [cancelLongPress]);
 
-  const getTopLevelBranchId = useCallback(
-    (noteId: string) => {
-      let current = notes.find((n) => n.id === noteId);
-      const seen = new Set<string>();
-      while (current?.parentNoteId && !seen.has(current.id)) {
-        seen.add(current.id);
-        const parentNote = notes.find((n) => n.id === current?.parentNoteId);
-        if (!parentNote) break;
-        current = parentNote;
-      }
-      return current?.id || noteId;
-    },
-    [notes],
-  );
-
   // Click handling with double-click detection
   const handleNodeClick = useCallback(
     (nodeId: string, clientX: number, clientY: number) => {
@@ -736,19 +783,10 @@ const GraphView = () => {
           const note = notes.find((n) => n.id === nId);
           const hasChildren = notes.some((n) => n.parentNoteId === nId);
           if (hasChildren && note) {
-            setActiveBranchId(getTopLevelBranchId(nId));
             lastExpandedRef.current = note.isCollapsed ? nodeId : null;
             lastCollapsedRef.current = note.isCollapsed ? null : nodeId;
+            setFocusNoteId(note.isCollapsed ? nId : null);
             toggleNoteCollapsed(nId);
-          }
-        } else if (nodeId.startsWith("cat-")) {
-          const cId = nodeId.replace("cat-", "");
-          const cat = categories.find((c) => c.id === cId);
-          const hasChildren = notes.some((n) => n.categoryId === cId && !n.parentNoteId);
-          if (hasChildren && cat) {
-            lastExpandedRef.current = cat.isCollapsed ? nodeId : null;
-            lastCollapsedRef.current = cat.isCollapsed ? null : nodeId;
-            toggleCategoryCollapsed(cId);
           }
         } else if (nodeId === "root") {
           setShowBrainDialog(true);
@@ -772,49 +810,72 @@ const GraphView = () => {
             });
             return;
           }
-          const branchId = getTopLevelBranchId(nId);
-          setActiveBranchId(branchId);
+          setFocusNoteId(nId);
+          // En escritorio el panel lateral ocupa la derecha: desplazamos el mapa
+          // para que el nodo activo siga siendo visible.
+          if (window.innerWidth >= 768) {
+            const panelW = 400;
+            const overlapX = clientX - (window.innerWidth - panelW - 24);
+            if (overlapX > -40) setPan((p) => ({ x: p.x - (overlapX + 80), y: p.y }));
+          }
           setOpenPostIt({ noteId: nId, x: clientX, y: clientY });
         } else if (nodeId === "root") {
-          setActiveBranchId(null);
           // single click on root opens rename
           setShowBrainDialog(true);
         }
-        // categories: single click does nothing (use long-press menu)
       }, 240);
     },
-    [
-      contextMenu,
-      notes,
-      categories,
-      toggleNoteCollapsed,
-      toggleCategoryCollapsed,
-      linkingNoteId,
-      linkNotes,
-      getTopLevelBranchId,
-    ],
+    [contextMenu, notes, toggleNoteCollapsed, linkingNoteId, linkNotes],
   );
 
-  const handleAddCategory = () => {
-    if (newCatName.trim()) {
-      addCategory(newCatName.trim(), newCatIcon, newCatColor, null);
-      setNewCatName("");
-      setNewCatIcon("📌");
-      setNewCatColor(DEFAULT_CATEGORY_COLOR);
-      setIsAddingCat(false);
+  // Smooth branch path. Main branches leave the shared trunk almost vertically
+  // and then bend outward; inner ramifications continue in the direction of growth.
+  const branchPath = (from: NodePos, to: NodePos, kind: "trunk" | "branch" = "branch") => {
+    if (kind === "trunk") {
+      const dy = to.y - from.y;
+      return `M ${from.x} ${from.y - ROOT_R * 0.55} C ${from.x - 2} ${from.y + dy * 0.34}, ${to.x + 2} ${from.y + dy * 0.72}, ${to.x} ${to.y}`;
     }
+
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const leavesTrunk = from.isVirtual && from.id.startsWith("attach-");
+    if (leavesTrunk) {
+      const rise = Math.max(28, Math.abs(dy) * 0.42);
+      return `M ${from.x} ${from.y} C ${from.x} ${from.y - rise}, ${to.x - dx * 0.26} ${to.y - dy * 0.08}, ${to.x} ${to.y}`;
+    }
+
+    return `M ${from.x} ${from.y} C ${from.x + dx * 0.3} ${from.y + dy * 0.16}, ${from.x + dx * 0.74} ${from.y + dy * 0.88}, ${to.x} ${to.y}`;
   };
 
-  // Helper: bezier path between two nodes
-  const pathBetween = (x1: number, y1: number, x2: number, y2: number) => {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const c1x = x1 + dx * 0.24;
-    const c1y = y1 + dy * 0.1;
-    const c2x = x1 + dx * 0.78;
-    const c2y = y1 + dy * 0.88;
-    return `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
+  // Thin graphic lines rather than a literal / realistic trunk.
+  const widthForDepth = (depth: number, isMain = false) => {
+    if (depth < 0) return 2.7;
+    if (isMain || depth === 0) return 2.35;
+    return Math.max(0.95, 1.8 - depth * 0.18);
   };
+  // Rama con protagonismo: subárbol de la raíz del nodo enfocado
+  const focusIds = useMemo(() => {
+    if (!focusNoteId) return null;
+    let cur = notes.find((n) => n.id === focusNoteId);
+    if (!cur) return null;
+    while (cur.parentNoteId) {
+      const p = notes.find((n) => n.id === cur!.parentNoteId);
+      if (!p) break;
+      cur = p;
+    }
+    const ids = new Set<string>(["root", "trunk-top", `attach-${cur.id}`]);
+    const visit = (id: string) => {
+      ids.add(`note-${id}`);
+      notes.filter((n) => n.parentNoteId === id).forEach((c) => visit(c.id));
+    };
+    visit(cur.id);
+    return ids;
+  }, [focusNoteId, notes]);
+
+  const dimFor = useCallback((id: string) => (focusIds && !focusIds.has(id) ? 0.16 : 1), [focusIds]);
+
+  // Nivel de detalle según zoom: con la vista alejada solo ramas principales
+  const showLeafLabels = viewZoom > 0.62;
 
   // Link edges (horizontal between notes)
   const linkEdges = useMemo(() => {
@@ -834,7 +895,7 @@ const GraphView = () => {
   return (
     <div
       ref={containerRef}
-      className="flex-1 h-full w-full bg-background overflow-hidden relative select-none"
+      className="flex-1 h-full w-full canvas-wash overflow-hidden relative select-none"
       style={{ touchAction: "none" }}
       onPointerDown={(e) => {
         if (e.button !== 0 && e.pointerType === "mouse") return;
@@ -904,8 +965,10 @@ const GraphView = () => {
           didPan.current = false;
           return;
         }
-        if (openPostIt) setOpenPostIt(null);
-        else setActiveBranchId(null);
+        if (openPostIt) {
+          setOpenPostIt(null);
+          setFocusNoteId(null);
+        }
         if (contextMenu) setContextMenu(null);
         if (colorPickerCat) setColorPickerCat(null);
         if (linkingNoteId) {
@@ -931,110 +994,131 @@ const GraphView = () => {
           willChange: "transform",
         }}
       >
-        {/* SVG branches */}
+        {/* Shared trunk + organic ramifications. Thin lines, no literal tree illustration. */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0, overflow: "visible" }}>
+          <defs>
+            <filter id="branch-soft-depth" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="1.15" />
+            </filter>
+          </defs>
+
           {edges.map((edge, idx) => {
             const from = getPos(edge.from);
             const to = getPos(edge.to);
             if (!from || !to) return null;
 
-            const isTrunk = edge.to.startsWith("trunk-") || (edge.from === "root" && edge.to.startsWith("trunk-"));
-            const branchRootId = to.branchRootId || from.branchRootId;
-            const isFocused = !activeBranchId || branchRootId === activeBranchId || isTrunk;
-            const isBehind = (to.zDepth ?? from.zDepth ?? 0) < 0;
-
-            const stroke = isTrunk ? "hsl(252 24% 58%)" : `hsl(${to.color})`;
-            const strokeOpacity = activeBranchId
-              ? isFocused
-                ? isTrunk
-                  ? 0.34
-                  : 0.9
-                : 0.11
-              : isTrunk
-                ? 0.42
-                : isBehind
-                  ? 0.42
-                  : 0.72;
-            const strokeWidth = isTrunk
-              ? 1.8
-              : (to.depth ?? 0) === 0
-                ? 2.5
-                : Math.max(1.15, 2.2 - (to.depth ?? 0) * 0.22);
+            const kind = edge.kind ?? "branch";
+            const isTrunk = kind === "trunk";
+            const isMain = to.type === "note" && to.isMain;
+            const width = isTrunk ? 2.75 : widthForDepth(to.depth, isMain);
+            const z = Math.min(from.z ?? 1, to.z ?? 1);
+            const focusDim = isTrunk ? 1 : Math.min(dimFor(edge.from), dimFor(edge.to));
+            const isActive = !!focusIds && focusIds.has(edge.to);
+            const baseOpacity = isTrunk ? 0.5 : isMain ? 0.78 : 0.56;
+            const opacity = isActive ? Math.min(0.96, baseOpacity + 0.16) : baseOpacity * z * focusDim;
+            const stroke = isTrunk ? "hsl(262 32% 58%)" : `hsl(${to.color})`;
+            const d = branchPath(from, to, kind);
 
             return (
-              <path
-                key={`be-${idx}`}
-                d={pathBetween(from.x, from.y, to.x, to.y)}
-                stroke={stroke}
-                strokeWidth={strokeWidth}
-                strokeOpacity={strokeOpacity}
-                strokeLinecap="round"
-                fill="none"
-                style={{
-                  filter: !activeBranchId && isBehind ? "blur(0.35px)" : "none",
-                  transition: "stroke-opacity 280ms ease, filter 280ms ease",
-                }}
-              />
+              <g key={`be-${idx}`} style={{ opacity, transition: "opacity 320ms ease" }}>
+                {/* very soft under-line gives depth without neon */}
+                {!isTrunk && (
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={stroke}
+                    strokeWidth={width + 3.2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={isActive ? 0.09 : 0.045}
+                    filter="url(#branch-soft-depth)"
+                  />
+                )}
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={stroke}
+                  strokeWidth={width}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                {/* one restrained highlight is enough for the 2.5D feel */}
+                {!isTrunk && z > 0.82 && (
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke="hsl(0 0% 100%)"
+                    strokeWidth={Math.max(0.45, width * 0.28)}
+                    strokeLinecap="round"
+                    opacity={0.22}
+                    transform="translate(-0.35 -0.55)"
+                  />
+                )}
+              </g>
             );
           })}
 
+          {/* Cross-links stay secondary to the actual hierarchy. */}
           {linkEdges.map((edge, idx) => {
             const from = getPos(edge.from);
             const to = getPos(edge.to);
             if (!from || !to) return null;
             return (
-              <line
+              <path
                 key={`le-${idx}`}
-                x1={from.x}
-                y1={from.y}
-                x2={to.x}
-                y2={to.y}
-                stroke="hsl(var(--muted-foreground) / 0.25)"
+                d={branchPath(from, to, "branch")}
+                fill="none"
+                stroke="hsl(var(--muted-foreground) / 0.30)"
                 strokeWidth={1}
-                strokeDasharray="5 5"
+                strokeDasharray="4 6"
+                strokeLinecap="round"
+                style={{ opacity: Math.min(dimFor(edge.from), dimFor(edge.to)), transition: "opacity 320ms ease" }}
               />
             );
           })}
         </svg>
 
-        {/* Nodes: labels are the nodes; no giant circles. */}
+        {/* Labels are the nodes: small, readable and sitting directly on the ramifications. */}
         <AnimatePresence>
           {positionsWithOffsets.map((node) => {
-            if (node.hidden || node.type === "anchor") return null;
+            if (node.isVirtual) return null;
 
             const isRoot = node.type === "root";
-            const isNote = node.type === "note";
-            const isMainBranch = isNote && node.depth === 0;
-            const branchFocused = !activeBranchId || node.branchRootId === activeBranchId || isRoot;
-            const isBehind = (node.zDepth ?? 0) < 0;
-            const nodeOpacity = activeBranchId ? (branchFocused ? 1 : 0.18) : isBehind ? 0.58 : 1;
+            const isMainNote = node.type === "note" && node.isMain;
+            const nodeNote = node.noteId ? notes.find((n) => n.id === node.noteId) : null;
+            const childCount = nodeNote ? notes.filter((n) => n.parentNoteId === nodeNote.id).length : 0;
+            const dim = dimFor(node.id);
+            const z = node.z ?? 1;
+            const isFocused = !!focusIds && focusIds.has(node.id);
             const isLinkSource = linkingNoteId && node.noteId === linkingNoteId;
-            const showCollapsedDot = isNote && node.hasChildren && node.isCollapsed;
-
-            const width = isRoot ? 120 : isMainBranch ? 118 : Math.max(78, Math.min(152, 34 + node.label.length * 6.2));
-            const height = isRoot ? 42 : isMainBranch ? 38 : 30;
+            const showChildLabel = isMainNote || showLeafLabels || isFocused;
+            const baseScale = focusIds ? (isFocused ? (isMainNote ? 1.06 : 1.025) : 0.96) : 0.96 + z * 0.04;
+            const visualOpacity = dim * (focusIds ? 1 : Math.max(0.68, z));
 
             return (
               <motion.div
                 key={node.id}
-                initial={{ opacity: 0, scale: 0.92 }}
+                initial={{ opacity: 0, scale: 0.9 }}
                 animate={{
-                  opacity: nodeOpacity,
-                  scale: activeBranchId && node.branchRootId === activeBranchId ? (isMainBranch ? 1.04 : 1) : 1,
-                  left: node.x - width / 2,
-                  top: node.y - height / 2,
+                  opacity: visualOpacity,
+                  scale: baseScale,
+                  left: node.x,
+                  top: node.y,
                 }}
-                exit={{ opacity: 0, scale: 0.92 }}
+                exit={{ opacity: 0, scale: 0.88 }}
                 transition={
-                  dragState.current?.nodeId === node.id ? { duration: 0 } : { duration: 0.28, ease: "easeOut" }
+                  dragState.current?.nodeId === node.id
+                    ? { duration: 0 }
+                    : { type: "spring", stiffness: 290, damping: 28 }
                 }
                 className="absolute cursor-grab active:cursor-grabbing touch-none"
                 data-graph-node
                 style={{
-                  width,
-                  height,
-                  zIndex: isRoot ? 10 : branchFocused ? 6 : 2,
-                  filter: !activeBranchId && isBehind ? "blur(0.18px)" : "none",
+                  width: 1,
+                  height: 1,
+                  zIndex: isRoot ? 8 : isMainNote ? 6 : 4,
+                  filter: dim < 1 ? "blur(0.55px)" : z < 0.82 ? "blur(0.18px)" : "none",
+                  transition: "filter 300ms ease",
                 }}
                 onPointerDown={(e) => {
                   e.stopPropagation();
@@ -1056,37 +1140,51 @@ const GraphView = () => {
                   handleNodeClick(node.id, e.clientX, e.clientY);
                 }}
               >
-                <div
-                  className={`h-full w-full rounded-full border bg-card/88 backdrop-blur-sm shadow-sm flex items-center justify-center gap-2 px-3 transition-all ${
-                    isLinkSource ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-background" : ""
-                  }`}
-                  style={{
-                    borderColor: isRoot ? "hsl(252 28% 72%)" : `hsl(${node.color} / ${isMainBranch ? 0.72 : 0.46})`,
-                    boxShadow:
-                      isMainBranch && branchFocused
-                        ? `0 7px 20px hsl(${node.color} / 0.10)`
-                        : "0 4px 14px hsl(240 12% 12% / 0.05)",
-                  }}
-                >
-                  {!isRoot && (
-                    <span
-                      className="shrink-0 rounded-full"
-                      style={{
-                        width: isMainBranch ? 9 : 6,
-                        height: isMainBranch ? 9 : 6,
-                        backgroundColor: `hsl(${node.color})`,
-                        opacity: 0.86,
-                      }}
-                    />
-                  )}
-                  <span
-                    className={`${isRoot || isMainBranch ? "font-display font-semibold" : "font-body font-medium"} text-foreground truncate text-center`}
-                    style={{ fontSize: isRoot ? 15 : isMainBranch ? 13 : 11 }}
+                {isRoot ? (
+                  <div
+                    className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-2xl border bg-card/95 px-5 py-2.5 font-display font-semibold text-foreground shadow-sm"
+                    style={{
+                      borderColor: "hsl(262 30% 70% / 0.55)",
+                      boxShadow: "0 8px 26px hsl(262 30% 40% / 0.10)",
+                    }}
                   >
                     {node.label}
-                  </span>
-                  {showCollapsedDot && <span className="text-[9px] text-muted-foreground">•••</span>}
-                </div>
+                  </div>
+                ) : showChildLabel ? (
+                  <div
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center whitespace-nowrap rounded-full border bg-card/95 font-body text-foreground shadow-sm transition-shadow ${
+                      isMainNote
+                        ? "gap-2 px-3 py-1.5 text-[12px] font-semibold"
+                        : "gap-1.5 px-2.5 py-1 text-[10px] font-medium"
+                    } ${isLinkSource ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-background" : ""}`}
+                    style={{
+                      borderColor: `hsl(${node.color} / ${isFocused ? 0.72 : isMainNote ? 0.48 : 0.3})`,
+                      boxShadow: isFocused
+                        ? `0 5px 18px hsl(${node.color} / 0.18)`
+                        : `0 3px 12px hsl(${node.color} / 0.08)`,
+                    }}
+                  >
+                    <span
+                      className={isMainNote ? "h-2 w-2 shrink-0 rounded-full" : "h-1.5 w-1.5 shrink-0 rounded-full"}
+                      style={{ backgroundColor: `hsl(${node.color})` }}
+                    />
+                    {nodeNote?.icon && <span className="text-[10px] leading-none opacity-80">{nodeNote.icon}</span>}
+                    <span className="max-w-[150px] overflow-hidden text-ellipsis">{node.label}</span>
+                    {childCount > 0 && (
+                      <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">{childCount}</span>
+                    )}
+                  </div>
+                ) : (
+                  <span
+                    className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-card"
+                    style={{
+                      width: 6,
+                      height: 6,
+                      backgroundColor: `hsl(${node.color})`,
+                      boxShadow: `0 2px 7px hsl(${node.color} / 0.16)`,
+                    }}
+                  />
+                )}
               </motion.div>
             );
           })}
@@ -1100,7 +1198,7 @@ const GraphView = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[170px]"
+            className="fixed z-50 surface-panel rounded-2xl py-1 min-w-[170px]"
             style={{ left: Math.min(contextMenu.x, size.w - 180), top: Math.min(contextMenu.y, size.h - 200) }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -1117,81 +1215,6 @@ const GraphView = () => {
               </button>
             )}
 
-            {contextMenu.nodeId.startsWith("cat-") &&
-              (() => {
-                const catId = contextMenu.nodeId.replace("cat-", "");
-                return (
-                  <>
-                    <button
-                      onClick={() => {
-                        setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "text" });
-                        setContextMenu(null);
-                      }}
-                      className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                    >
-                      <FileText size={12} />
-                      Añadir nota
-                    </button>
-                    <button
-                      onClick={() => {
-                        setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "checklist" });
-                        setContextMenu(null);
-                      }}
-                      className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                    >
-                      <ListChecks size={12} />
-                      Añadir lista
-                    </button>
-                    <button
-                      onClick={() => {
-                        const cat = categories.find((c) => c.id === catId);
-                        if (cat) setEditingCat({ id: catId, name: cat.name });
-                        setContextMenu(null);
-                      }}
-                      className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                    >
-                      <Pencil size={12} />
-                      Renombrar tema
-                    </button>
-                    <button
-                      onClick={() => {
-                        setColorPickerCat({ id: catId, x: contextMenu.x, y: contextMenu.y });
-                        setContextMenu(null);
-                      }}
-                      className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                    >
-                      <Palette size={12} />
-                      Cambiar color
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIconPickerCat({ id: catId, x: contextMenu.x, y: contextMenu.y });
-                        setContextMenu(null);
-                      }}
-                      className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                    >
-                      <span className="text-sm leading-none">🙂</span>Cambiar icono
-                    </button>
-                    <button
-                      onClick={() => {
-                        setConfirmDialog({
-                          message: "¿Eliminar este tema y sus notas?",
-                          onConfirm: () => {
-                            deleteCategory(catId);
-                            setConfirmDialog(null);
-                          },
-                        });
-                        setContextMenu(null);
-                      }}
-                      className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
-                    >
-                      <Trash2 size={12} />
-                      Eliminar tema
-                    </button>
-                  </>
-                );
-              })()}
-
             {contextMenu.nodeId.startsWith("note-") &&
               (() => {
                 const nId = contextMenu.nodeId.replace("note-", "");
@@ -1201,7 +1224,7 @@ const GraphView = () => {
                   <>
                     <button
                       onClick={() => {
-                        setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "text" });
+                        setNewNoteDialog({ parentNoteId: nId, type: "text" });
                         setContextMenu(null);
                       }}
                       className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
@@ -1211,13 +1234,54 @@ const GraphView = () => {
                     </button>
                     <button
                       onClick={() => {
-                        setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "checklist" });
+                        setNewNoteDialog({ parentNoteId: nId, type: "checklist" });
                         setContextMenu(null);
                       }}
                       className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                     >
                       <ListChecks size={12} />
                       Añadir hija (lista)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMovingNoteId(nId);
+                        setContextMenu(null);
+                      }}
+                      className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    >
+                      <Move size={12} />
+                      Mover a...
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingCat({ id: nId, name: note.title });
+                        setContextMenu(null);
+                      }}
+                      className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    >
+                      <Pencil size={12} />
+                      Renombrar
+                    </button>
+                    {!note.parentNoteId && (
+                      <button
+                        onClick={() => {
+                          setColorPickerCat({ id: nId, x: contextMenu.x, y: contextMenu.y });
+                          setContextMenu(null);
+                        }}
+                        className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                      >
+                        <Palette size={12} />
+                        Cambiar color
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setIconPickerCat({ id: nId, x: contextMenu.x, y: contextMenu.y });
+                        setContextMenu(null);
+                      }}
+                      className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    >
+                      <span className="text-sm leading-none">🙂</span>Cambiar icono
                     </button>
                     <button
                       onClick={() => {
@@ -1255,15 +1319,15 @@ const GraphView = () => {
       {/* Color picker (long-press category) */}
       {colorPickerCat && (
         <div
-          className="fixed z-50 bg-card border border-border rounded-lg shadow-xl p-3"
+          className="fixed z-50 surface-panel rounded-2xl p-3"
           style={{ left: Math.min(colorPickerCat.x, size.w - 180), top: Math.min(colorPickerCat.y, size.h - 140) }}
           onClick={(e) => e.stopPropagation()}
         >
           <p className="text-xs font-body text-muted-foreground mb-2">Elige un color</p>
           <ColorPicker
-            value={categories.find((c) => c.id === colorPickerCat.id)?.color || ""}
+            value={notes.find((n) => n.id === colorPickerCat.id)?.color || DEFAULT_CATEGORY_COLOR}
             onChange={(color) => {
-              updateCategory(colorPickerCat.id, { color });
+              updateNote(colorPickerCat.id, { color });
               setColorPickerCat(null);
             }}
           />
@@ -1273,15 +1337,15 @@ const GraphView = () => {
       {/* Icon picker (category) */}
       {iconPickerCat && (
         <div
-          className="fixed z-50 bg-card border border-border rounded-lg shadow-xl p-3"
+          className="fixed z-50 surface-panel rounded-2xl p-3"
           style={{ left: Math.min(iconPickerCat.x, size.w - 280), top: Math.min(iconPickerCat.y, size.h - 260) }}
           onClick={(e) => e.stopPropagation()}
         >
           <p className="text-xs font-body text-muted-foreground mb-2">Elige un icono</p>
           <EmojiPicker
-            value={categories.find((c) => c.id === iconPickerCat.id)?.icon}
+            value={notes.find((n) => n.id === iconPickerCat.id)?.icon || undefined}
             onChange={(icon) => {
-              updateCategory(iconPickerCat.id, { icon });
+              updateNote(iconPickerCat.id, { icon });
               setIconPickerCat(null);
             }}
           />
@@ -1331,7 +1395,7 @@ const GraphView = () => {
             e.stopPropagation();
             toggleTheme();
           }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
           title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
           aria-label="Alternar modo oscuro"
         >
@@ -1343,16 +1407,15 @@ const GraphView = () => {
               e.stopPropagation();
               setShowProfileMenu((v) => !v);
               setShowFilterPanel(false);
-              setIsAddingCat(false);
             }}
-            className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
+            className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
             title={user ? "Perfil" : "Iniciar sesión"}
           >
             <UserIcon size={16} />
           </button>
           {showProfileMenu && (
             <div
-              className="absolute right-0 top-11 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[200px]"
+              className="absolute right-0 top-12 surface-panel rounded-2xl py-1 min-w-[200px]"
               onClick={(e) => e.stopPropagation()}
             >
               {user ? (
@@ -1424,11 +1487,11 @@ const GraphView = () => {
           onClick={(e) => {
             e.stopPropagation();
             setOffsets({});
+            setFocusNoteId(null);
             fitFullTree();
             setShowFilterPanel(false);
-            setIsAddingCat(false);
           }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
           title="Restablecer vista del árbol"
         >
           <TreePine size={16} />
@@ -1438,9 +1501,8 @@ const GraphView = () => {
           onClick={(e) => {
             e.stopPropagation();
             setShowFilterPanel((v) => !v);
-            setIsAddingCat(false);
           }}
-          className={`p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all flex items-center justify-center ${
+          className={`p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 transition-all flex items-center justify-center ${
             hiddenCategoryIds.size > 0 ? "text-primary" : "text-muted-foreground"
           }`}
           title="Filtrar temas"
@@ -1451,11 +1513,11 @@ const GraphView = () => {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            setIsAddingCat(true);
+            setCreateDialog({ x: size.w / 2, y: size.h / 2 });
             setShowFilterPanel(false);
           }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
-          title="Nuevo tema"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
+          title="Crear nuevo"
         >
           <Plus size={16} />
         </button>
@@ -1464,7 +1526,7 @@ const GraphView = () => {
       {/* Filter panel */}
       {showFilterPanel && (
         <div
-          className="fixed top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[220px] max-h-[60vh] overflow-y-auto"
+          className="fixed top-16 right-3 z-30 surface-panel rounded-2xl p-3 space-y-2 min-w-[220px] max-h-[60vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-1">
@@ -1478,10 +1540,10 @@ const GraphView = () => {
               </button>
             )}
           </div>
-          {categories.length === 0 && (
-            <p className="text-sm md:text-[11px] font-body text-muted-foreground">No hay temas aún.</p>
+          {rootNotes.length === 0 && (
+            <p className="text-sm md:text-[11px] font-body text-muted-foreground">No hay ramas aún.</p>
           )}
-          {categories.map((cat) => {
+          {rootNotes.map((cat) => {
             const hidden = hiddenCategoryIds.has(cat.id);
             return (
               <button
@@ -1500,10 +1562,13 @@ const GraphView = () => {
               >
                 <span
                   className="w-3.5 h-3.5 md:w-3 md:h-3 rounded-full border"
-                  style={{ backgroundColor: `hsl(${cat.color})`, borderColor: `hsl(${cat.color})` }}
+                  style={{
+                    backgroundColor: `hsl(${cat.color || DEFAULT_CATEGORY_COLOR})`,
+                    borderColor: `hsl(${cat.color || DEFAULT_CATEGORY_COLOR})`,
+                  }}
                 />
                 <span className="flex-1 truncate text-foreground">
-                  {cat.icon} {cat.name}
+                  {cat.icon || ""} {cat.title}
                 </span>
                 <span className="text-xs md:text-[10px] text-muted-foreground">{hidden ? "oculto" : "visible"}</span>
               </button>
@@ -1512,56 +1577,10 @@ const GraphView = () => {
         </div>
       )}
 
-      {/* Add category panel */}
-      {isAddingCat && (
-        <div
-          className="fixed top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-3 min-w-[220px]"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex gap-2">
-            <input
-              value={newCatIcon}
-              onChange={(e) => setNewCatIcon(e.target.value)}
-              className="w-11 md:w-10 text-center bg-muted rounded text-base md:text-sm p-2 md:p-1 min-h-11 md:min-h-0"
-              maxLength={2}
-            />
-            <input
-              value={newCatName}
-              onChange={(e) => setNewCatName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
-              placeholder="Nombre del tema..."
-              autoFocus
-              className="flex-1 bg-muted rounded text-base md:text-xs px-2 py-2.5 md:py-1 min-h-11 md:min-h-0 text-foreground outline-none font-body"
-            />
-          </div>
-          <div>
-            <p className="text-xs md:text-[10px] font-body text-muted-foreground mb-1">Color</p>
-            <ColorPicker value={newCatColor} onChange={setNewCatColor} />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleAddCategory}
-              className="flex-1 bg-primary text-primary-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0 font-medium"
-            >
-              Añadir
-            </button>
-            <button
-              onClick={() => {
-                setIsAddingCat(false);
-                setNewCatName("");
-              }}
-              className="flex-1 bg-muted text-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Edit category name */}
       {editingCat && (
         <div
-          className="fixed top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[200px]"
+          className="fixed top-16 right-3 z-30 surface-panel rounded-2xl p-3 space-y-2 min-w-[200px]"
           onClick={(e) => e.stopPropagation()}
         >
           <input
@@ -1569,7 +1588,7 @@ const GraphView = () => {
             onChange={(e) => setEditingCat({ ...editingCat, name: e.target.value })}
             onKeyDown={(e) => {
               if (e.key === "Enter" && editingCat.name.trim()) {
-                updateCategory(editingCat.id, { name: editingCat.name.trim() });
+                updateNote(editingCat.id, { title: editingCat.name.trim() });
                 setEditingCat(null);
               }
             }}
@@ -1580,7 +1599,7 @@ const GraphView = () => {
             <button
               onClick={() => {
                 if (editingCat.name.trim()) {
-                  updateCategory(editingCat.id, { name: editingCat.name.trim() });
+                  updateNote(editingCat.id, { title: editingCat.name.trim() });
                   setEditingCat(null);
                 }
               }}
@@ -1599,12 +1618,12 @@ const GraphView = () => {
       )}
 
       {/* Empty state */}
-      {categories.length === 0 && !loading && (
+      {rootNotes.length === 0 && !loading && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center text-muted-foreground">
             <p className="text-5xl mb-3">🌳</p>
             <p className="font-display text-xl">Empieza tu árbol</p>
-            <p className="text-sm mt-1 font-body">Pulsa + para crear el primer tema</p>
+            <p className="text-sm mt-1 font-body">Pulsa + para crear tu primera rama</p>
           </div>
         </div>
       )}
@@ -1638,6 +1657,7 @@ const GraphView = () => {
             onClose={() => {
               setOpenPostIt(null);
               setSelectedNoteId(null);
+              setFocusNoteId(null);
             }}
           />
         )}
@@ -1657,9 +1677,9 @@ const GraphView = () => {
         placeholder={newNoteDialog?.type === "checklist" ? "Nombre de la lista..." : "Nombre de la nota..."}
         onSubmit={async (name) => {
           if (!newNoteDialog) return;
-          const { categoryId, parentNoteId, type } = newNoteDialog;
+          const { parentNoteId, type } = newNoteDialog;
           setNewNoteDialog(null);
-          const created = await addNote(categoryId, parentNoteId, type);
+          const created = await addNote(null, parentNoteId, type);
           if (created) updateNote(created.id, { title: name });
         }}
         onCancel={() => setNewNoteDialog(null)}
@@ -1675,6 +1695,20 @@ const GraphView = () => {
           if (created) updateNote(created.id, { title: name });
         }}
         onCancel={() => setCreateDialog(null)}
+      />
+
+      <MoveToDialog
+        open={movingNoteId !== null}
+        noteId={movingNoteId}
+        notes={notes}
+        brainName={brainName}
+        onMove={async (targetId) => {
+          if (!movingNoteId) return;
+          const id = movingNoteId;
+          setMovingNoteId(null);
+          await moveNote(id, targetId);
+        }}
+        onCancel={() => setMovingNoteId(null)}
       />
     </div>
   );
