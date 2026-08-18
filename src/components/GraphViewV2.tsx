@@ -1667,15 +1667,11 @@ const GraphView = () => {
 
       <CreateNodeDialog
         open={createDialog !== null}
-        categories={categories}
         notes={notes}
-        onCreateCategory={(name, color) => {
-          addCategory(name, "📌", color, null);
+        brainName={brainName}
+        onCreateNote={async (parentNoteId, type, name, color) => {
           setCreateDialog(null);
-        }}
-        onCreateNote={async (categoryId, parentNoteId, type, name) => {
-          setCreateDialog(null);
-          const created = await addNote(categoryId, parentNoteId, type);
+          const created = await addNote(null, parentNoteId, type, parentNoteId ? null : color);
           if (created) updateNote(created.id, { title: name });
         }}
         onCancel={() => setCreateDialog(null)}
