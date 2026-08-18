@@ -32,6 +32,7 @@ export interface NoteVersion {
   noteType: NoteType;
   isCollapsed: boolean;
   icon?: string | null;
+  color?: string | null;
   eventType: string;
   source: string;
   createdAt: string;
@@ -47,7 +48,11 @@ interface NotesContextType {
   setActiveView: (v: "notes" | "graph") => void;
   setSelectedCategoryId: (id: string | null) => void;
   setSelectedNoteId: (id: string | null) => void;
-  addNote: (categoryId: string, parentNoteId?: string | null, noteType?: NoteType) => Promise<Note | null>;
+  addNote: (categoryId: string | null, parentNoteId?: string | null, noteType?: NoteType, color?: string | null) => Promise<Note | null>;
+  moveNote: (noteId: string, newParentId: string | null) => Promise<boolean>;
+  getDescendantIds: (noteId: string) => Set<string>;
+  canMoveTo: (noteId: string, targetId: string | null) => boolean;
+  getRootNotes: () => Note[];
   updateNote: (id: string, updates: Partial<Note>) => void;
   deleteNote: (id: string) => void;
   addCategory: (name: string, icon: string, color?: string, parentId?: string | null) => void;
@@ -92,8 +97,9 @@ const dbToNote = (row: any): Note => ({
   id: row.id,
   title: row.title,
   content: row.content,
-  categoryId: row.category_id,
+  categoryId: row.category_id ?? null,
   parentNoteId: row.parent_note_id ?? null,
+  color: row.color ?? null,
   linkedNoteIds: row.linked_note_ids ?? [],
   checklist: (row.checklist as ChecklistItem[]) ?? [],
   noteType: (row.note_type as NoteType) ?? "text",
@@ -160,17 +166,22 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Debounced save for note updates
   const updateTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const addNote = useCallback(async (categoryId: string, parentNoteId?: string | null, noteType: NoteType = "text") => {
+  const addNote = useCallback(async (categoryId: string | null, parentNoteId?: string | null, noteType: NoteType = "text", color?: string | null) => {
     if (!user) return null;
-    // Child notes inherit parent's category
+    // Child notes inherit parent's category and color
     let catId = categoryId;
+    let noteColor = color ?? null;
     if (parentNoteId) {
       const parent = notes.find(n => n.id === parentNoteId);
-      if (parent) catId = parent.categoryId;
+      if (parent) {
+        catId = parent.categoryId;
+        noteColor = parent.color ?? noteColor;
+      }
     }
     const { data, error } = await supabase.from("notes").insert({
       user_id: user.id,
       category_id: catId,
+      color: noteColor,
       parent_note_id: parentNoteId ?? null,
       title: noteType === "checklist" ? "Nueva lista" : "Nueva nota",
       content: "",
@@ -199,6 +210,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (updates.checklist !== undefined) dbUpdates.checklist = updates.checklist;
       if (updates.linkedNoteIds !== undefined) dbUpdates.linked_note_ids = updates.linkedNoteIds;
       if ((updates as any).icon !== undefined) dbUpdates.icon = (updates as any).icon;
+      if (updates.color !== undefined) dbUpdates.color = updates.color;
       await supabase.from("notes").update(dbUpdates).eq("id", id);
     }, 500);
   }, []);
@@ -487,6 +499,48 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return recovered;
   }, []);
 
+  const getDescendantIds = useCallback((noteId: string) => {
+    const ids = new Set<string>();
+    const walk = (id: string) => {
+      for (const n of notes) {
+        if (n.parentNoteId === id && !ids.has(n.id)) { ids.add(n.id); walk(n.id); }
+      }
+    };
+    walk(noteId);
+    return ids;
+  }, [notes]);
+
+  const canMoveTo = useCallback((noteId: string, targetId: string | null) => {
+    if (targetId === null) return true;
+    if (targetId === noteId) return false;
+    return !getDescendantIds(noteId).has(targetId);
+  }, [getDescendantIds]);
+
+  const getRootNotes = useCallback(() => notes.filter(n => !n.parentNoteId), [notes]);
+
+  const moveNote = useCallback(async (noteId: string, newParentId: string | null) => {
+    if (!canMoveTo(noteId, newParentId)) {
+      toast.error("No puedes mover una nota dentro de sí misma");
+      return false;
+    }
+    const { data, error } = await supabase.rpc("move_note", {
+      _note_id: noteId,
+      _new_parent_id: newParentId,
+    });
+    if (error) {
+      console.error("moveNote error:", error);
+      toast.error("No se pudo mover");
+      return false;
+    }
+    const updated = (data as any[] | null)?.map(dbToNote) ?? [];
+    if (updated.length) {
+      const byId = new Map(updated.map(n => [n.id, n]));
+      setNotes(prev => prev.map(n => byId.get(n.id) ?? n));
+    }
+    toast.success("Movido");
+    return true;
+  }, [canMoveTo]);
+
   const getChildNotes = useCallback((noteId: string) => notes.filter(n => n.parentNoteId === noteId), [notes]);
   const getLinkedNotes = useCallback((noteId: string) => {
     const note = notes.find(n => n.id === noteId);
@@ -516,7 +570,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     <NotesContext.Provider value={{
       notes, categories, selectedCategoryId, selectedNoteId, activeView, loading,
       setActiveView, setSelectedCategoryId, setSelectedNoteId,
-      addNote, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
+      addNote, moveNote, getDescendantIds, canMoveTo, getRootNotes, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
       addChecklistItem, toggleChecklistItem, deleteChecklistItem,
       toggleNoteCollapsed, toggleCategoryCollapsed,
       linkNotes, unlinkNotes,

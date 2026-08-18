@@ -2,7 +2,7 @@ import { useNotes } from "@/contexts/NotesContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine, Sun, Moon, History, Download } from "lucide-react";
+import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine, Sun, Moon, History, Download, Move } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
@@ -13,6 +13,7 @@ import EmojiPicker from "./EmojiPicker";
 import GoogleCalendarMenuItem from "./GoogleCalendarMenuItem";
 import HistoryDialog from "./HistoryDialog";
 import ExportDialog from "./ExportDialog";
+import MoveToDialog from "./MoveToDialog";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
@@ -33,6 +34,7 @@ interface NodePos {
   noteType?: "text" | "checklist";
   hasChildren?: boolean;
   isCollapsed?: boolean;
+  isMain?: boolean;
   depth: number;
 }
 
@@ -44,8 +46,8 @@ const NOTE_R = 12;
 
 const GraphView = () => {
   const {
-    notes, categories, addNote, addCategory, deleteNote, deleteCategory,
-    updateCategory, updateNote, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
+    notes, addNote, deleteNote, moveNote, canMoveTo,
+    updateNote, linkNotes, toggleNoteCollapsed,
     setSelectedNoteId, selectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
   } = useNotes();
 
@@ -62,14 +64,12 @@ const GraphView = () => {
   const [colorPickerCat, setColorPickerCat] = useState<{ id: string; x: number; y: number } | null>(null);
   const [iconPickerCat, setIconPickerCat] = useState<{ id: string; x: number; y: number } | null>(null);
   const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
-  const [isAddingCat, setIsAddingCat] = useState(false);
-  const [newCatName, setNewCatName] = useState("");
-  const [newCatIcon, setNewCatIcon] = useState("📌");
-  const [newCatColor, setNewCatColor] = useState(DEFAULT_CATEGORY_COLOR);
+  const [movingNoteId, setMovingNoteId] = useState<string | null>(null);
+  const [pickTargetForId, setPickTargetForId] = useState<string | null>(null);
   const [showBrainDialog, setShowBrainDialog] = useState(false);
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
-  const [newNoteDialog, setNewNoteDialog] = useState<{ categoryId: string; parentNoteId: string | null; type: "text" | "checklist" } | null>(null);
+  const [newNoteDialog, setNewNoteDialog] = useState<{ parentNoteId: string | null; type: "text" | "checklist" } | null>(null);
   const [createDialog, setCreateDialog] = useState<{ x: number; y: number } | null>(null);
   const canvasLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canvasLongPressStart = useRef<{ x: number; y: number } | null>(null);
@@ -103,13 +103,14 @@ const GraphView = () => {
     centerY: number;
   } | null>(null);
 
-  // Hidden category filter
+  // Hidden main-branch filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
   const [showFilterPanel, setShowFilterPanel] = useState(false);
 
-  const visibleCategories = useMemo(
-    () => categories.filter(c => !hiddenCategoryIds.has(c.id)),
-    [categories, hiddenCategoryIds],
+  const rootNotes = useMemo(() => notes.filter(n => !n.parentNoteId), [notes]);
+  const visibleRoots = useMemo(
+    () => rootNotes.filter(n => !hiddenCategoryIds.has(n.id)),
+    [rootNotes, hiddenCategoryIds],
   );
 
   // Resize observer
@@ -150,7 +151,7 @@ const GraphView = () => {
     const H = size.h;
     const isMobile = W < 640;
 
-    if (categories.length === 0) return { positions: pos, edges: eds, parentMap: parent };
+    if (rootNotes.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
     // Radii per depth (distance from parent)
     const radiusForDepth = (depth: number) => {
@@ -178,8 +179,10 @@ const GraphView = () => {
       parentY: number,
       outwardAngle: number,
       depth: number,
+      isMain = false,
+      overrideRadius?: number,
     ) => {
-      const R = radiusForDepth(depth);
+      const R = overrideRadius ?? radiusForDepth(depth);
       const children = notes.filter(n => n.parentNoteId === note.id);
       const expanded = note.isCollapsed === false && children.length > 0;
 
@@ -192,11 +195,12 @@ const GraphView = () => {
         id: `note-${note.id}`,
         x, y,
         type: "note", label: note.title, color,
-        categoryId: note.categoryId, noteId: note.id,
+        categoryId: note.categoryId ?? undefined, noteId: note.id,
         parentNoteId: note.parentNoteId,
         noteType: note.noteType,
         hasChildren: children.length > 0,
         isCollapsed: !expanded,
+        isMain,
         depth,
       });
 
@@ -223,10 +227,10 @@ const GraphView = () => {
     const rootY = hubY + trunkLength;
 
     const baseCatRadius = isMobile ? Math.max(96, Math.min(118, W * 0.29)) : 170;
-    const catCount = visibleCategories.length;
+    const catCount = visibleRoots.length;
 
-    // Radio adaptativo: garantizar separación mínima entre categorías vecinas
-    // sobre el arco de 180°.
+    // Radio adaptativo: garantizar separación mínima entre ramas principales
+    // vecinas sobre el arco de 180°.
     let catRadius = baseCatRadius;
     if (catCount >= 2) {
       const arcStep = Math.PI / (catCount - 1);
@@ -235,42 +239,21 @@ const GraphView = () => {
       catRadius = Math.max(baseCatRadius, requiredRadius);
     }
 
-    visibleCategories.forEach((cat, i) => {
+    visibleRoots.forEach((rootNote, i) => {
       // Angle range: -PI (left) to 0 (right), passing through -PI/2 (up).
       const t = catCount === 1 ? 0.5 : i / (catCount - 1);
       const catAngle = -Math.PI + t * Math.PI;
-
-      const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
-      const catExpanded = cat.isCollapsed === false && rootNotes.length > 0;
-
-      // Empuje radial cuando la categoría está expandida.
-      const extra = catExpanded ? expansionOffset(rootNotes.length) : 0;
-      const cx = hubX + (catRadius + extra) * Math.cos(catAngle);
-      const cy = hubY + (catRadius + extra) * Math.sin(catAngle);
-
-      pos.push({
-        id: `cat-${cat.id}`,
-        x: cx, y: cy,
-        type: "category", label: cat.name, color: cat.color,
-        categoryId: cat.id, depth: 0,
-        hasChildren: rootNotes.length > 0,
-        isCollapsed: cat.isCollapsed,
-      });
-      parent[`cat-${cat.id}`] = "hub";
-      eds.push({ from: "hub", to: `cat-${cat.id}` });
-
-      if (catExpanded) {
-        const rnCount = rootNotes.length;
-        let spread = Math.min(Math.PI, Math.PI * 0.5 + rnCount * 0.22);
-        if (rnCount >= 4) spread = Math.max(spread, Math.PI * 0.82);
-        rootNotes.forEach((rn, i2) => {
-          const t2 = rnCount === 1 ? 0 : (i2 / (rnCount - 1)) - 0.5;
-          const angle = catAngle + t2 * spread;
-          eds.push({ from: `cat-${cat.id}`, to: `note-${rn.id}` });
-          parent[`note-${rn.id}`] = `cat-${cat.id}`;
-          placeNoteSubtree(rn, cat.color, cx, cy, angle, 0);
-        });
-      }
+      parent[`note-${rootNote.id}`] = "hub";
+      eds.push({ from: "hub", to: `note-${rootNote.id}` });
+      placeNoteSubtree(
+        rootNote,
+        rootNote.color || DEFAULT_CATEGORY_COLOR,
+        hubX, hubY,
+        catAngle,
+        0,
+        true,
+        catRadius,
+      );
     });
 
 
@@ -290,7 +273,8 @@ const GraphView = () => {
     });
     eds.push({ from: "root", to: "hub" });
     return { positions: pos, edges: eds, parentMap: parent };
-  }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
+  }, [notes, rootNotes, visibleRoots, brainName, size.w, size.h]);
+
 
 
   // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
@@ -628,15 +612,6 @@ const GraphView = () => {
             lastCollapsedRef.current = note.isCollapsed ? null : nodeId;
             toggleNoteCollapsed(nId);
           }
-        } else if (nodeId.startsWith("cat-")) {
-          const cId = nodeId.replace("cat-", "");
-          const cat = categories.find(c => c.id === cId);
-          const hasChildren = notes.some(n => n.categoryId === cId && !n.parentNoteId);
-          if (hasChildren && cat) {
-            lastExpandedRef.current = cat.isCollapsed ? nodeId : null;
-            lastCollapsedRef.current = cat.isCollapsed ? null : nodeId;
-            toggleCategoryCollapsed(cId);
-          }
         } else if (nodeId === "root") {
           setShowBrainDialog(true);
         }
@@ -664,17 +639,9 @@ const GraphView = () => {
         // single click on root opens rename
         setShowBrainDialog(true);
       }
-      // categories: single click does nothing (use long-press menu)
     }, 240);
-  }, [contextMenu, notes, categories, toggleNoteCollapsed, toggleCategoryCollapsed, linkingNoteId, linkNotes]);
+  }, [contextMenu, notes, toggleNoteCollapsed, linkingNoteId, linkNotes]);
 
-  const handleAddCategory = () => {
-    if (newCatName.trim()) {
-      addCategory(newCatName.trim(), newCatIcon, newCatColor, null);
-      setNewCatName(""); setNewCatIcon("📌"); setNewCatColor(DEFAULT_CATEGORY_COLOR);
-      setIsAddingCat(false);
-    }
-  };
 
   // Helper: bezier path between two nodes
   const pathBetween = (x1: number, y1: number, x2: number, y2: number) => {
@@ -828,13 +795,14 @@ const GraphView = () => {
         {positionsWithOffsets.map(node => {
           const isRoot = node.type === "root";
           const isHub = node.id === "hub";
-          const isCat = node.type === "category" && !isHub;
-          const r = isRoot ? ROOT_R : isHub ? 6 : isCat ? CAT_R : NOTE_R;
+          const isMainNote = node.type === "note" && node.isMain;
+          const isCat = isMainNote;
+          const r = isRoot ? ROOT_R : isHub ? 6 : isMainNote ? CAT_R : NOTE_R;
           const isLinkSource = linkingNoteId && node.noteId === linkingNoteId;
           const showCollapsedDot =
-            (node.type === "note" || isCat) &&
-            node.hasChildren && node.isCollapsed;
-          const cat = isCat ? categories.find(c => c.id === node.categoryId) : null;
+            node.type === "note" && node.hasChildren && node.isCollapsed;
+          const nodeNote = node.noteId ? notes.find(n => n.id === node.noteId) : null;
+
 
           return (
             <motion.div
@@ -867,13 +835,13 @@ const GraphView = () => {
               onPointerLeave={cancelLongPress}
               onClick={e => { e.stopPropagation(); handleNodeClick(node.id, e.clientX, e.clientY); }}
             >
-              {/* Label below circle for category (tree is inverted) */}
-              {isCat && (
+              {/* Label below circle for main branches (tree is inverted) */}
+              {isMainNote && (
                 <span
                   className="absolute whitespace-nowrap font-display text-xs font-semibold text-foreground"
                   style={{ top: r * 2 + 6, left: '50%', transform: 'translateX(-50%)' }}
                 >
-                  {cat ? `${cat.icon} ` : ""}{node.label}
+                  {nodeNote?.icon ? `${nodeNote.icon} ` : ""}{node.label}
                 </span>
               )}
 
@@ -917,7 +885,7 @@ const GraphView = () => {
               )}
 
               {/* Label above circle for notes (children grow upward) */}
-              {node.type === "note" && (
+              {node.type === "note" && !isMainNote && (
                 <span
                   className="absolute font-body text-[9px] leading-tight text-foreground/80 whitespace-nowrap overflow-hidden text-ellipsis text-center block"
                   style={{ bottom: r * 2 + 3, left: '50%', transform: 'translateX(-50%)', width: 54 }}
@@ -951,60 +919,6 @@ const GraphView = () => {
               </button>
             )}
 
-            {contextMenu.nodeId.startsWith("cat-") && (() => {
-              const catId = contextMenu.nodeId.replace("cat-", "");
-              return (
-                <>
-                  <button
-                    onClick={() => { setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "text" }); setContextMenu(null); }}
-                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    <FileText size={12} />Añadir nota
-                  </button>
-                  <button
-                    onClick={() => { setNewNoteDialog({ categoryId: catId, parentNoteId: null, type: "checklist" }); setContextMenu(null); }}
-                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    <ListChecks size={12} />Añadir lista
-                  </button>
-                  <button
-                    onClick={() => {
-                      const cat = categories.find(c => c.id === catId);
-                      if (cat) setEditingCat({ id: catId, name: cat.name });
-                      setContextMenu(null);
-                    }}
-                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    <Pencil size={12} />Renombrar tema
-                  </button>
-                  <button
-                    onClick={() => { setColorPickerCat({ id: catId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
-                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    <Palette size={12} />Cambiar color
-                  </button>
-                  <button
-                    onClick={() => { setIconPickerCat({ id: catId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
-                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
-                  >
-                    <span className="text-sm leading-none">🙂</span>Cambiar icono
-                  </button>
-                  <button
-                    onClick={() => {
-                      setConfirmDialog({
-                        message: "¿Eliminar este tema y sus notas?",
-                        onConfirm: () => { deleteCategory(catId); setConfirmDialog(null); },
-                      });
-                      setContextMenu(null);
-                    }}
-                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
-                  >
-                    <Trash2 size={12} />Eliminar tema
-                  </button>
-                </>
-              );
-            })()}
-
             {contextMenu.nodeId.startsWith("note-") && (() => {
               const nId = contextMenu.nodeId.replace("note-", "");
               const note = notes.find(n => n.id === nId);
@@ -1012,16 +926,42 @@ const GraphView = () => {
               return (
                 <>
                   <button
-                    onClick={() => { setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "text" }); setContextMenu(null); }}
+                    onClick={() => { setNewNoteDialog({ parentNoteId: nId, type: "text" }); setContextMenu(null); }}
                     className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <FileText size={12} />Añadir hija (texto)
                   </button>
                   <button
-                    onClick={() => { setNewNoteDialog({ categoryId: note.categoryId, parentNoteId: nId, type: "checklist" }); setContextMenu(null); }}
+                    onClick={() => { setNewNoteDialog({ parentNoteId: nId, type: "checklist" }); setContextMenu(null); }}
                     className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
                   >
                     <ListChecks size={12} />Añadir hija (lista)
+                  </button>
+                  <button
+                    onClick={() => { setMovingNoteId(nId); setContextMenu(null); }}
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <Move size={12} />Mover a...
+                  </button>
+                  <button
+                    onClick={() => { setEditingCat({ id: nId, name: note.title }); setContextMenu(null); }}
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <Pencil size={12} />Renombrar
+                  </button>
+                  {!note.parentNoteId && (
+                    <button
+                      onClick={() => { setColorPickerCat({ id: nId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
+                      className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                    >
+                      <Palette size={12} />Cambiar color
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setIconPickerCat({ id: nId, x: contextMenu.x, y: contextMenu.y }); setContextMenu(null); }}
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <span className="text-sm leading-none">🙂</span>Cambiar icono
                   </button>
                   <button
                     onClick={() => { setLinkingNoteId(nId); setContextMenu(null); toast.info("Pulsa otra nota para enlazar"); }}
@@ -1057,8 +997,8 @@ const GraphView = () => {
         >
           <p className="text-xs font-body text-muted-foreground mb-2">Elige un color</p>
           <ColorPicker
-            value={categories.find(c => c.id === colorPickerCat.id)?.color || ""}
-            onChange={(color) => { updateCategory(colorPickerCat.id, { color }); setColorPickerCat(null); }}
+            value={notes.find(n => n.id === colorPickerCat.id)?.color || DEFAULT_CATEGORY_COLOR}
+            onChange={(color) => { updateNote(colorPickerCat.id, { color }); setColorPickerCat(null); }}
           />
         </div>
       )}
@@ -1072,8 +1012,8 @@ const GraphView = () => {
         >
           <p className="text-xs font-body text-muted-foreground mb-2">Elige un icono</p>
           <EmojiPicker
-            value={categories.find(c => c.id === iconPickerCat.id)?.icon}
-            onChange={(icon) => { updateCategory(iconPickerCat.id, { icon }); setIconPickerCat(null); }}
+            value={notes.find(n => n.id === iconPickerCat.id)?.icon || undefined}
+            onChange={(icon) => { updateNote(iconPickerCat.id, { icon }); setIconPickerCat(null); }}
           />
         </div>
       )}
@@ -1120,7 +1060,7 @@ const GraphView = () => {
         </button>
         <div className="relative">
           <button
-            onClick={(e) => { e.stopPropagation(); setShowProfileMenu(v => !v); setShowFilterPanel(false); setIsAddingCat(false); }}
+            onClick={(e) => { e.stopPropagation(); setShowProfileMenu(v => !v); setShowFilterPanel(false); }}
             className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
             title={user ? "Perfil" : "Iniciar sesión"}
           >
@@ -1178,7 +1118,7 @@ const GraphView = () => {
 
 
         <button
-          onClick={(e) => { e.stopPropagation(); setOffsets({}); fitFullTree(); setShowFilterPanel(false); setIsAddingCat(false); }}
+          onClick={(e) => { e.stopPropagation(); setOffsets({}); fitFullTree(); setShowFilterPanel(false); }}
           className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
           title="Restablecer vista del árbol"
         >
@@ -1186,7 +1126,7 @@ const GraphView = () => {
         </button>
 
         <button
-          onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); setIsAddingCat(false); }}
+          onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); }}
           className={`p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all flex items-center justify-center ${
             hiddenCategoryIds.size > 0 ? "text-primary" : "text-muted-foreground"
           }`}
@@ -1196,9 +1136,9 @@ const GraphView = () => {
           <span className="text-sm leading-none">{hiddenCategoryIds.size > 0 ? "🙈" : "👁"}</span>
         </button>
         <button
-          onClick={(e) => { e.stopPropagation(); setIsAddingCat(true); setShowFilterPanel(false); }}
+          onClick={(e) => { e.stopPropagation(); setCreateDialog({ x: size.w / 2, y: size.h / 2 }); setShowFilterPanel(false); }}
           className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
-          title="Nuevo tema"
+          title="Crear nuevo"
         >
           <Plus size={16} />
         </button>
@@ -1221,10 +1161,10 @@ const GraphView = () => {
               </button>
             )}
           </div>
-          {categories.length === 0 && (
-            <p className="text-sm md:text-[11px] font-body text-muted-foreground">No hay temas aún.</p>
+          {rootNotes.length === 0 && (
+            <p className="text-sm md:text-[11px] font-body text-muted-foreground">No hay ramas aún.</p>
           )}
-          {categories.map(cat => {
+          {rootNotes.map(cat => {
             const hidden = hiddenCategoryIds.has(cat.id);
             return (
               <button
@@ -1243,42 +1183,13 @@ const GraphView = () => {
               >
                 <span
                   className="w-3.5 h-3.5 md:w-3 md:h-3 rounded-full border"
-                  style={{ backgroundColor: `hsl(${cat.color})`, borderColor: `hsl(${cat.color})` }}
+                  style={{ backgroundColor: `hsl(${cat.color || DEFAULT_CATEGORY_COLOR})`, borderColor: `hsl(${cat.color || DEFAULT_CATEGORY_COLOR})` }}
                 />
-                <span className="flex-1 truncate text-foreground">{cat.icon} {cat.name}</span>
+                <span className="flex-1 truncate text-foreground">{cat.icon || ""} {cat.title}</span>
                 <span className="text-xs md:text-[10px] text-muted-foreground">{hidden ? "oculto" : "visible"}</span>
               </button>
             );
           })}
-        </div>
-      )}
-
-      {/* Add category panel */}
-      {isAddingCat && (
-        <div
-          className="fixed top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-3 min-w-[220px]"
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="flex gap-2">
-            <input
-              value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)}
-              className="w-11 md:w-10 text-center bg-muted rounded text-base md:text-sm p-2 md:p-1 min-h-11 md:min-h-0" maxLength={2}
-            />
-            <input
-              value={newCatName} onChange={e => setNewCatName(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleAddCategory()}
-              placeholder="Nombre del tema..." autoFocus
-              className="flex-1 bg-muted rounded text-base md:text-xs px-2 py-2.5 md:py-1 min-h-11 md:min-h-0 text-foreground outline-none font-body"
-            />
-          </div>
-          <div>
-            <p className="text-xs md:text-[10px] font-body text-muted-foreground mb-1">Color</p>
-            <ColorPicker value={newCatColor} onChange={setNewCatColor} />
-          </div>
-          <div className="flex gap-2">
-            <button onClick={handleAddCategory} className="flex-1 bg-primary text-primary-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0 font-medium">Añadir</button>
-            <button onClick={() => { setIsAddingCat(false); setNewCatName(""); }} className="flex-1 bg-muted text-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0">Cancelar</button>
-          </div>
         </div>
       )}
 
@@ -1293,7 +1204,7 @@ const GraphView = () => {
             onChange={e => setEditingCat({ ...editingCat, name: e.target.value })}
             onKeyDown={e => {
               if (e.key === "Enter" && editingCat.name.trim()) {
-                updateCategory(editingCat.id, { name: editingCat.name.trim() });
+                updateNote(editingCat.id, { title: editingCat.name.trim() });
                 setEditingCat(null);
               }
             }}
@@ -1304,7 +1215,7 @@ const GraphView = () => {
             <button
               onClick={() => {
                 if (editingCat.name.trim()) {
-                  updateCategory(editingCat.id, { name: editingCat.name.trim() });
+                  updateNote(editingCat.id, { title: editingCat.name.trim() });
                   setEditingCat(null);
                 }
               }}
@@ -1318,12 +1229,12 @@ const GraphView = () => {
       )}
 
       {/* Empty state */}
-      {categories.length === 0 && !loading && (
+      {rootNotes.length === 0 && !loading && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center text-muted-foreground">
             <p className="text-5xl mb-3">🌳</p>
             <p className="font-display text-xl">Empieza tu árbol</p>
-            <p className="text-sm mt-1 font-body">Pulsa + para crear el primer tema</p>
+            <p className="text-sm mt-1 font-body">Pulsa + para crear tu primera rama</p>
           </div>
         </div>
       )}
@@ -1367,9 +1278,9 @@ const GraphView = () => {
         placeholder={newNoteDialog?.type === "checklist" ? "Nombre de la lista..." : "Nombre de la nota..."}
         onSubmit={async (name) => {
           if (!newNoteDialog) return;
-          const { categoryId, parentNoteId, type } = newNoteDialog;
+          const { parentNoteId, type } = newNoteDialog;
           setNewNoteDialog(null);
-          const created = await addNote(categoryId, parentNoteId, type);
+          const created = await addNote(null, parentNoteId, type);
           if (created) updateNote(created.id, { title: name });
         }}
         onCancel={() => setNewNoteDialog(null)}
@@ -1377,18 +1288,28 @@ const GraphView = () => {
 
       <CreateNodeDialog
         open={createDialog !== null}
-        categories={categories}
         notes={notes}
-        onCreateCategory={(name, color) => {
-          addCategory(name, "📌", color, null);
+        brainName={brainName}
+        onCreateNote={async (parentNoteId, type, name, color) => {
           setCreateDialog(null);
-        }}
-        onCreateNote={async (categoryId, parentNoteId, type, name) => {
-          setCreateDialog(null);
-          const created = await addNote(categoryId, parentNoteId, type);
+          const created = await addNote(null, parentNoteId, type, parentNoteId ? null : color);
           if (created) updateNote(created.id, { title: name });
         }}
         onCancel={() => setCreateDialog(null)}
+      />
+
+      <MoveToDialog
+        open={movingNoteId !== null}
+        noteId={movingNoteId}
+        notes={notes}
+        brainName={brainName}
+        onMove={async (targetId) => {
+          if (!movingNoteId) return;
+          const id = movingNoteId;
+          setMovingNoteId(null);
+          await moveNote(id, targetId);
+        }}
+        onCancel={() => setMovingNoteId(null)}
       />
     </div>
   );
