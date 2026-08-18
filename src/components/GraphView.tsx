@@ -151,7 +151,7 @@ const GraphView = () => {
     const H = size.h;
     const isMobile = W < 640;
 
-    if (categories.length === 0) return { positions: pos, edges: eds, parentMap: parent };
+    if (rootNotes.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
     // Radii per depth (distance from parent)
     const radiusForDepth = (depth: number) => {
@@ -179,8 +179,10 @@ const GraphView = () => {
       parentY: number,
       outwardAngle: number,
       depth: number,
+      isMain = false,
+      overrideRadius?: number,
     ) => {
-      const R = radiusForDepth(depth);
+      const R = overrideRadius ?? radiusForDepth(depth);
       const children = notes.filter(n => n.parentNoteId === note.id);
       const expanded = note.isCollapsed === false && children.length > 0;
 
@@ -193,11 +195,12 @@ const GraphView = () => {
         id: `note-${note.id}`,
         x, y,
         type: "note", label: note.title, color,
-        categoryId: note.categoryId, noteId: note.id,
+        categoryId: note.categoryId ?? undefined, noteId: note.id,
         parentNoteId: note.parentNoteId,
         noteType: note.noteType,
         hasChildren: children.length > 0,
         isCollapsed: !expanded,
+        isMain,
         depth,
       });
 
@@ -224,10 +227,10 @@ const GraphView = () => {
     const rootY = hubY + trunkLength;
 
     const baseCatRadius = isMobile ? Math.max(96, Math.min(118, W * 0.29)) : 170;
-    const catCount = visibleCategories.length;
+    const catCount = visibleRoots.length;
 
-    // Radio adaptativo: garantizar separación mínima entre categorías vecinas
-    // sobre el arco de 180°.
+    // Radio adaptativo: garantizar separación mínima entre ramas principales
+    // vecinas sobre el arco de 180°.
     let catRadius = baseCatRadius;
     if (catCount >= 2) {
       const arcStep = Math.PI / (catCount - 1);
@@ -236,42 +239,21 @@ const GraphView = () => {
       catRadius = Math.max(baseCatRadius, requiredRadius);
     }
 
-    visibleCategories.forEach((cat, i) => {
+    visibleRoots.forEach((rootNote, i) => {
       // Angle range: -PI (left) to 0 (right), passing through -PI/2 (up).
       const t = catCount === 1 ? 0.5 : i / (catCount - 1);
       const catAngle = -Math.PI + t * Math.PI;
-
-      const rootNotes = notes.filter(n => n.categoryId === cat.id && !n.parentNoteId);
-      const catExpanded = cat.isCollapsed === false && rootNotes.length > 0;
-
-      // Empuje radial cuando la categoría está expandida.
-      const extra = catExpanded ? expansionOffset(rootNotes.length) : 0;
-      const cx = hubX + (catRadius + extra) * Math.cos(catAngle);
-      const cy = hubY + (catRadius + extra) * Math.sin(catAngle);
-
-      pos.push({
-        id: `cat-${cat.id}`,
-        x: cx, y: cy,
-        type: "category", label: cat.name, color: cat.color,
-        categoryId: cat.id, depth: 0,
-        hasChildren: rootNotes.length > 0,
-        isCollapsed: cat.isCollapsed,
-      });
-      parent[`cat-${cat.id}`] = "hub";
-      eds.push({ from: "hub", to: `cat-${cat.id}` });
-
-      if (catExpanded) {
-        const rnCount = rootNotes.length;
-        let spread = Math.min(Math.PI, Math.PI * 0.5 + rnCount * 0.22);
-        if (rnCount >= 4) spread = Math.max(spread, Math.PI * 0.82);
-        rootNotes.forEach((rn, i2) => {
-          const t2 = rnCount === 1 ? 0 : (i2 / (rnCount - 1)) - 0.5;
-          const angle = catAngle + t2 * spread;
-          eds.push({ from: `cat-${cat.id}`, to: `note-${rn.id}` });
-          parent[`note-${rn.id}`] = `cat-${cat.id}`;
-          placeNoteSubtree(rn, cat.color, cx, cy, angle, 0);
-        });
-      }
+      parent[`note-${rootNote.id}`] = "hub";
+      eds.push({ from: "hub", to: `note-${rootNote.id}` });
+      placeNoteSubtree(
+        rootNote,
+        rootNote.color || DEFAULT_CATEGORY_COLOR,
+        hubX, hubY,
+        catAngle,
+        0,
+        true,
+        catRadius,
+      );
     });
 
 
@@ -291,7 +273,8 @@ const GraphView = () => {
     });
     eds.push({ from: "root", to: "hub" });
     return { positions: pos, edges: eds, parentMap: parent };
-  }, [notes, categories, visibleCategories, brainName, size.w, size.h]);
+  }, [notes, rootNotes, visibleRoots, brainName, size.w, size.h]);
+
 
 
   // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
