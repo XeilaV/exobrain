@@ -2,7 +2,7 @@ import { useNotes } from "@/contexts/NotesContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine, Sun, Moon, History } from "lucide-react";
+import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine, Sun, Moon, History, Download } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
