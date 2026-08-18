@@ -2,7 +2,7 @@ import { useNotes } from "@/contexts/NotesContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine, Sun, Moon, History, Download } from "lucide-react";
+import { Plus, Trash2, Pencil, Palette, FileText, ListChecks, Pencil as Rename, User as UserIcon, LogOut, LogIn, Brain, TreePine, Sun, Moon, History, Download, Move } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import NotePostIt from "./NotePostIt";
 import BrainNameDialog from "./BrainNameDialog";
@@ -13,6 +13,7 @@ import EmojiPicker from "./EmojiPicker";
 import GoogleCalendarMenuItem from "./GoogleCalendarMenuItem";
 import HistoryDialog from "./HistoryDialog";
 import ExportDialog from "./ExportDialog";
+import MoveToDialog from "./MoveToDialog";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
@@ -33,6 +34,7 @@ interface NodePos {
   noteType?: "text" | "checklist";
   hasChildren?: boolean;
   isCollapsed?: boolean;
+  isMain?: boolean;
   depth: number;
 }
 
@@ -44,8 +46,8 @@ const NOTE_R = 12;
 
 const GraphView = () => {
   const {
-    notes, categories, addNote, addCategory, deleteNote, deleteCategory,
-    updateCategory, updateNote, linkNotes, unlinkNotes, toggleNoteCollapsed, toggleCategoryCollapsed,
+    notes, addNote, deleteNote, moveNote, canMoveTo,
+    updateNote, linkNotes, toggleNoteCollapsed,
     setSelectedNoteId, selectedNoteId, brainName, setBrainName, onboarded, setOnboarded, loading,
   } = useNotes();
 
@@ -62,14 +64,12 @@ const GraphView = () => {
   const [colorPickerCat, setColorPickerCat] = useState<{ id: string; x: number; y: number } | null>(null);
   const [iconPickerCat, setIconPickerCat] = useState<{ id: string; x: number; y: number } | null>(null);
   const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
-  const [isAddingCat, setIsAddingCat] = useState(false);
-  const [newCatName, setNewCatName] = useState("");
-  const [newCatIcon, setNewCatIcon] = useState("📌");
-  const [newCatColor, setNewCatColor] = useState(DEFAULT_CATEGORY_COLOR);
+  const [movingNoteId, setMovingNoteId] = useState<string | null>(null);
+  const [pickTargetForId, setPickTargetForId] = useState<string | null>(null);
   const [showBrainDialog, setShowBrainDialog] = useState(false);
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
-  const [newNoteDialog, setNewNoteDialog] = useState<{ categoryId: string; parentNoteId: string | null; type: "text" | "checklist" } | null>(null);
+  const [newNoteDialog, setNewNoteDialog] = useState<{ parentNoteId: string | null; type: "text" | "checklist" } | null>(null);
   const [createDialog, setCreateDialog] = useState<{ x: number; y: number } | null>(null);
   const canvasLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canvasLongPressStart = useRef<{ x: number; y: number } | null>(null);
@@ -103,13 +103,14 @@ const GraphView = () => {
     centerY: number;
   } | null>(null);
 
-  // Hidden category filter
+  // Hidden main-branch filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
   const [showFilterPanel, setShowFilterPanel] = useState(false);
 
-  const visibleCategories = useMemo(
-    () => categories.filter(c => !hiddenCategoryIds.has(c.id)),
-    [categories, hiddenCategoryIds],
+  const rootNotes = useMemo(() => notes.filter(n => !n.parentNoteId), [notes]);
+  const visibleRoots = useMemo(
+    () => rootNotes.filter(n => !hiddenCategoryIds.has(n.id)),
+    [rootNotes, hiddenCategoryIds],
   );
 
   // Resize observer
