@@ -1060,7 +1060,7 @@ const GraphView = () => {
         </button>
         <div className="relative">
           <button
-            onClick={(e) => { e.stopPropagation(); setShowProfileMenu(v => !v); setShowFilterPanel(false); setIsAddingCat(false); }}
+            onClick={(e) => { e.stopPropagation(); setShowProfileMenu(v => !v); setShowFilterPanel(false); }}
             className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
             title={user ? "Perfil" : "Iniciar sesión"}
           >
@@ -1118,7 +1118,7 @@ const GraphView = () => {
 
 
         <button
-          onClick={(e) => { e.stopPropagation(); setOffsets({}); fitFullTree(); setShowFilterPanel(false); setIsAddingCat(false); }}
+          onClick={(e) => { e.stopPropagation(); setOffsets({}); fitFullTree(); setShowFilterPanel(false); }}
           className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
           title="Restablecer vista del árbol"
         >
@@ -1126,7 +1126,7 @@ const GraphView = () => {
         </button>
 
         <button
-          onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); setIsAddingCat(false); }}
+          onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); }}
           className={`p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all flex items-center justify-center ${
             hiddenCategoryIds.size > 0 ? "text-primary" : "text-muted-foreground"
           }`}
@@ -1136,9 +1136,9 @@ const GraphView = () => {
           <span className="text-sm leading-none">{hiddenCategoryIds.size > 0 ? "🙈" : "👁"}</span>
         </button>
         <button
-          onClick={(e) => { e.stopPropagation(); setIsAddingCat(true); setShowFilterPanel(false); }}
+          onClick={(e) => { e.stopPropagation(); setCreateDialog({ x: size.w / 2, y: size.h / 2 }); setShowFilterPanel(false); }}
           className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
-          title="Nuevo tema"
+          title="Crear nuevo"
         >
           <Plus size={16} />
         </button>
@@ -1161,10 +1161,10 @@ const GraphView = () => {
               </button>
             )}
           </div>
-          {categories.length === 0 && (
-            <p className="text-sm md:text-[11px] font-body text-muted-foreground">No hay temas aún.</p>
+          {rootNotes.length === 0 && (
+            <p className="text-sm md:text-[11px] font-body text-muted-foreground">No hay ramas aún.</p>
           )}
-          {categories.map(cat => {
+          {rootNotes.map(cat => {
             const hidden = hiddenCategoryIds.has(cat.id);
             return (
               <button
@@ -1183,42 +1183,13 @@ const GraphView = () => {
               >
                 <span
                   className="w-3.5 h-3.5 md:w-3 md:h-3 rounded-full border"
-                  style={{ backgroundColor: `hsl(${cat.color})`, borderColor: `hsl(${cat.color})` }}
+                  style={{ backgroundColor: `hsl(${cat.color || DEFAULT_CATEGORY_COLOR})`, borderColor: `hsl(${cat.color || DEFAULT_CATEGORY_COLOR})` }}
                 />
-                <span className="flex-1 truncate text-foreground">{cat.icon} {cat.name}</span>
+                <span className="flex-1 truncate text-foreground">{cat.icon || ""} {cat.title}</span>
                 <span className="text-xs md:text-[10px] text-muted-foreground">{hidden ? "oculto" : "visible"}</span>
               </button>
             );
           })}
-        </div>
-      )}
-
-      {/* Add category panel */}
-      {isAddingCat && (
-        <div
-          className="fixed top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-3 min-w-[220px]"
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="flex gap-2">
-            <input
-              value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)}
-              className="w-11 md:w-10 text-center bg-muted rounded text-base md:text-sm p-2 md:p-1 min-h-11 md:min-h-0" maxLength={2}
-            />
-            <input
-              value={newCatName} onChange={e => setNewCatName(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleAddCategory()}
-              placeholder="Nombre del tema..." autoFocus
-              className="flex-1 bg-muted rounded text-base md:text-xs px-2 py-2.5 md:py-1 min-h-11 md:min-h-0 text-foreground outline-none font-body"
-            />
-          </div>
-          <div>
-            <p className="text-xs md:text-[10px] font-body text-muted-foreground mb-1">Color</p>
-            <ColorPicker value={newCatColor} onChange={setNewCatColor} />
-          </div>
-          <div className="flex gap-2">
-            <button onClick={handleAddCategory} className="flex-1 bg-primary text-primary-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0 font-medium">Añadir</button>
-            <button onClick={() => { setIsAddingCat(false); setNewCatName(""); }} className="flex-1 bg-muted text-foreground rounded text-sm md:text-xs py-2.5 md:py-1.5 min-h-11 md:min-h-0">Cancelar</button>
-          </div>
         </div>
       )}
 
@@ -1233,7 +1204,7 @@ const GraphView = () => {
             onChange={e => setEditingCat({ ...editingCat, name: e.target.value })}
             onKeyDown={e => {
               if (e.key === "Enter" && editingCat.name.trim()) {
-                updateCategory(editingCat.id, { name: editingCat.name.trim() });
+                updateNote(editingCat.id, { title: editingCat.name.trim() });
                 setEditingCat(null);
               }
             }}
@@ -1244,7 +1215,7 @@ const GraphView = () => {
             <button
               onClick={() => {
                 if (editingCat.name.trim()) {
-                  updateCategory(editingCat.id, { name: editingCat.name.trim() });
+                  updateNote(editingCat.id, { title: editingCat.name.trim() });
                   setEditingCat(null);
                 }
               }}
@@ -1258,12 +1229,12 @@ const GraphView = () => {
       )}
 
       {/* Empty state */}
-      {categories.length === 0 && !loading && (
+      {rootNotes.length === 0 && !loading && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center text-muted-foreground">
             <p className="text-5xl mb-3">🌳</p>
             <p className="font-display text-xl">Empieza tu árbol</p>
-            <p className="text-sm mt-1 font-body">Pulsa + para crear el primer tema</p>
+            <p className="text-sm mt-1 font-body">Pulsa + para crear tu primera rama</p>
           </div>
         </div>
       )}
@@ -1307,9 +1278,9 @@ const GraphView = () => {
         placeholder={newNoteDialog?.type === "checklist" ? "Nombre de la lista..." : "Nombre de la nota..."}
         onSubmit={async (name) => {
           if (!newNoteDialog) return;
-          const { categoryId, parentNoteId, type } = newNoteDialog;
+          const { parentNoteId, type } = newNoteDialog;
           setNewNoteDialog(null);
-          const created = await addNote(categoryId, parentNoteId, type);
+          const created = await addNote(null, parentNoteId, type);
           if (created) updateNote(created.id, { title: name });
         }}
         onCancel={() => setNewNoteDialog(null)}
@@ -1317,18 +1288,28 @@ const GraphView = () => {
 
       <CreateNodeDialog
         open={createDialog !== null}
-        categories={categories}
         notes={notes}
-        onCreateCategory={(name, color) => {
-          addCategory(name, "📌", color, null);
+        brainName={brainName}
+        onCreateNote={async (parentNoteId, type, name, color) => {
           setCreateDialog(null);
-        }}
-        onCreateNote={async (categoryId, parentNoteId, type, name) => {
-          setCreateDialog(null);
-          const created = await addNote(categoryId, parentNoteId, type);
+          const created = await addNote(null, parentNoteId, type, parentNoteId ? null : color);
           if (created) updateNote(created.id, { title: name });
         }}
         onCancel={() => setCreateDialog(null)}
+      />
+
+      <MoveToDialog
+        open={movingNoteId !== null}
+        noteId={movingNoteId}
+        notes={notes}
+        brainName={brainName}
+        onMove={async (targetId) => {
+          if (!movingNoteId) return;
+          const id = movingNoteId;
+          setMovingNoteId(null);
+          await moveNote(id, targetId);
+        }}
+        onCancel={() => setMovingNoteId(null)}
       />
     </div>
   );
