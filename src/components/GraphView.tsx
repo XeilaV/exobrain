@@ -726,7 +726,7 @@ const GraphView = () => {
   return (
     <div
       ref={containerRef}
-      className="flex-1 h-full w-full bg-background overflow-hidden relative select-none"
+      className="flex-1 h-full w-full canvas-wash overflow-hidden relative select-none"
       style={{ touchAction: "none" }}
       onPointerDown={(e) => {
         if (e.button !== 0 && e.pointerType === "mouse") return;
