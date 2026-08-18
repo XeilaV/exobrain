@@ -262,7 +262,7 @@ const GraphView = () => {
     pos.push({
       id: "hub",
       x: hubX, y: hubY,
-      type: "category", label: "", color: "30 8% 30%", depth: -1,
+      type: "category", label: "", color: "265 22% 52%", depth: -1,
     });
     parent["hub"] = "root";
 
@@ -270,7 +270,7 @@ const GraphView = () => {
       id: "root",
       x: hubX, y: rootY,
       type: "root", label: brainName || "ExoBrain",
-      color: "30 8% 25%", depth: -1,
+      color: "265 24% 44%", depth: -1,
     });
     eds.push({ from: "root", to: "hub" });
     return { positions: pos, edges: eds, parentMap: parent };
@@ -661,8 +661,8 @@ const GraphView = () => {
 
   // Grosor de rama según profundidad: grueso cerca del tronco, fino al ramificar
   const widthForDepth = (depth: number) => {
-    if (depth < 0) return 17;
-    return Math.max(1.6, 9.5 - depth * 2.1);
+    if (depth < 0) return 15;
+    return Math.max(1.5, 8.5 - depth * 2.3);
   };
 
   // Rama orgánica: contorno relleno con grosor decreciente (efecto 2.5D)
