@@ -611,6 +611,7 @@ const GraphView = () => {
           if (hasChildren && note) {
             lastExpandedRef.current = note.isCollapsed ? nodeId : null;
             lastCollapsedRef.current = note.isCollapsed ? null : nodeId;
+            setFocusNoteId(note.isCollapsed ? nId : null);
             toggleNoteCollapsed(nId);
           }
         } else if (nodeId === "root") {
@@ -634,6 +635,14 @@ const GraphView = () => {
             },
           });
           return;
+        }
+        setFocusNoteId(nId);
+        // En escritorio el panel lateral ocupa la derecha: desplazamos el mapa
+        // para que el nodo activo siga siendo visible.
+        if (window.innerWidth >= 768) {
+          const panelW = 400;
+          const overlapX = clientX - (window.innerWidth - panelW - 24);
+          if (overlapX > -40) setPan(p => ({ x: p.x - (overlapX + 80), y: p.y }));
         }
         setOpenPostIt({ noteId: nId, x: clientX, y: clientY });
       } else if (nodeId === "root") {
