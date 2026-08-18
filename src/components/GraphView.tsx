@@ -788,7 +788,7 @@ const GraphView = () => {
       }}
       onClick={() => {
         if (didPan.current) { didPan.current = false; return; }
-        if (openPostIt) setOpenPostIt(null);
+        if (openPostIt) { setOpenPostIt(null); setFocusNoteId(null); }
         if (contextMenu) setContextMenu(null);
         if (colorPickerCat) setColorPickerCat(null);
         if (linkingNoteId) { setLinkingNoteId(null); toast.info("Enlace cancelado"); }
