@@ -68,6 +68,7 @@ const GraphView = () => {
   const [pickTargetForId, setPickTargetForId] = useState<string | null>(null);
   const [showBrainDialog, setShowBrainDialog] = useState(false);
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
+  const [focusNoteId, setFocusNoteId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [newNoteDialog, setNewNoteDialog] = useState<{ parentNoteId: string | null; type: "text" | "checklist" } | null>(null);
   const [createDialog, setCreateDialog] = useState<{ x: number; y: number } | null>(null);
