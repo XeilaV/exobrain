@@ -612,15 +612,6 @@ const GraphView = () => {
             lastCollapsedRef.current = note.isCollapsed ? null : nodeId;
             toggleNoteCollapsed(nId);
           }
-        } else if (nodeId.startsWith("cat-")) {
-          const cId = nodeId.replace("cat-", "");
-          const cat = categories.find(c => c.id === cId);
-          const hasChildren = notes.some(n => n.categoryId === cId && !n.parentNoteId);
-          if (hasChildren && cat) {
-            lastExpandedRef.current = cat.isCollapsed ? nodeId : null;
-            lastCollapsedRef.current = cat.isCollapsed ? null : nodeId;
-            toggleCategoryCollapsed(cId);
-          }
         } else if (nodeId === "root") {
           setShowBrainDialog(true);
         }
@@ -648,17 +639,9 @@ const GraphView = () => {
         // single click on root opens rename
         setShowBrainDialog(true);
       }
-      // categories: single click does nothing (use long-press menu)
     }, 240);
-  }, [contextMenu, notes, categories, toggleNoteCollapsed, toggleCategoryCollapsed, linkingNoteId, linkNotes]);
+  }, [contextMenu, notes, toggleNoteCollapsed, linkingNoteId, linkNotes]);
 
-  const handleAddCategory = () => {
-    if (newCatName.trim()) {
-      addCategory(newCatName.trim(), newCatIcon, newCatColor, null);
-      setNewCatName(""); setNewCatIcon("📌"); setNewCatColor(DEFAULT_CATEGORY_COLOR);
-      setIsAddingCat(false);
-    }
-  };
 
   // Helper: bezier path between two nodes
   const pathBetween = (x1: number, y1: number, x2: number, y2: number) => {
