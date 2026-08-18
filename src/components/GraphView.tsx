@@ -650,6 +650,63 @@ const GraphView = () => {
     return `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
   };
 
+  // Grosor de rama según profundidad: grueso cerca del tronco, fino al ramificar
+  const widthForDepth = (depth: number) => {
+    if (depth < 0) return 17;
+    return Math.max(1.6, 9.5 - depth * 2.1);
+  };
+
+  // Rama orgánica: contorno relleno con grosor decreciente (efecto 2.5D)
+  const taperedBranch = (
+    x1: number, y1: number, x2: number, y2: number, w1: number, w2: number,
+  ) => {
+    const midY = (y1 + y2) / 2;
+    const p0 = { x: x1, y: y1 }, p1 = { x: x1, y: midY }, p2 = { x: x2, y: midY }, p3 = { x: x2, y: y2 };
+    const N = 22;
+    const left: string[] = [];
+    const right: string[] = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const mt = 1 - t;
+      const px = mt * mt * mt * p0.x + 3 * mt * mt * t * p1.x + 3 * mt * t * t * p2.x + t * t * t * p3.x;
+      const py = mt * mt * mt * p0.y + 3 * mt * mt * t * p1.y + 3 * mt * t * t * p2.y + t * t * t * p3.y;
+      const dx = 3 * mt * mt * (p1.x - p0.x) + 6 * mt * t * (p2.x - p1.x) + 3 * t * t * (p3.x - p2.x);
+      const dy = 3 * mt * mt * (p1.y - p0.y) + 6 * mt * t * (p2.y - p1.y) + 3 * t * t * (p3.y - p2.y);
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      // easing para que el adelgazamiento sea orgánico, no lineal
+      const e = t * t * (3 - 2 * t);
+      const w = (w1 + (w2 - w1) * e) / 2;
+      left.push(`${(px + nx * w).toFixed(2)} ${(py + ny * w).toFixed(2)}`);
+      right.push(`${(px - nx * w).toFixed(2)} ${(py - ny * w).toFixed(2)}`);
+    }
+    return `M ${left.join(" L ")} L ${right.reverse().join(" L ")} Z`;
+  };
+
+  // Rama con protagonismo: subárbol de la raíz del nodo enfocado
+  const focusIds = useMemo(() => {
+    if (!focusNoteId) return null;
+    let cur = notes.find(n => n.id === focusNoteId);
+    if (!cur) return null;
+    while (cur.parentNoteId) {
+      const p = notes.find(n => n.id === cur!.parentNoteId);
+      if (!p) break;
+      cur = p;
+    }
+    const ids = new Set<string>(["root", "hub"]);
+    const visit = (id: string) => {
+      ids.add(`note-${id}`);
+      notes.filter(n => n.parentNoteId === id).forEach(c => visit(c.id));
+    };
+    visit(cur.id);
+    return ids;
+  }, [focusNoteId, notes]);
+
+  const dimFor = useCallback((id: string) => (focusIds && !focusIds.has(id) ? 0.3 : 1), [focusIds]);
+
+  // Nivel de detalle según zoom: con la vista alejada solo ramas principales
+  const showLeafLabels = viewZoom > 0.62;
+
   // Link edges (horizontal between notes)
   const linkEdges = useMemo(() => {
     const out: { from: string; to: string }[] = [];
@@ -664,6 +721,7 @@ const GraphView = () => {
     });
     return out;
   }, [notes, positions]);
+
 
   return (
     <div
