@@ -189,8 +189,8 @@ const ChatPanel = () => {
 
 
   const panelClasses = isMobile
-    ? "fixed bottom-4 left-3 right-3 h-[70vh] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden z-50"
-    : "fixed bottom-6 right-6 w-96 h-[500px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden z-50";
+    ? "fixed bottom-4 left-3 right-3 h-[70vh] surface-panel rounded-2xl flex flex-col overflow-hidden z-50"
+    : "fixed bottom-6 right-6 w-96 h-[500px] surface-panel rounded-2xl flex flex-col overflow-hidden z-50";
 
   const toggleClasses = isMobile
     ? "fixed bottom-28 right-4 p-3.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-opacity z-50"
@@ -263,7 +263,7 @@ const ChatPanel = () => {
             {/* Header (drag handle) */}
             <div
               onPointerDown={(e) => dragControls.start(e)}
-              className="flex items-center justify-between p-4 border-b border-border bg-chat shrink-0 cursor-grab active:cursor-grabbing touch-none select-none"
+              className="flex items-center justify-between p-4 border-b border-border/60 shrink-0 cursor-grab active:cursor-grabbing touch-none select-none"
             >
               <div className="flex items-center gap-2 pointer-events-none">
                 <Sparkles size={18} className="text-primary" />
@@ -371,7 +371,7 @@ const ChatPanel = () => {
             )}
 
             {/* Input */}
-            <div className="p-3 border-t border-border bg-chat shrink-0">
+            <div className="p-3 border-t border-border/60 shrink-0">
               <div className="flex items-end gap-2">
                 <div className="flex gap-1 shrink-0 self-end">
                   <button

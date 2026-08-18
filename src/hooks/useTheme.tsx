@@ -4,10 +4,10 @@ type Theme = "light" | "dark";
 const STORAGE_KEY = "exobrain-theme";
 
 const getInitial = (): Theme => {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return "light";
   const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
   if (stored === "light" || stored === "dark") return stored;
-  return "dark";
+  return "light";
 };
 
 const apply = (t: Theme) => {

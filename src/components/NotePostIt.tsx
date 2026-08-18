@@ -265,27 +265,30 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   };
 
   const isMobile = window.innerWidth < 768;
-  const fullW = window.innerWidth - 16;
-  const fullH = window.innerHeight - 24;
-  const postItWidth = isMobile || maximized ? fullW : Math.min(420, window.innerWidth - 32);
-  const postItHeight = isMobile || maximized ? fullH : Math.min(620, window.innerHeight - 80);
-  let left = isMobile || maximized ? 8 : position.x - postItWidth / 2;
-  let top = isMobile || maximized ? 12 : position.y - postItHeight / 2;
-  left = Math.max(8, Math.min(window.innerWidth - postItWidth - 8, left));
-  top = Math.max(12, Math.min(window.innerHeight - postItHeight - 12, top));
+  // Panel lateral contextual (escritorio) / hoja inferior casi completa (móvil)
+  const panelWidth = isMobile
+    ? window.innerWidth - 12
+    : maximized
+      ? Math.min(760, window.innerWidth - 48)
+      : Math.min(400, window.innerWidth - 32);
+  const panelHeight = isMobile ? Math.round(window.innerHeight * 0.92) : window.innerHeight - 32;
+  const left = isMobile ? 6 : window.innerWidth - panelWidth - 16;
+  const top = isMobile ? window.innerHeight - panelHeight - 6 : 16;
 
   return (
     <>
     <motion.div
-      initial={{ opacity: 0, scale: 0.85 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.85 }}
-      className="fixed z-50 bg-card border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
-      style={{ left, top, width: postItWidth, height: postItHeight }}
+      initial={{ opacity: 0, x: isMobile ? 0 : 28, y: isMobile ? 28 : 0 }}
+      animate={{ opacity: 1, x: 0, y: 0 }}
+      exit={{ opacity: 0, x: isMobile ? 0 : 28, y: isMobile ? 28 : 0 }}
+      transition={{ type: "spring", stiffness: 320, damping: 32 }}
+      className="fixed z-50 surface-panel rounded-2xl flex flex-col overflow-hidden"
+      style={{ left, top, width: panelWidth, height: panelHeight }}
       onClick={e => e.stopPropagation()}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/50 shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60 shrink-0">
+
         <div className="flex items-center gap-1 text-xs md:text-[10px] text-muted-foreground font-body flex-1 min-w-0 flex-wrap">
           <span className="flex items-center gap-0.5">{brainName || "ExoBrain"}</span>
           {ancestorPath.map((a) => (

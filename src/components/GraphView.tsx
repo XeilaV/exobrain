@@ -68,6 +68,7 @@ const GraphView = () => {
   const [pickTargetForId, setPickTargetForId] = useState<string | null>(null);
   const [showBrainDialog, setShowBrainDialog] = useState(false);
   const [linkingNoteId, setLinkingNoteId] = useState<string | null>(null);
+  const [focusNoteId, setFocusNoteId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [newNoteDialog, setNewNoteDialog] = useState<{ parentNoteId: string | null; type: "text" | "checklist" } | null>(null);
   const [createDialog, setCreateDialog] = useState<{ x: number; y: number } | null>(null);
@@ -261,7 +262,7 @@ const GraphView = () => {
     pos.push({
       id: "hub",
       x: hubX, y: hubY,
-      type: "category", label: "", color: "30 8% 30%", depth: -1,
+      type: "category", label: "", color: "265 22% 52%", depth: -1,
     });
     parent["hub"] = "root";
 
@@ -269,7 +270,7 @@ const GraphView = () => {
       id: "root",
       x: hubX, y: rootY,
       type: "root", label: brainName || "ExoBrain",
-      color: "30 8% 25%", depth: -1,
+      color: "265 24% 44%", depth: -1,
     });
     eds.push({ from: "root", to: "hub" });
     return { positions: pos, edges: eds, parentMap: parent };
@@ -610,6 +611,7 @@ const GraphView = () => {
           if (hasChildren && note) {
             lastExpandedRef.current = note.isCollapsed ? nodeId : null;
             lastCollapsedRef.current = note.isCollapsed ? null : nodeId;
+            setFocusNoteId(note.isCollapsed ? nId : null);
             toggleNoteCollapsed(nId);
           }
         } else if (nodeId === "root") {
@@ -634,6 +636,14 @@ const GraphView = () => {
           });
           return;
         }
+        setFocusNoteId(nId);
+        // En escritorio el panel lateral ocupa la derecha: desplazamos el mapa
+        // para que el nodo activo siga siendo visible.
+        if (window.innerWidth >= 768) {
+          const panelW = 400;
+          const overlapX = clientX - (window.innerWidth - panelW - 24);
+          if (overlapX > -40) setPan(p => ({ x: p.x - (overlapX + 80), y: p.y }));
+        }
         setOpenPostIt({ noteId: nId, x: clientX, y: clientY });
       } else if (nodeId === "root") {
         // single click on root opens rename
@@ -648,6 +658,63 @@ const GraphView = () => {
     const midY = (y1 + y2) / 2;
     return `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
   };
+
+  // Grosor de rama según profundidad: grueso cerca del tronco, fino al ramificar
+  const widthForDepth = (depth: number) => {
+    if (depth < 0) return 15;
+    return Math.max(1.5, 8.5 - depth * 2.3);
+  };
+
+  // Rama orgánica: contorno relleno con grosor decreciente (efecto 2.5D)
+  const taperedBranch = (
+    x1: number, y1: number, x2: number, y2: number, w1: number, w2: number,
+  ) => {
+    const midY = (y1 + y2) / 2;
+    const p0 = { x: x1, y: y1 }, p1 = { x: x1, y: midY }, p2 = { x: x2, y: midY }, p3 = { x: x2, y: y2 };
+    const N = 22;
+    const left: string[] = [];
+    const right: string[] = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const mt = 1 - t;
+      const px = mt * mt * mt * p0.x + 3 * mt * mt * t * p1.x + 3 * mt * t * t * p2.x + t * t * t * p3.x;
+      const py = mt * mt * mt * p0.y + 3 * mt * mt * t * p1.y + 3 * mt * t * t * p2.y + t * t * t * p3.y;
+      const dx = 3 * mt * mt * (p1.x - p0.x) + 6 * mt * t * (p2.x - p1.x) + 3 * t * t * (p3.x - p2.x);
+      const dy = 3 * mt * mt * (p1.y - p0.y) + 6 * mt * t * (p2.y - p1.y) + 3 * t * t * (p3.y - p2.y);
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      // easing para que el adelgazamiento sea orgánico, no lineal
+      const e = t * t * (3 - 2 * t);
+      const w = (w1 + (w2 - w1) * e) / 2;
+      left.push(`${(px + nx * w).toFixed(2)} ${(py + ny * w).toFixed(2)}`);
+      right.push(`${(px - nx * w).toFixed(2)} ${(py - ny * w).toFixed(2)}`);
+    }
+    return `M ${left.join(" L ")} L ${right.reverse().join(" L ")} Z`;
+  };
+
+  // Rama con protagonismo: subárbol de la raíz del nodo enfocado
+  const focusIds = useMemo(() => {
+    if (!focusNoteId) return null;
+    let cur = notes.find(n => n.id === focusNoteId);
+    if (!cur) return null;
+    while (cur.parentNoteId) {
+      const p = notes.find(n => n.id === cur!.parentNoteId);
+      if (!p) break;
+      cur = p;
+    }
+    const ids = new Set<string>(["root", "hub"]);
+    const visit = (id: string) => {
+      ids.add(`note-${id}`);
+      notes.filter(n => n.parentNoteId === id).forEach(c => visit(c.id));
+    };
+    visit(cur.id);
+    return ids;
+  }, [focusNoteId, notes]);
+
+  const dimFor = useCallback((id: string) => (focusIds && !focusIds.has(id) ? 0.3 : 1), [focusIds]);
+
+  // Nivel de detalle según zoom: con la vista alejada solo ramas principales
+  const showLeafLabels = viewZoom > 0.62;
 
   // Link edges (horizontal between notes)
   const linkEdges = useMemo(() => {
@@ -664,10 +731,11 @@ const GraphView = () => {
     return out;
   }, [notes, positions]);
 
+
   return (
     <div
       ref={containerRef}
-      className="flex-1 h-full w-full bg-background overflow-hidden relative select-none"
+      className="flex-1 h-full w-full canvas-wash overflow-hidden relative select-none"
       style={{ touchAction: "none" }}
       onPointerDown={(e) => {
         if (e.button !== 0 && e.pointerType === "mouse") return;
@@ -729,7 +797,7 @@ const GraphView = () => {
       }}
       onClick={() => {
         if (didPan.current) { didPan.current = false; return; }
-        if (openPostIt) setOpenPostIt(null);
+        if (openPostIt) { setOpenPostIt(null); setFocusNoteId(null); }
         if (contextMenu) setContextMenu(null);
         if (colorPickerCat) setColorPickerCat(null);
         if (linkingNoteId) { setLinkingNoteId(null); toast.info("Enlace cancelado"); }
@@ -752,28 +820,58 @@ const GraphView = () => {
           willChange: "transform",
         }}
       >
-      {/* SVG branches */}
+      {/* SVG branches (orgánicas, con grosor decreciente) */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0, overflow: "visible" }}>
+        <defs>
+          {edges.map((edge, idx) => {
+            const from = getPos(edge.from);
+            const to = getPos(edge.to);
+            if (!from || !to) return null;
+            return (
+              <linearGradient
+                key={`bg-${idx}`}
+                id={`branch-${idx}`}
+                gradientUnits="userSpaceOnUse"
+                x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+              >
+                <stop offset="0%" stopColor={`hsl(${from.type === "note" ? from.color : to.color})`} stopOpacity={0.85} />
+                <stop offset="100%" stopColor={`hsl(${to.color})`} stopOpacity={0.6} />
+              </linearGradient>
+            );
+          })}
+          <radialGradient id="hub-glow">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.32} />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+          </radialGradient>
+        </defs>
+
+        {/* Halo bajo el tronco */}
+        {(() => {
+          const hub = getPos("hub");
+          if (!hub) return null;
+          return <circle cx={hub.x} cy={hub.y} r={140} fill="url(#hub-glow)" />;
+        })()}
+
         {edges.map((edge, idx) => {
           const from = getPos(edge.from);
           const to = getPos(edge.to);
           if (!from || !to) return null;
-          // Use child color for the branch
-          const stroke = `hsl(${to.color})`;
-          // If terminating at the root text node, stop above the text so the
-          // trunk visibly ends where the label begins (no line crossing text).
           const toY = edge.to === "root" ? to.y - ROOT_R : to.y;
+          const w1 = widthForDepth(from.type === "note" ? from.depth : -1);
+          const w2 = widthForDepth(to.type === "note" ? to.depth : -1);
+          const d = taperedBranch(from.x, from.y, to.x, toY, w1, w2);
+          const opacity = Math.min(dimFor(edge.to), dimFor(edge.from));
           return (
-            <path
-              key={`be-${idx}`}
-              d={pathBetween(from.x, from.y, to.x, toY)}
-              stroke={stroke}
-              strokeWidth={2}
-              strokeOpacity={0.5}
-              fill="none"
-            />
+            <g key={`be-${idx}`} style={{ opacity, transition: "opacity 400ms ease" }}>
+              {/* volumen: capa exterior difusa */}
+              <path d={taperedBranch(from.x, from.y, to.x, toY, w1 + 5, w2 + 2.5)} fill={`hsl(${to.color})`} fillOpacity={0.1} />
+              <path d={d} fill={`url(#branch-${idx})`} />
+              {/* luz superior sutil para el efecto 2.5D */}
+              <path d={taperedBranch(from.x, from.y - 0.9, to.x, toY - 0.6, w1 * 0.32, w2 * 0.32)} fill="hsl(0 0% 100%)" fillOpacity={0.22} />
+            </g>
           );
         })}
+
         {linkEdges.map((edge, idx) => {
           const from = getPos(edge.from);
           const to = getPos(edge.to);
@@ -782,9 +880,10 @@ const GraphView = () => {
             <line
               key={`le-${idx}`}
               x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-              stroke="hsl(var(--muted-foreground) / 0.4)"
-              strokeWidth={1.5}
-              strokeDasharray="5 4"
+              stroke="hsl(var(--muted-foreground) / 0.35)"
+              strokeWidth={1.2}
+              strokeDasharray="5 5"
+              style={{ opacity: Math.min(dimFor(edge.from), dimFor(edge.to)), transition: "opacity 400ms ease" }}
             />
           );
         })}
@@ -802,13 +901,20 @@ const GraphView = () => {
           const showCollapsedDot =
             node.type === "note" && node.hasChildren && node.isCollapsed;
           const nodeNote = node.noteId ? notes.find(n => n.id === node.noteId) : null;
-
+          const dim = dimFor(node.id);
+          const isFocused = !!focusIds && focusIds.has(node.id);
+          const childCount = nodeNote ? notes.filter(n => n.parentNoteId === nodeNote.id).length : 0;
 
           return (
             <motion.div
               key={node.id}
               initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1, left: node.x - r, top: node.y - r }}
+              animate={{
+                opacity: dim,
+                scale: isFocused && node.type === "note" ? 1.06 : 1,
+                left: node.x - r,
+                top: node.y - r,
+              }}
               exit={{ opacity: 0, scale: 0 }}
               transition={
                 dragState.current?.nodeId === node.id
@@ -817,7 +923,11 @@ const GraphView = () => {
               }
               className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing touch-none"
               data-graph-node
-              style={{ width: r * 2, zIndex: isRoot ? 6 : isCat ? 4 : 2 }}
+              style={{
+                width: r * 2,
+                zIndex: isRoot ? 6 : isCat ? 4 : 2,
+                filter: dim < 1 ? "blur(1.1px)" : "none",
+              }}
               onPointerDown={e => {
                 e.stopPropagation();
                 didDrag.current = false;
@@ -835,13 +945,20 @@ const GraphView = () => {
               onPointerLeave={cancelLongPress}
               onClick={e => { e.stopPropagation(); handleNodeClick(node.id, e.clientX, e.clientY); }}
             >
-              {/* Label below circle for main branches (tree is inverted) */}
+              {/* Etiqueta píldora bajo las ramas principales */}
               {isMainNote && (
                 <span
-                  className="absolute whitespace-nowrap font-display text-xs font-semibold text-foreground"
-                  style={{ top: r * 2 + 6, left: '50%', transform: 'translateX(-50%)' }}
+                  className="absolute whitespace-nowrap surface-glass rounded-full px-2.5 py-1 flex items-center gap-1.5 font-display text-xs font-semibold text-foreground"
+                  style={{ top: r * 2 + 8, left: '50%', transform: 'translateX(-50%)' }}
                 >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: `hsl(${node.color})` }}
+                  />
                   {nodeNote?.icon ? `${nodeNote.icon} ` : ""}{node.label}
+                  {childCount > 0 && (
+                    <span className="text-[9px] font-body text-muted-foreground">{childCount}</span>
+                  )}
                 </span>
               )}
 
@@ -860,35 +977,43 @@ const GraphView = () => {
                 </div>
               ) : (
                 <div
-                  className={`rounded-full flex items-center justify-center shadow-md border-2 transition-all ${
+                  className={`rounded-full flex items-center justify-center shadow-node transition-all ${
                     isLinkSource ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
                   }`}
                   style={{
                     width: r * 2,
                     height: r * 2,
-                    backgroundColor: `hsl(${node.color})`,
-                    borderColor: `hsl(${node.color})`,
+                    background: `radial-gradient(circle at 32% 28%, hsl(0 0% 100% / 0.55), hsl(${node.color}) 62%)`,
+                    border: `1.5px solid hsl(${node.color})`,
                   }}
                 >
                   {showCollapsedDot && (
                     <span
                       className="rounded-full"
-                      style={{ width: 6, height: 6, backgroundColor: "hsl(var(--background))" }}
+                      style={{ width: 6, height: 6, backgroundColor: "hsl(var(--card))" }}
                     />
                   )}
                   {node.type === "note" && !showCollapsedDot && (
-                    <span className="text-[10px]" style={{ color: "hsl(var(--background))" }}>
+                    <span className="text-[10px]" style={{ color: "hsl(var(--card))" }}>
                       {node.noteType === "checklist" ? "☑" : ""}
                     </span>
                   )}
                 </div>
               )}
 
-              {/* Label above circle for notes (children grow upward) */}
+              {/* Etiqueta sobre el nodo para notas hijas */}
               {node.type === "note" && !isMainNote && (
                 <span
-                  className="absolute font-body text-[9px] leading-tight text-foreground/80 whitespace-nowrap overflow-hidden text-ellipsis text-center block"
-                  style={{ bottom: r * 2 + 3, left: '50%', transform: 'translateX(-50%)', width: 54 }}
+                  className="absolute font-body text-[9px] leading-tight text-foreground/85 whitespace-nowrap overflow-hidden text-ellipsis text-center block px-1.5 py-0.5 rounded-full"
+                  style={{
+                    bottom: r * 2 + 4,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 60,
+                    opacity: showLeafLabels ? 1 : 0,
+                    backgroundColor: "hsl(var(--glass-strong))",
+                    transition: "opacity 250ms ease",
+                  }}
                 >
                   {node.label}
                 </span>
@@ -897,6 +1022,7 @@ const GraphView = () => {
           );
         })}
       </AnimatePresence>
+
       </div>
 
       {/* Context menu */}
@@ -906,7 +1032,7 @@ const GraphView = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[170px]"
+            className="fixed z-50 surface-panel rounded-2xl py-1 min-w-[170px]"
             style={{ left: Math.min(contextMenu.x, size.w - 180), top: Math.min(contextMenu.y, size.h - 200) }}
             onClick={e => e.stopPropagation()}
           >
@@ -991,7 +1117,7 @@ const GraphView = () => {
       {/* Color picker (long-press category) */}
       {colorPickerCat && (
         <div
-          className="fixed z-50 bg-card border border-border rounded-lg shadow-xl p-3"
+          className="fixed z-50 surface-panel rounded-2xl p-3"
           style={{ left: Math.min(colorPickerCat.x, size.w - 180), top: Math.min(colorPickerCat.y, size.h - 140) }}
           onClick={e => e.stopPropagation()}
         >
@@ -1006,7 +1132,7 @@ const GraphView = () => {
       {/* Icon picker (category) */}
       {iconPickerCat && (
         <div
-          className="fixed z-50 bg-card border border-border rounded-lg shadow-xl p-3"
+          className="fixed z-50 surface-panel rounded-2xl p-3"
           style={{ left: Math.min(iconPickerCat.x, size.w - 280), top: Math.min(iconPickerCat.y, size.h - 260) }}
           onClick={e => e.stopPropagation()}
         >
@@ -1052,7 +1178,7 @@ const GraphView = () => {
       <div className="fixed top-3 right-3 z-30 flex gap-2">
         <button
           onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
           title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
           aria-label="Alternar modo oscuro"
         >
@@ -1061,14 +1187,14 @@ const GraphView = () => {
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShowProfileMenu(v => !v); setShowFilterPanel(false); }}
-            className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
+            className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
             title={user ? "Perfil" : "Iniciar sesión"}
           >
             <UserIcon size={16} />
           </button>
           {showProfileMenu && (
             <div
-              className="absolute right-0 top-11 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[200px]"
+              className="absolute right-0 top-12 surface-panel rounded-2xl py-1 min-w-[200px]"
               onClick={e => e.stopPropagation()}
             >
               {user ? (
@@ -1118,8 +1244,8 @@ const GraphView = () => {
 
 
         <button
-          onClick={(e) => { e.stopPropagation(); setOffsets({}); fitFullTree(); setShowFilterPanel(false); }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
+          onClick={(e) => { e.stopPropagation(); setOffsets({}); setFocusNoteId(null); fitFullTree(); setShowFilterPanel(false); }}
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
           title="Restablecer vista del árbol"
         >
           <TreePine size={16} />
@@ -1127,7 +1253,7 @@ const GraphView = () => {
 
         <button
           onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); }}
-          className={`p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all flex items-center justify-center ${
+          className={`p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 transition-all flex items-center justify-center ${
             hiddenCategoryIds.size > 0 ? "text-primary" : "text-muted-foreground"
           }`}
           title="Filtrar temas"
@@ -1137,7 +1263,7 @@ const GraphView = () => {
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); setCreateDialog({ x: size.w / 2, y: size.h / 2 }); setShowFilterPanel(false); }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
           title="Crear nuevo"
         >
           <Plus size={16} />
@@ -1147,7 +1273,7 @@ const GraphView = () => {
       {/* Filter panel */}
       {showFilterPanel && (
         <div
-          className="fixed top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[220px] max-h-[60vh] overflow-y-auto"
+          className="fixed top-16 right-3 z-30 surface-panel rounded-2xl p-3 space-y-2 min-w-[220px] max-h-[60vh] overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-1">
@@ -1196,7 +1322,7 @@ const GraphView = () => {
       {/* Edit category name */}
       {editingCat && (
         <div
-          className="fixed top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[200px]"
+          className="fixed top-16 right-3 z-30 surface-panel rounded-2xl p-3 space-y-2 min-w-[200px]"
           onClick={e => e.stopPropagation()}
         >
           <input
@@ -1265,7 +1391,7 @@ const GraphView = () => {
             key={openPostIt.noteId}
             noteId={openPostIt.noteId}
             position={{ x: openPostIt.x, y: openPostIt.y }}
-            onClose={() => { setOpenPostIt(null); setSelectedNoteId(null); }}
+            onClose={() => { setOpenPostIt(null); setSelectedNoteId(null); setFocusNoteId(null); }}
           />
         )}
       </AnimatePresence>
