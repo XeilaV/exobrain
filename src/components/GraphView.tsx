@@ -54,6 +54,7 @@ const GraphView = () => {
   const { theme, toggleTheme } = useTheme();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 1200, h: 800 });
   const [openPostIt, setOpenPostIt] = useState<{ noteId: string; x: number; y: number } | null>(null);
