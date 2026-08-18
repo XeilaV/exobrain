@@ -1345,6 +1345,8 @@ const GraphView = () => {
 
       <HistoryDialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog} />
 
+      <ExportDialog open={showExportDialog} onOpenChange={setShowExportDialog} />
+
       {/* Post-it overlay */}
       <AnimatePresence>
         {openPostIt && (
