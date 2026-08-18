@@ -997,8 +997,8 @@ const GraphView = () => {
         >
           <p className="text-xs font-body text-muted-foreground mb-2">Elige un color</p>
           <ColorPicker
-            value={categories.find(c => c.id === colorPickerCat.id)?.color || ""}
-            onChange={(color) => { updateCategory(colorPickerCat.id, { color }); setColorPickerCat(null); }}
+            value={notes.find(n => n.id === colorPickerCat.id)?.color || DEFAULT_CATEGORY_COLOR}
+            onChange={(color) => { updateNote(colorPickerCat.id, { color }); setColorPickerCat(null); }}
           />
         </div>
       )}
@@ -1012,8 +1012,8 @@ const GraphView = () => {
         >
           <p className="text-xs font-body text-muted-foreground mb-2">Elige un icono</p>
           <EmojiPicker
-            value={categories.find(c => c.id === iconPickerCat.id)?.icon}
-            onChange={(icon) => { updateCategory(iconPickerCat.id, { icon }); setIconPickerCat(null); }}
+            value={notes.find(n => n.id === iconPickerCat.id)?.icon || undefined}
+            onChange={(icon) => { updateNote(iconPickerCat.id, { icon }); setIconPickerCat(null); }}
           />
         </div>
       )}
