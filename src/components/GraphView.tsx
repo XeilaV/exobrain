@@ -811,28 +811,58 @@ const GraphView = () => {
           willChange: "transform",
         }}
       >
-      {/* SVG branches */}
+      {/* SVG branches (orgánicas, con grosor decreciente) */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0, overflow: "visible" }}>
+        <defs>
+          {edges.map((edge, idx) => {
+            const from = getPos(edge.from);
+            const to = getPos(edge.to);
+            if (!from || !to) return null;
+            return (
+              <linearGradient
+                key={`bg-${idx}`}
+                id={`branch-${idx}`}
+                gradientUnits="userSpaceOnUse"
+                x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+              >
+                <stop offset="0%" stopColor={`hsl(${from.type === "note" ? from.color : to.color})`} stopOpacity={0.85} />
+                <stop offset="100%" stopColor={`hsl(${to.color})`} stopOpacity={0.6} />
+              </linearGradient>
+            );
+          })}
+          <radialGradient id="hub-glow">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.32} />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+          </radialGradient>
+        </defs>
+
+        {/* Halo bajo el tronco */}
+        {(() => {
+          const hub = getPos("hub");
+          if (!hub) return null;
+          return <circle cx={hub.x} cy={hub.y} r={140} fill="url(#hub-glow)" />;
+        })()}
+
         {edges.map((edge, idx) => {
           const from = getPos(edge.from);
           const to = getPos(edge.to);
           if (!from || !to) return null;
-          // Use child color for the branch
-          const stroke = `hsl(${to.color})`;
-          // If terminating at the root text node, stop above the text so the
-          // trunk visibly ends where the label begins (no line crossing text).
           const toY = edge.to === "root" ? to.y - ROOT_R : to.y;
+          const w1 = widthForDepth(from.type === "note" ? from.depth : -1);
+          const w2 = widthForDepth(to.type === "note" ? to.depth : -1);
+          const d = taperedBranch(from.x, from.y, to.x, toY, w1, w2);
+          const opacity = Math.min(dimFor(edge.to), dimFor(edge.from));
           return (
-            <path
-              key={`be-${idx}`}
-              d={pathBetween(from.x, from.y, to.x, toY)}
-              stroke={stroke}
-              strokeWidth={2}
-              strokeOpacity={0.5}
-              fill="none"
-            />
+            <g key={`be-${idx}`} style={{ opacity, transition: "opacity 400ms ease" }}>
+              {/* volumen: capa exterior difusa */}
+              <path d={taperedBranch(from.x, from.y, to.x, toY, w1 + 5, w2 + 2.5)} fill={`hsl(${to.color})`} fillOpacity={0.1} />
+              <path d={d} fill={`url(#branch-${idx})`} />
+              {/* luz superior sutil para el efecto 2.5D */}
+              <path d={taperedBranch(from.x, from.y - 0.9, to.x, toY - 0.6, w1 * 0.32, w2 * 0.32)} fill="hsl(0 0% 100%)" fillOpacity={0.22} />
+            </g>
           );
         })}
+
         {linkEdges.map((edge, idx) => {
           const from = getPos(edge.from);
           const to = getPos(edge.to);
@@ -841,9 +871,10 @@ const GraphView = () => {
             <line
               key={`le-${idx}`}
               x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-              stroke="hsl(var(--muted-foreground) / 0.4)"
-              strokeWidth={1.5}
-              strokeDasharray="5 4"
+              stroke="hsl(var(--muted-foreground) / 0.35)"
+              strokeWidth={1.2}
+              strokeDasharray="5 5"
+              style={{ opacity: Math.min(dimFor(edge.from), dimFor(edge.to)), transition: "opacity 400ms ease" }}
             />
           );
         })}
@@ -861,13 +892,20 @@ const GraphView = () => {
           const showCollapsedDot =
             node.type === "note" && node.hasChildren && node.isCollapsed;
           const nodeNote = node.noteId ? notes.find(n => n.id === node.noteId) : null;
-
+          const dim = dimFor(node.id);
+          const isFocused = !!focusIds && focusIds.has(node.id);
+          const childCount = nodeNote ? notes.filter(n => n.parentNoteId === nodeNote.id).length : 0;
 
           return (
             <motion.div
               key={node.id}
               initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1, left: node.x - r, top: node.y - r }}
+              animate={{
+                opacity: dim,
+                scale: isFocused && node.type === "note" ? 1.06 : 1,
+                left: node.x - r,
+                top: node.y - r,
+              }}
               exit={{ opacity: 0, scale: 0 }}
               transition={
                 dragState.current?.nodeId === node.id
@@ -876,7 +914,11 @@ const GraphView = () => {
               }
               className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing touch-none"
               data-graph-node
-              style={{ width: r * 2, zIndex: isRoot ? 6 : isCat ? 4 : 2 }}
+              style={{
+                width: r * 2,
+                zIndex: isRoot ? 6 : isCat ? 4 : 2,
+                filter: dim < 1 ? "blur(1.1px)" : "none",
+              }}
               onPointerDown={e => {
                 e.stopPropagation();
                 didDrag.current = false;
@@ -894,13 +936,20 @@ const GraphView = () => {
               onPointerLeave={cancelLongPress}
               onClick={e => { e.stopPropagation(); handleNodeClick(node.id, e.clientX, e.clientY); }}
             >
-              {/* Label below circle for main branches (tree is inverted) */}
+              {/* Etiqueta píldora bajo las ramas principales */}
               {isMainNote && (
                 <span
-                  className="absolute whitespace-nowrap font-display text-xs font-semibold text-foreground"
-                  style={{ top: r * 2 + 6, left: '50%', transform: 'translateX(-50%)' }}
+                  className="absolute whitespace-nowrap surface-glass rounded-full px-2.5 py-1 flex items-center gap-1.5 font-display text-xs font-semibold text-foreground"
+                  style={{ top: r * 2 + 8, left: '50%', transform: 'translateX(-50%)' }}
                 >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: `hsl(${node.color})` }}
+                  />
                   {nodeNote?.icon ? `${nodeNote.icon} ` : ""}{node.label}
+                  {childCount > 0 && (
+                    <span className="text-[9px] font-body text-muted-foreground">{childCount}</span>
+                  )}
                 </span>
               )}
 
@@ -919,35 +968,43 @@ const GraphView = () => {
                 </div>
               ) : (
                 <div
-                  className={`rounded-full flex items-center justify-center shadow-md border-2 transition-all ${
+                  className={`rounded-full flex items-center justify-center shadow-node transition-all ${
                     isLinkSource ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
                   }`}
                   style={{
                     width: r * 2,
                     height: r * 2,
-                    backgroundColor: `hsl(${node.color})`,
-                    borderColor: `hsl(${node.color})`,
+                    background: `radial-gradient(circle at 32% 28%, hsl(0 0% 100% / 0.55), hsl(${node.color}) 62%)`,
+                    border: `1.5px solid hsl(${node.color})`,
                   }}
                 >
                   {showCollapsedDot && (
                     <span
                       className="rounded-full"
-                      style={{ width: 6, height: 6, backgroundColor: "hsl(var(--background))" }}
+                      style={{ width: 6, height: 6, backgroundColor: "hsl(var(--card))" }}
                     />
                   )}
                   {node.type === "note" && !showCollapsedDot && (
-                    <span className="text-[10px]" style={{ color: "hsl(var(--background))" }}>
+                    <span className="text-[10px]" style={{ color: "hsl(var(--card))" }}>
                       {node.noteType === "checklist" ? "☑" : ""}
                     </span>
                   )}
                 </div>
               )}
 
-              {/* Label above circle for notes (children grow upward) */}
+              {/* Etiqueta sobre el nodo para notas hijas */}
               {node.type === "note" && !isMainNote && (
                 <span
-                  className="absolute font-body text-[9px] leading-tight text-foreground/80 whitespace-nowrap overflow-hidden text-ellipsis text-center block"
-                  style={{ bottom: r * 2 + 3, left: '50%', transform: 'translateX(-50%)', width: 54 }}
+                  className="absolute font-body text-[9px] leading-tight text-foreground/85 whitespace-nowrap overflow-hidden text-ellipsis text-center block px-1.5 py-0.5 rounded-full"
+                  style={{
+                    bottom: r * 2 + 4,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 60,
+                    opacity: showLeafLabels ? 1 : 0,
+                    backgroundColor: "hsl(var(--glass-strong))",
+                    transition: "opacity 250ms ease",
+                  }}
                 >
                   {node.label}
                 </span>
@@ -956,6 +1013,7 @@ const GraphView = () => {
           );
         })}
       </AnimatePresence>
+
       </div>
 
       {/* Context menu */}
