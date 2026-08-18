@@ -175,6 +175,7 @@ export type Database = {
         Row: {
           category_id: string | null
           checklist: Json
+          color: string | null
           content: string
           created_at: string
           event_type: string
@@ -195,6 +196,7 @@ export type Database = {
         Insert: {
           category_id?: string | null
           checklist?: Json
+          color?: string | null
           content?: string
           created_at?: string
           event_type?: string
@@ -215,6 +217,7 @@ export type Database = {
         Update: {
           category_id?: string | null
           checklist?: Json
+          color?: string | null
           content?: string
           created_at?: string
           event_type?: string
@@ -236,8 +239,9 @@ export type Database = {
       }
       notes: {
         Row: {
-          category_id: string
+          category_id: string | null
           checklist: Json
+          color: string | null
           content: string
           created_at: string
           icon: string | null
@@ -253,8 +257,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          category_id: string
+          category_id?: string | null
           checklist?: Json
+          color?: string | null
           content?: string
           created_at?: string
           icon?: string | null
@@ -270,8 +275,9 @@ export type Database = {
           user_id: string
         }
         Update: {
-          category_id?: string
+          category_id?: string | null
           checklist?: Json
+          color?: string | null
           content?: string
           created_at?: string
           icon?: string | null
@@ -344,11 +350,39 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      move_note: {
+        Args: { _new_parent_id?: string; _note_id: string }
+        Returns: {
+          category_id: string | null
+          checklist: Json
+          color: string | null
+          content: string
+          created_at: string
+          icon: string | null
+          id: string
+          is_collapsed: boolean
+          linked_note_ids: string[]
+          note_type: string
+          parent_note_id: string | null
+          pos_dx: number | null
+          pos_dy: number | null
+          title: string
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "notes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       recover_deleted_note_version: {
         Args: { _version_id: string }
         Returns: {
-          category_id: string
+          category_id: string | null
           checklist: Json
+          color: string | null
           content: string
           created_at: string
           icon: string | null
@@ -373,8 +407,9 @@ export type Database = {
       restore_note_version: {
         Args: { _note_id: string; _version_id: string }
         Returns: {
-          category_id: string
+          category_id: string | null
           checklist: Json
+          color: string | null
           content: string
           created_at: string
           icon: string | null
