@@ -1151,6 +1151,12 @@ const GraphView = () => {
                     <History size={12} />Historial
                   </button>
                   <button
+                    onClick={() => { setShowProfileMenu(false); setShowExportDialog(true); }}
+                    className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-muted flex items-center gap-2 font-body text-foreground"
+                  >
+                    <Download size={12} />Descargar mis notas
+                  </button>
+                  <button
                     onClick={async () => { setShowProfileMenu(false); await signOut(); navigate("/auth"); }}
                     className="w-full text-left text-sm md:text-xs px-3 py-3 md:py-2 min-h-11 md:min-h-0 hover:bg-destructive/10 flex items-center gap-2 font-body text-destructive"
                   >
