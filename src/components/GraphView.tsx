@@ -795,13 +795,14 @@ const GraphView = () => {
         {positionsWithOffsets.map(node => {
           const isRoot = node.type === "root";
           const isHub = node.id === "hub";
-          const isCat = node.type === "category" && !isHub;
-          const r = isRoot ? ROOT_R : isHub ? 6 : isCat ? CAT_R : NOTE_R;
+          const isMainNote = node.type === "note" && node.isMain;
+          const isCat = isMainNote;
+          const r = isRoot ? ROOT_R : isHub ? 6 : isMainNote ? CAT_R : NOTE_R;
           const isLinkSource = linkingNoteId && node.noteId === linkingNoteId;
           const showCollapsedDot =
-            (node.type === "note" || isCat) &&
-            node.hasChildren && node.isCollapsed;
-          const cat = isCat ? categories.find(c => c.id === node.categoryId) : null;
+            node.type === "note" && node.hasChildren && node.isCollapsed;
+          const nodeNote = node.noteId ? notes.find(n => n.id === node.noteId) : null;
+
 
           return (
             <motion.div
