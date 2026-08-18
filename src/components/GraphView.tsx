@@ -1032,7 +1032,7 @@ const GraphView = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[170px]"
+            className="fixed z-50 surface-panel rounded-2xl py-1 min-w-[170px]"
             style={{ left: Math.min(contextMenu.x, size.w - 180), top: Math.min(contextMenu.y, size.h - 200) }}
             onClick={e => e.stopPropagation()}
           >
@@ -1117,7 +1117,7 @@ const GraphView = () => {
       {/* Color picker (long-press category) */}
       {colorPickerCat && (
         <div
-          className="fixed z-50 bg-card border border-border rounded-lg shadow-xl p-3"
+          className="fixed z-50 surface-panel rounded-2xl p-3"
           style={{ left: Math.min(colorPickerCat.x, size.w - 180), top: Math.min(colorPickerCat.y, size.h - 140) }}
           onClick={e => e.stopPropagation()}
         >
@@ -1132,7 +1132,7 @@ const GraphView = () => {
       {/* Icon picker (category) */}
       {iconPickerCat && (
         <div
-          className="fixed z-50 bg-card border border-border rounded-lg shadow-xl p-3"
+          className="fixed z-50 surface-panel rounded-2xl p-3"
           style={{ left: Math.min(iconPickerCat.x, size.w - 280), top: Math.min(iconPickerCat.y, size.h - 260) }}
           onClick={e => e.stopPropagation()}
         >
@@ -1178,7 +1178,7 @@ const GraphView = () => {
       <div className="fixed top-3 right-3 z-30 flex gap-2">
         <button
           onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
           title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
           aria-label="Alternar modo oscuro"
         >
@@ -1187,14 +1187,14 @@ const GraphView = () => {
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShowProfileMenu(v => !v); setShowFilterPanel(false); }}
-            className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
+            className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
             title={user ? "Perfil" : "Iniciar sesión"}
           >
             <UserIcon size={16} />
           </button>
           {showProfileMenu && (
             <div
-              className="absolute right-0 top-11 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[200px]"
+              className="absolute right-0 top-12 surface-panel rounded-2xl py-1 min-w-[200px]"
               onClick={e => e.stopPropagation()}
             >
               {user ? (
@@ -1244,8 +1244,8 @@ const GraphView = () => {
 
 
         <button
-          onClick={(e) => { e.stopPropagation(); setOffsets({}); fitFullTree(); setShowFilterPanel(false); }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
+          onClick={(e) => { e.stopPropagation(); setOffsets({}); setFocusNoteId(null); fitFullTree(); setShowFilterPanel(false); }}
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
           title="Restablecer vista del árbol"
         >
           <TreePine size={16} />
@@ -1253,7 +1253,7 @@ const GraphView = () => {
 
         <button
           onClick={(e) => { e.stopPropagation(); setShowFilterPanel(v => !v); }}
-          className={`p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow transition-all flex items-center justify-center ${
+          className={`p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 transition-all flex items-center justify-center ${
             hiddenCategoryIds.size > 0 ? "text-primary" : "text-muted-foreground"
           }`}
           title="Filtrar temas"
@@ -1263,7 +1263,7 @@ const GraphView = () => {
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); setCreateDialog({ x: size.w / 2, y: size.h / 2 }); setShowFilterPanel(false); }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-sm hover:shadow text-muted-foreground transition-all flex items-center justify-center"
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
           title="Crear nuevo"
         >
           <Plus size={16} />
@@ -1273,7 +1273,7 @@ const GraphView = () => {
       {/* Filter panel */}
       {showFilterPanel && (
         <div
-          className="fixed top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[220px] max-h-[60vh] overflow-y-auto"
+          className="fixed top-16 right-3 z-30 surface-panel rounded-2xl p-3 space-y-2 min-w-[220px] max-h-[60vh] overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-1">
@@ -1322,7 +1322,7 @@ const GraphView = () => {
       {/* Edit category name */}
       {editingCat && (
         <div
-          className="fixed top-14 right-3 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[200px]"
+          className="fixed top-16 right-3 z-30 surface-panel rounded-2xl p-3 space-y-2 min-w-[200px]"
           onClick={e => e.stopPropagation()}
         >
           <input
