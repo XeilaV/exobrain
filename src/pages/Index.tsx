@@ -1,6 +1,6 @@
 import { NotesProvider } from "@/contexts/NotesContext";
 import ChatPanel from "@/components/ChatPanel";
-import GraphView from "@/components/GraphView";
+import GraphView from "@/components/GraphViewV2";
 
 const Index = () => {
   return (
