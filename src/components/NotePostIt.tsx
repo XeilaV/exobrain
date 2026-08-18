@@ -266,6 +266,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
   top = Math.max(12, Math.min(window.innerHeight - postItHeight - 12, top));
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0, scale: 0.85 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -651,6 +652,7 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
         }}
         onCancel={() => setShowMoveDialog(false)}
       />
+    </>
   );
 };
 
