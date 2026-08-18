@@ -1,6 +1,6 @@
 import { useNotes } from "@/contexts/NotesContext";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight, Check, Calendar as CalendarIcon, MoreHorizontal, Dot } from "lucide-react";
+import { X, Plus, Trash2, CheckSquare, Square, ChevronRight, Link2, Unlink, FileText, ArrowUp, GripVertical, Copy, Paperclip, Download, File, Type, ListChecks, Maximize2, Minimize2, CornerDownRight, Check, Calendar as CalendarIcon, MoreHorizontal, Dot, Move } from "lucide-react";
 
 import { useNoteAttachments } from "@/hooks/useNoteAttachments";
 import { motion, Reorder, useDragControls } from "framer-motion";
@@ -9,6 +9,7 @@ import RichTextEditor from "./RichTextEditor";
 import NameInputDialog from "./NameInputDialog";
 import TaskSheet from "./TaskSheet";
 import EmojiPicker from "./EmojiPicker";
+import MoveToDialog from "./MoveToDialog";
 
 import { format, isToday, isTomorrow, isPast } from "date-fns";
 import { es } from "date-fns/locale";
@@ -639,6 +640,17 @@ const NotePostIt = ({ noteId, position, onClose }: NotePostItProps) => {
       />
       
     </motion.div>
+      <MoveToDialog
+        open={showMoveDialog}
+        noteId={noteId}
+        notes={notes}
+        brainName={brainName}
+        onMove={async (targetId) => {
+          setShowMoveDialog(false);
+          await moveNote(noteId, targetId);
+        }}
+        onCancel={() => setShowMoveDialog(false)}
+      />
   );
 };
 
