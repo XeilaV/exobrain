@@ -828,11 +828,11 @@ const GraphView = () => {
     return `M ${from.x} ${from.y} C ${from.x + dx * 0.3} ${from.y + dy * 0.16}, ${from.x + dx * 0.74} ${from.y + dy * 0.88}, ${to.x} ${to.y}`;
   };
 
-  // Thin graphic lines rather than a literal / realistic trunk.
+  // Trazo afilado: grueso junto al tronco, casi un pelo en las hojas.
   const widthForDepth = (depth: number, isMain = false) => {
-    if (depth < 0) return 2.7;
-    if (isMain || depth === 0) return 2.35;
-    return Math.max(0.95, 1.8 - depth * 0.18);
+    if (depth < 0) return 2.9;
+    if (isMain || depth === 0) return 2.5;
+    return Math.max(0.5, 1.9 / (1 + depth * 0.55));
   };
   // Rama con protagonismo: subárbol de la raíz del nodo enfocado
   const focusIds = useMemo(() => {
