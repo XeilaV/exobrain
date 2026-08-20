@@ -1105,7 +1105,9 @@ const GraphView = () => {
                     {childCount > 0 && (
                       <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">{childCount}</span>
                     )}
-                  </div>
+                    </div>
+                  </>
+
                 ) : (
                   <span
                     className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-card"
