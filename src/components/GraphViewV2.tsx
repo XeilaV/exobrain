@@ -334,7 +334,64 @@ const GraphView = () => {
     });
   }, [positions, offsets, parentMap]);
 
+  // Pasada de resolución de solapes de etiquetas: la píldora se desplaza
+  // perpendicularmente a su rama unos pocos px; el punto del nodo permanece
+  // exactamente en la bifurcación. Prioridad por profundidad (gana la más cercana
+  // al tronco).
+  const labelShifts = useMemo(() => {
+    const shifts: Record<string, { dx: number; dy: number }> = {};
+    const byId = new Map(positionsWithOffsets.map((p) => [p.id, p]));
+    const boxOf = (n: NodePos) => {
+      const isRoot = n.type === "root";
+      const chars = Math.min(18, (n.label || "").length);
+      const w = isRoot ? 40 + chars * 9 : (n.isMain ? 34 : 28) + chars * (n.isMain ? 6.6 : 5.6);
+      const h = isRoot ? 40 : n.isMain ? 28 : 22;
+      return { w, h };
+    };
+    const placed: { x: number; y: number; w: number; h: number }[] = [];
+    const ordered = positionsWithOffsets
+      .filter((n) => !n.isVirtual)
+      .slice()
+      .sort((a, b) => a.depth - b.depth);
+
+    ordered.forEach((n) => {
+      const { w, h } = boxOf(n);
+      const parentId = parentMap[n.id];
+      const par = parentId ? byId.get(parentId) : undefined;
+      let px = 0;
+      let py = -1;
+      if (par) {
+        const dx = n.x - par.x;
+        const dy = n.y - par.y;
+        const len = Math.hypot(dx, dy) || 1;
+        px = -dy / len;
+        py = dx / len;
+      }
+      const hits = (x: number, y: number) =>
+        placed.some((b) => Math.abs(b.x - x) < (b.w + w) / 2 + 4 && Math.abs(b.y - y) < (b.h + h) / 2 + 3);
+
+      let best = { dx: 0, dy: 0 };
+      for (let step = 0; step <= 5; step++) {
+        const cands: { dx: number; dy: number }[] =
+          step === 0 ? [{ dx: 0, dy: 0 }] : [
+            { dx: px * step * 9, dy: py * step * 9 },
+            { dx: -px * step * 9, dy: -py * step * 9 },
+          ];
+        const found = cands.find((c) => !hits(n.x + c.dx, n.y + c.dy));
+        if (found) {
+          best = found;
+          break;
+        }
+        if (step === 5) best = cands[0];
+      }
+      placed.push({ x: n.x + best.dx, y: n.y + best.dy, w, h });
+      if (best.dx !== 0 || best.dy !== 0) shifts[n.id] = best;
+    });
+    return shifts;
+  }, [positionsWithOffsets, parentMap]);
+
   const getPos = (id: string) => positionsWithOffsets.find((p) => p.id === id);
+
 
   const getNodeRadius = useCallback((node: NodePos) => {
     if (node.isVirtual) return 0;
