@@ -54,6 +54,10 @@ interface NotesContextType {
   canMoveTo: (noteId: string, targetId: string | null) => boolean;
   getRootNotes: () => Note[];
   updateNote: (id: string, updates: Partial<Note>) => void;
+  updateNotePosition: (id: string, dx: number | null, dy: number | null) => Promise<void>;
+  saveNotePositions: (entries: { id: string; dx: number; dy: number }[]) => Promise<void>;
+  clearAllPositions: () => Promise<void>;
+
   deleteNote: (id: string) => void;
   addCategory: (name: string, icon: string, color?: string, parentId?: string | null) => void;
   updateCategory: (id: string, updates: Partial<Pick<Category, "name" | "icon" | "color">>) => void;
