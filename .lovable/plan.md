@@ -4,7 +4,7 @@ El objetivo será únicamente este: después de recolocar el árbol y recargar, 
 
 ## Guardado absoluto, no relativo
 
-El sistema actual guarda desplazamientos respecto al reparto automático. Eso no garantiza la misma posición porque el reparto base puede cambiar al reconstruirse.
+El sistema actual guarda desplazamientos respecto al reparto automático. La posición quedará garantizada: no dependerá del reparto automático.
 
 Se sustituirá por coordenadas absolutas del espacio del árbol:
 
