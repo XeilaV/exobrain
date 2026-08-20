@@ -84,6 +84,10 @@ const GraphView = () => {
     moveNote,
     canMoveTo,
     updateNote,
+    updateNotePosition,
+    saveNotePositions,
+    clearAllPositions,
+
     linkNotes,
     toggleNoteCollapsed,
     setSelectedNoteId,
