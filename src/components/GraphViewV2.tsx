@@ -278,14 +278,23 @@ const GraphView = () => {
     left.sort((a, b) => a.originalIndex - b.originalIndex);
     right.sort((a, b) => a.originalIndex - b.originalIndex);
 
-    const allBySide = [
-      ...left.map((item, i) => ({ ...item, side: -1 as const, sideIndex: i, sideCount: left.length })),
-      ...right.map((item, i) => ({ ...item, side: 1 as const, sideIndex: i, sideCount: right.length })),
-    ];
+    // Alternamos lados subiendo por el tronco: cada rama principal nace a una altura
+    // distinta, como en un árbol real (nunca dos ramas en el mismo punto).
+    const interleaved: { root: Note; originalIndex: number; weight: number; side: -1 | 1 }[] = [];
+    const maxLen = Math.max(left.length, right.length);
+    for (let i = 0; i < maxLen; i++) {
+      if (left[i]) interleaved.push({ ...left[i], side: -1 });
+      if (right[i]) interleaved.push({ ...right[i], side: 1 });
+    }
 
     const trunkSpan = Math.max(180, trunkBottomY - trunkTopY);
-    const attachLow = trunkBottomY - trunkSpan * 0.18;
-    const attachHigh = trunkTopY + trunkSpan * 0.18;
+    const attachLow = trunkBottomY - trunkSpan * 0.1;
+    const attachHigh = trunkTopY + trunkSpan * 0.12;
+
+    const allBySide = interleaved.map((item, i) => ({
+      ...item,
+      heightT: interleaved.length <= 1 ? 0.35 : i / (interleaved.length - 1),
+    }));
 
     const clampUpperAngle = (angle: number, side: -1 | 1) => {
       // Keep descendants in the crown: sideways/upwards, never hanging beneath the parent.
