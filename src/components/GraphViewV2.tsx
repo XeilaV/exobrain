@@ -139,12 +139,14 @@ const GraphView = () => {
   const didInitialFitRef = useRef(false);
   const viewZoomRef = useRef(1);
 
-  // Desplazamientos manuales por nodo. Se hidratan desde la base de datos
-  // (notes.pos_dx / pos_dy) y se vuelven a guardar al terminar cada arrastre.
+  // Desplazamientos de sesión mientras se arrastra. Al soltar se convierten en
+  // coordenadas absolutas guardadas (notes.pos_x / pos_y) y se limpian.
   const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
   const offsetsRef = useRef(offsets);
   offsetsRef.current = offsets;
-  const hydratedPositionsRef = useRef(false);
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+  const seededRef = useRef<Set<string>>(new Set());
   const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(
     null,
   );
@@ -160,42 +162,49 @@ const GraphView = () => {
     centerY: number;
   } | null>(null);
 
-  // Hidratación: aplicar los desplazamientos guardados en cuanto llegan las notas.
-  useEffect(() => {
-    if (hydratedPositionsRef.current) return;
-    if (loading || notes.length === 0) return;
-    hydratedPositionsRef.current = true;
-    const saved: Record<string, { dx: number; dy: number }> = {};
-    notes.forEach((n) => {
-      if (n.posDx != null || n.posDy != null) {
-        saved[`note-${n.id}`] = { dx: Number(n.posDx ?? 0), dy: Number(n.posDy ?? 0) };
-      }
-    });
-    if (Object.keys(saved).length > 0) {
-      setOffsets((prev) => ({ ...saved, ...prev }));
-    }
-  }, [notes, loading]);
+  // Posiciones finales de los nodos en el mundo del árbol (para poder persistirlas).
+  const finalPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
 
-  const persistOffset = useCallback(
+  /** Guarda la posición absoluta del nodo arrastrado y de todo su subárbol. */
+  const persistDragged = useCallback(
     (nodeId: string) => {
       if (!nodeId.startsWith("note-")) return;
-      const noteId = nodeId.replace("note-", "");
-      const off = offsetsRef.current[nodeId];
-      if (!off) return;
-      void updateNotePosition(noteId, off.dx, off.dy);
+      const rootNoteId = nodeId.replace("note-", "");
+      const ids: string[] = [];
+      const visit = (id: string) => {
+        ids.push(id);
+        notesRef.current.filter((n) => n.parentNoteId === id).forEach((c) => visit(c.id));
+      };
+      visit(rootNoteId);
+      const entries = ids
+        .map((id) => {
+          const p = finalPositionsRef.current.get(`note-${id}`);
+          return p ? { id, x: p.x, y: p.y } : null;
+        })
+        .filter(Boolean) as { id: string; x: number; y: number }[];
+      if (entries.length === 0) return;
+      // Las coordenadas pasan a ser el dato oficial: se limpian los offsets de sesión.
+      setOffsets((prev) => {
+        const next = { ...prev };
+        ids.forEach((id) => delete next[`note-${id}`]);
+        return next;
+      });
+      void saveNotePositions(entries);
     },
-    [updateNotePosition],
+    [saveNotePositions],
   );
 
-  /** Guarda de golpe toda la disposición actual de la sesión. */
+  /** Guarda de golpe toda la disposición actual del árbol. */
   const saveCurrentLayout = useCallback(async () => {
-    const entries = Object.entries(offsetsRef.current)
-      .filter(([id]) => id.startsWith("note-"))
-      .map(([id, off]) => ({ id: id.replace("note-", ""), dx: off.dx, dy: off.dy }));
+    const entries: { id: string; x: number; y: number }[] = [];
+    finalPositionsRef.current.forEach((p, id) => {
+      if (id.startsWith("note-")) entries.push({ id: id.replace("note-", ""), x: p.x, y: p.y });
+    });
     if (entries.length === 0) {
-      toast.info("No hay cambios de posición que guardar");
+      toast.info("No hay posiciones que guardar");
       return;
     }
+    setOffsets({});
     await saveNotePositions(entries);
     toast.success("Disposición guardada");
   }, [saveNotePositions]);
@@ -330,10 +339,12 @@ const GraphView = () => {
       if (!note) return;
       const children = notes.filter((n) => n.parentNoteId === note.id);
       const color = rootColors.get(j.branchRootId ?? note.id) || fallbackPalette[0];
+      // Si la nota tiene posición manual guardada, manda sobre el reparto automático.
+      const hasSaved = note.posX != null && note.posY != null;
       pos.push({
         id: `note-${note.id}`,
-        x: j.x,
-        y: j.y,
+        x: hasSaved ? Number(note.posX) : j.x,
+        y: hasSaved ? Number(note.posY) : j.y,
         type: "note",
         label: note.title,
         color,
@@ -387,6 +398,30 @@ const GraphView = () => {
   }, [positions, offsets, parentMap]);
 
   const getPos = (id: string) => positionsWithOffsets.find((p) => p.id === id);
+
+  // Mantener el mapa de posiciones finales para poder persistirlas al soltar.
+  useEffect(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    positionsWithOffsets.forEach((p) => map.set(p.id, { x: p.x, y: p.y }));
+    finalPositionsRef.current = map;
+  }, [positionsWithOffsets]);
+
+  // Siembra inicial: fija en la base de datos la posición automática de las notas
+  // que aún no tienen coordenadas, para que el árbol no se recoloque al recargar.
+  useEffect(() => {
+    if (loading || notes.length === 0) return;
+    if (dragState.current) return;
+    const pending: { id: string; x: number; y: number }[] = [];
+    notes.forEach((n) => {
+      if (n.posX != null && n.posY != null) return;
+      if (seededRef.current.has(n.id)) return;
+      const p = finalPositionsRef.current.get(`note-${n.id}`);
+      if (!p) return;
+      seededRef.current.add(n.id);
+      pending.push({ id: n.id, x: p.x, y: p.y });
+    });
+    if (pending.length > 0) void saveNotePositions(pending);
+  }, [notes, loading, positionsWithOffsets, saveNotePositions]);
 
   const getNodeRadius = useCallback((node: NodePos) => {
     if (node.isVirtual) return 0;
@@ -639,7 +674,7 @@ const GraphView = () => {
       pointersRef.current.delete(e.pointerId);
       const endedDrag = dragState.current;
       dragState.current = null;
-      if (endedDrag && didDrag.current) persistOffset(endedDrag.nodeId);
+      if (endedDrag && didDrag.current) persistDragged(endedDrag.nodeId);
 
 
       // Cancel canvas long-press if pointer released before timer fired
@@ -669,7 +704,7 @@ const GraphView = () => {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [cancelLongPress, persistOffset]);
+  }, [cancelLongPress, persistDragged]);
 
   // Click handling with double-click detection
   const handleNodeClick = useCallback(
@@ -930,14 +965,11 @@ const GraphView = () => {
             const baseOpacity = isTrunk ? 0.5 : isMain ? 0.78 : 0.56;
             const opacity = isActive ? Math.min(0.96, baseOpacity + 0.16) : baseOpacity * z * focusDim;
             const stroke = isTrunk ? "hsl(262 32% 58%)" : `hsl(${to.color})`;
-            // Geometría estática del motivo; solo se recalcula si el nodo se ha arrastrado.
-            const moved =
-              (offsets[edge.from] && (offsets[edge.from].dx || offsets[edge.from].dy)) ||
-              (offsets[edge.to] && (offsets[edge.to].dx || offsets[edge.to].dy));
-            const d =
-              edge.motif && (moved || !edge.d)
-                ? motifPath(from, to, edge.motif, !!edge.mirror)
-                : (edge.d ?? branchPath(from, to, kind));
+            // La rama siempre se traza entre las posiciones actuales de madre e hija,
+            // así nunca se desconecta al mover un nodo o su subárbol.
+            const d = edge.motif
+              ? motifPath(from, to, edge.motif, !!edge.mirror)
+              : branchPath(from, to, kind);
 
             return (
               <g key={`be-${idx}`} style={{ opacity, transition: "opacity 320ms ease" }}>
@@ -1421,6 +1453,7 @@ const GraphView = () => {
               message: "¿Restablecer el árbol al reparto automático? Se perderán las posiciones guardadas.",
               onConfirm: () => {
                 setOffsets({});
+                seededRef.current.clear();
                 void clearAllPositions();
                 setFocusNoteId(null);
                 fitFullTree();
