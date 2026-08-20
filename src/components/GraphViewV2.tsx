@@ -430,7 +430,7 @@ const GraphView = () => {
     });
 
     return { positions: pos, edges: eds, parentMap: parent };
-  }, [notes, categories, rootNotes, visibleRoots, brainName, size.w, size.h]);
+  }, [notes, categories, rootNotes, visibleRoots, brainName, size.w, size.h, collapsedIds]);
 
   // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
   // node moves its whole subtree along with it.
