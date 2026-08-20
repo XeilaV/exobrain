@@ -1,33 +1,30 @@
-# Rehacer el árbol como copia literal de la forma del SVG
+# Rehacer la forma del árbol al estilo del SVG
 
-Objetivo: que el árbol se vea como `Group-8-2.svg`, no como una geometría "inspirada" en él. Se tira toda la maquinaria actual de motivos/sectores/aridades y se sustituye por **plantillas literales** extraídas del archivo.
+Objetivo: un árbol ramificado que **se parezca** a `Group-8-2.svg` — tronco vertical, racimos que se abren a los lados, ramas onduladas y grosor de línea uniforme — sin perseguir una copia pixel a pixel. Prioridad: que funcione y se vea orgánico.
 
 ## Lo que se ha comprobado en el SVG
 
-- Hay **un tronco azul** (`#1957C3`) con dos ramitas cortas y un punto grande abajo (`rect` r=9 en `211,443`).
-- Del tronco salen **4 racimos de color** (turquesa, naranja, rosa, amarillo). Los cuatro son **exactamente el mismo dibujo**: el racimo naranja es el turquesa desplazado, y rosa/amarillo son los mismos pero espejados en X (`matrix(-1 0 0 1 ...)`).
-- Todo el trazo es `stroke-width="2"`, sin degradados ni grosor variable.
-- Los nodos son círculos de 3 tamaños: 15px (nodo raíz del racimo), 7px (nodos intermedios) y 5px (hojas).
-- Cada racimo tiene una topología fija: raíz → 2 salidas principales → subramas onduladas con hojas al final (~13 nodos por racimo).
+- Un tronco azul (`#1957C3`) casi vertical con un punto grande abajo (r=9) y un par de ramitas cortas.
+- Cuatro racimos de color con el mismo dibujo, dos a la derecha y dos espejados a la izquierda.
+- Todo el trazo es `stroke-width="2"` uniforme, sin degradados ni grosor variable.
+- Nodos en tres tamaños: 15px (raíz del tema), 7px (intermedios), 5px (hojas).
+- Las ramas son curvas en S suaves: salen casi horizontales del punto de unión y giran hacia arriba/abajo; los tramos se acortan claramente al alejarse del tronco.
 
 ## Qué se hace
 
-1. **Extraer literalmente** (en tiempo de implementación, con un script; el resultado queda como datos en el código, sin leer el SVG en runtime):
-   - El path del tronco y sus dos ramitas.
-   - **Un racimo completo** como plantilla: sus paths `d` tal cual, normalizados al origen de su nodo raíz, con la lista de slots (posición de cada nodo, su tamaño 15/7/5, y a qué path pertenece).
-2. **Nuevo `src/lib/treeShape.ts`** con `TRUNK` y `CLUSTER_TEMPLATE` como constantes, y un layout que:
-   - coloca cada nota raíz en uno de los puntos de enganche del tronco, alternando espejo X igual que el SVG (der, der, izq, izq);
-   - asigna las notas descendientes a los slots de la plantilla **en orden de profundidad**, respetando la jerarquía real (una nota va a un slot hijo del slot de su madre);
-   - si un tema tiene más notas que slots, **repite la plantilla en escala reducida** colgando del slot ocupado (el mismo dibujo, más pequeño), en vez de inventar ángulos;
-   - si tiene menos, deja los paths sobrantes sin dibujar.
-   - Más de 4 temas: se siguen añadiendo enganches en el tronco (que se alarga) reutilizando las mismas 2 orientaciones.
-3. **Render en `GraphViewV2.tsx`**: se dibujan los paths de la plantilla transformados (escala + espejo + traslación) y los círculos en los slots ocupados. `stroke-width: 2` fijo con `vector-effect="non-scaling-stroke"`; el color lo pone el tema de cada nota.
-4. **Limpieza**: se elimina `src/lib/treeGeometry.ts` (FORK_MOTIFS, sectores, composición de aridades, decaimiento, `segmentPath`) y el código de `GraphViewV2.tsx` que dependía de él, incluida la pasada de separación de etiquetas basada en ángulos de rama.
+1. **Nuevo `src/lib/treeShape.ts`** con un generador simple y determinista (hash del id de la nota, sin aleatoriedad por render):
+   - Tronco vertical con un punto de enganche por tema, ordenados de abajo arriba.
+   - Cada tema sale del tronco alternando lado (der/der/izq/izq como en el SVG) y ocupa un sector angular propio, de altura proporcional a su descendencia, para que no se solapen.
+   - Las hijas se reparten dentro del sector con un abanico suave; la longitud de cada tramo decae ~0.75 por nivel, tomando como referencia las longitudes medidas en el SVG.
+   - Cada segmento es una cúbica en S con la misma personalidad del SVG: tangente casi horizontal al salir de la unión y al llegar al nodo, con una ondulación leve dependiente del hash.
+   - La rama madre termina exactamente en el punto de unión y cada hija arranca en ese mismo punto.
+2. **Render en `GraphViewV2.tsx`**: `stroke-width` 2 fijo con `vector-effect="non-scaling-stroke"` para todos los tramos (fuera el grosor por profundidad), nodos como círculos de 15/7/5 según profundidad, color del tema en toda la rama y azul en el tronco.
+3. **Limpieza**: se elimina `src/lib/treeGeometry.ts` completo (FORK_MOTIFS, motivos, composición de aridades, sectores actuales, `segmentPath`, `strokeForDepth`) y todo el código de `GraphViewV2.tsx` que dependía de él, incluida la pasada de separación de etiquetas por ángulo de rama, sustituida por un desplazamiento vertical simple cuando dos píldoras chocan.
 
 ## Se conserva
 
-Pan/zoom anclado, selección con atenuación del resto, doble clic para plegar (un slot plegado no dibuja su subárbol), etiquetas de nombre, colores por tema, y todos los diálogos y funcionalidad de notas. Sin cambios de backend.
+Pan/zoom anclado, selección con atenuación del resto, doble clic para plegar, etiquetas, colores por tema, arrastre de nodos y todos los diálogos y funcionalidad de notas. Sin cambios de backend.
 
 ## Criterio de aceptación
 
-Puesto al lado del SVG, el árbol se reconoce como el mismo dibujo: mismo tronco, mismos racimos ondulados, mismo grosor de línea uniforme y mismos tamaños de punto.
+El árbol se lee como el del SVG: tronco central, racimos laterales equilibrados, curvas orgánicas, línea de grosor uniforme y puntos de tres tamaños — sin ramas que se crucen ni etiquetas superpuestas.
