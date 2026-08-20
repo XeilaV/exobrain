@@ -151,6 +151,10 @@ const GraphView = () => {
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
   const [showFilterPanel, setShowFilterPanel] = useState(false);
 
+  // Todo el árbol nace desplegado: el plegado es manual (doble clic) y vive en sesión,
+  // ignorando el estado persistido `isCollapsed`.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+
   const rootNotes = useMemo(() => notes.filter((n) => !n.parentNoteId), [notes]);
   const visibleRoots = useMemo(
     () => rootNotes.filter((n) => !hiddenCategoryIds.has(n.id)),
