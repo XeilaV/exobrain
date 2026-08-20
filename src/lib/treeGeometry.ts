@@ -88,6 +88,9 @@ export interface BranchSegment {
   branchRootId: string;
   depth: number;
   kind: "trunk" | "branch";
+  /** motivo aplicado, para poder re-dibujar el mismo trazo si el nodo se arrastra */
+  motif: BranchMotif;
+  mirror: boolean;
 }
 
 export interface TreeNoteInput {
@@ -168,14 +171,17 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
     };
     junctions.push(j);
     const motif = pickMotif(`trunk-${root.id}`, 0.05);
+    const mirror = hash(`${root.id}-m`) > 0.5;
     segments.push({
       id: `seg-trunk-${i}`,
       fromJunctionId: prev.id,
       toJunctionId: j.id,
-      d: motifPath(prev, j, motif, hash(`${root.id}-m`) > 0.5),
+      d: motifPath(prev, j, motif, mirror),
       branchRootId: "trunk",
       depth: 0,
       kind: "trunk",
+      motif,
+      mirror,
     });
     trunkPoints.push(j);
     prev = j;
@@ -199,6 +205,8 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
       branchRootId: "trunk",
       depth: 0,
       kind: "trunk",
+      motif: pickMotif("trunk-tip", 0.05),
+      mirror: false,
     });
   }
 
@@ -229,14 +237,18 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
     branchRootOf.set(note.id, branchRootId);
 
     const maxBend = depth <= 1 ? 0.09 : 0.16;
+    const motif = pickMotif(`${note.id}-${depth}`, maxBend);
+    const mirror = hash(`${note.id}-mir`) > 0.5;
     segments.push({
       id: `seg-${note.id}`,
       fromJunctionId: from.id,
       toJunctionId: j.id,
-      d: motifPath(from, j, pickMotif(`${note.id}-${depth}`, maxBend), hash(`${note.id}-mir`) > 0.5),
+      d: motifPath(from, j, motif, mirror),
       branchRootId,
       depth,
       kind: "branch",
+      motif,
+      mirror,
     });
 
     if (collapsed.has(note.id)) return;
