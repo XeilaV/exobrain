@@ -14,9 +14,6 @@ import {
   LogOut,
   LogIn,
   Brain,
-  TreePine,
-  Save,
-
   Sun,
   Moon,
   History,
@@ -86,9 +83,7 @@ const GraphView = () => {
     moveNote,
     canMoveTo,
     updateNote,
-    updateNotePosition,
     saveNotePositions,
-    clearAllPositions,
 
     linkNotes,
     toggleNoteCollapsed,
@@ -133,23 +128,10 @@ const GraphView = () => {
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
-  const didDrag = useRef(false);
   const didPan = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didInitialFitRef = useRef(false);
   const viewZoomRef = useRef(1);
-
-  // Desplazamientos de sesión mientras se arrastra. Al soltar se convierten en
-  // coordenadas absolutas guardadas (notes.pos_x / pos_y) y se limpian.
-  const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
-  const offsetsRef = useRef(offsets);
-  offsetsRef.current = offsets;
-  const notesRef = useRef(notes);
-  notesRef.current = notes;
-  const seededRef = useRef<Set<string>>(new Set());
-  const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(
-    null,
-  );
 
   const panState = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
@@ -161,54 +143,6 @@ const GraphView = () => {
     centerX: number;
     centerY: number;
   } | null>(null);
-
-  // Posiciones finales de los nodos en el mundo del árbol (para poder persistirlas).
-  const finalPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
-
-  /** Guarda la posición absoluta del nodo arrastrado y de todo su subárbol. */
-  const persistDragged = useCallback(
-    (nodeId: string) => {
-      if (!nodeId.startsWith("note-")) return;
-      const rootNoteId = nodeId.replace("note-", "");
-      const ids: string[] = [];
-      const visit = (id: string) => {
-        ids.push(id);
-        notesRef.current.filter((n) => n.parentNoteId === id).forEach((c) => visit(c.id));
-      };
-      visit(rootNoteId);
-      const entries = ids
-        .map((id) => {
-          const p = finalPositionsRef.current.get(`note-${id}`);
-          return p ? { id, x: p.x, y: p.y } : null;
-        })
-        .filter(Boolean) as { id: string; x: number; y: number }[];
-      if (entries.length === 0) return;
-      // Las coordenadas pasan a ser el dato oficial: se limpian los offsets de sesión.
-      setOffsets((prev) => {
-        const next = { ...prev };
-        ids.forEach((id) => delete next[`note-${id}`]);
-        return next;
-      });
-      void saveNotePositions(entries);
-    },
-    [saveNotePositions],
-  );
-
-  /** Guarda de golpe toda la disposición actual del árbol. */
-  const saveCurrentLayout = useCallback(async () => {
-    const entries: { id: string; x: number; y: number }[] = [];
-    finalPositionsRef.current.forEach((p, id) => {
-      if (id.startsWith("note-")) entries.push({ id: id.replace("note-", ""), x: p.x, y: p.y });
-    });
-    if (entries.length === 0) {
-      toast.info("No hay posiciones que guardar");
-      return;
-    }
-    setOffsets({});
-    await saveNotePositions(entries);
-    toast.success("Disposición guardada");
-  }, [saveNotePositions]);
-
 
   // Hidden main-branch filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
@@ -256,15 +190,11 @@ const GraphView = () => {
   // Esqueleto del árbol: geometría estática construida con los motivos Bézier
   // extraídos de `Group 8.svg` (ver src/lib/treeGeometry.ts). Ni la selección ni
   // el zoom recalculan posiciones: solo cámara, opacidad y etiquetas.
-  const { positions, edges, parentMap } = useMemo(() => {
+  const { positions, edges } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
     const parent: Record<string, string> = {};
-    const W = size.w;
-    const H = size.h;
-    const isMobile = W < 640;
-
-    if (rootNotes.length === 0) return { positions: pos, edges: eds, parentMap: parent };
+    if (rootNotes.length === 0) return { positions: pos, edges: eds };
 
     const fallbackPalette = [
       "262 62% 62%",
@@ -284,9 +214,9 @@ const GraphView = () => {
     const skeleton = buildTreeSkeleton(
       notes.map((n) => ({ id: n.id, parentId: n.parentNoteId ?? null })),
       {
-        rootX: W / 2,
-        rootY: H - (isMobile ? 96 : 84),
-        compact: isMobile,
+        rootX: 610,
+        rootY: 540,
+        compact: false,
         collapsed: collapsedIds,
         hiddenRootIds: hiddenCategoryIds,
       },
@@ -368,60 +298,27 @@ const GraphView = () => {
       parent[to] = from;
     });
 
-    return { positions: pos, edges: eds, parentMap: parent };
-  }, [notes, categories, rootNotes, hiddenCategoryIds, brainName, size.w, size.h, collapsedIds]);
+    return { positions: pos, edges: eds };
+  }, [notes, categories, rootNotes, hiddenCategoryIds, brainName, collapsedIds]);
 
 
-  // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
-  // node moves its whole subtree along with it.
-  const positionsWithOffsets = useMemo(() => {
-    const accumulated: Record<string, { dx: number; dy: number }> = {};
-    const compute = (id: string): { dx: number; dy: number } => {
-      if (accumulated[id]) return accumulated[id];
-      const own = offsets[id] || { dx: 0, dy: 0 };
-      const parentId = parentMap[id];
-      if (!parentId) {
-        accumulated[id] = own;
-        return own;
-      }
-      const par = compute(parentId);
-      const total = { dx: own.dx + par.dx, dy: own.dy + par.dy };
-      accumulated[id] = total;
-      return total;
-    };
-    return positions.map((p) => {
-      const off = compute(p.id);
-      const nx = p.x + off.dx;
-      const ny = p.y + off.dy;
-      return off.dx !== 0 || off.dy !== 0 ? { ...p, x: nx, y: ny } : p;
-    });
-  }, [positions, offsets, parentMap]);
+  // Las coordenadas absolutas son la geometría final; no existen offsets de sesión.
+  const positionsWithOffsets = positions;
 
   const getPos = (id: string) => positionsWithOffsets.find((p) => p.id === id);
 
-  // Mantener el mapa de posiciones finales para poder persistirlas al soltar.
-  useEffect(() => {
-    const map = new Map<string, { x: number; y: number }>();
-    positionsWithOffsets.forEach((p) => map.set(p.id, { x: p.x, y: p.y }));
-    finalPositionsRef.current = map;
-  }, [positionsWithOffsets]);
-
-  // Siembra inicial: fija en la base de datos la posición automática de las notas
-  // que aún no tienen coordenadas, para que el árbol no se recoloque al recargar.
+  // Compatibilidad con datos antiguos: asigna una única vez las coordenadas ausentes.
   useEffect(() => {
     if (loading || notes.length === 0) return;
-    if (dragState.current) return;
     const pending: { id: string; x: number; y: number }[] = [];
     notes.forEach((n) => {
       if (n.posX != null && n.posY != null) return;
-      if (seededRef.current.has(n.id)) return;
-      const p = finalPositionsRef.current.get(`note-${n.id}`);
+      const p = positions.find((position) => position.id === `note-${n.id}`);
       if (!p) return;
-      seededRef.current.add(n.id);
       pending.push({ id: n.id, x: p.x, y: p.y });
     });
     if (pending.length > 0) void saveNotePositions(pending);
-  }, [notes, loading, positionsWithOffsets, saveNotePositions]);
+  }, [notes, loading, positions, saveNotePositions]);
 
   const getNodeRadius = useCallback((node: NodePos) => {
     if (node.isVirtual) return 0;
@@ -429,29 +326,6 @@ const GraphView = () => {
     if (node.type === "note" && node.isMain) return CAT_R;
     return NOTE_R;
   }, []);
-
-  const getSubtreeIds = useCallback(
-    (nodeId: string) => {
-      const ids = new Set<string>();
-      const visitNote = (noteId: string) => {
-        ids.add(`note-${noteId}`);
-        notes.filter((n) => n.parentNoteId === noteId).forEach((child) => visitNote(child.id));
-      };
-
-      if (nodeId.startsWith("note-")) {
-        visitNote(nodeId.replace("note-", ""));
-      } else if (nodeId.startsWith("cat-")) {
-        const categoryId = nodeId.replace("cat-", "");
-        ids.add(nodeId);
-        notes.filter((n) => n.categoryId === categoryId && !n.parentNoteId).forEach((note) => visitNote(note.id));
-      } else {
-        positionsWithOffsets.forEach((node) => ids.add(node.id));
-      }
-
-      return ids;
-    },
-    [notes, positionsWithOffsets],
-  );
 
   const getNodesBounds = useCallback(
     (nodes: NodePos[]) => {
@@ -599,7 +473,6 @@ const GraphView = () => {
           return p;
         });
         panState.current = null;
-        dragState.current = null;
         cancelLongPress();
         didPan.current = true;
         setIsPanning(true);
@@ -643,24 +516,6 @@ const GraphView = () => {
         return;
       }
 
-      const ds = dragState.current;
-      if (ds) {
-        const rawDx = e.clientX - ds.startX;
-        const rawDy = e.clientY - ds.startY;
-        if (!didDrag.current && Math.hypot(rawDx, rawDy) > 5) {
-          didDrag.current = true;
-          cancelLongPress();
-        }
-        if (didDrag.current) {
-          const zoom = viewZoomRef.current || 1;
-          const dx = rawDx / zoom;
-          const dy = rawDy / zoom;
-          setOffsets((prev) => ({
-            ...prev,
-            [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
-          }));
-        }
-      }
       const ps = panState.current;
       if (!ps) return;
       const rawDx = e.clientX - ps.startX;
@@ -672,11 +527,6 @@ const GraphView = () => {
     };
     const onUp = (e: PointerEvent) => {
       pointersRef.current.delete(e.pointerId);
-      const endedDrag = dragState.current;
-      dragState.current = null;
-      if (endedDrag && didDrag.current) persistDragged(endedDrag.nodeId);
-
-
       // Cancel canvas long-press if pointer released before timer fired
       if (canvasLongPressTimer.current) {
         clearTimeout(canvasLongPressTimer.current);
@@ -704,15 +554,11 @@ const GraphView = () => {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [cancelLongPress, persistDragged]);
+  }, [cancelLongPress]);
 
   // Click handling with double-click detection
   const handleNodeClick = useCallback(
     (nodeId: string, clientX: number, clientY: number) => {
-      if (didDrag.current) {
-        didDrag.current = false;
-        return;
-      }
       if (didLongPress.current) {
         didLongPress.current = false;
         return;
@@ -855,7 +701,7 @@ const GraphView = () => {
         // Always track pointer for pinch detection
         pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-        // Second pointer -> start pinch (cancel any in-flight pan, node drag or canvas long-press)
+          // Second pointer -> start pinch (cancel any in-flight pan or canvas long-press)
         if (pointersRef.current.size >= 2) {
           const pts = Array.from(pointersRef.current.values());
           const [p1, p2] = pts;
@@ -869,7 +715,6 @@ const GraphView = () => {
             centerY: (p1.y + p2.y) / 2,
           };
           panState.current = null;
-          dragState.current = null;
           cancelLongPress();
           if (canvasLongPressTimer.current) {
             clearTimeout(canvasLongPressTimer.current);
@@ -1058,12 +903,8 @@ const GraphView = () => {
                   top: node.y,
                 }}
                 exit={{ opacity: 0, scale: 0.88 }}
-                transition={
-                  dragState.current?.nodeId === node.id
-                    ? { duration: 0 }
-                    : { type: "spring", stiffness: 290, damping: 28 }
-                }
-                className="absolute cursor-grab active:cursor-grabbing touch-none"
+                transition={{ type: "spring", stiffness: 290, damping: 28 }}
+                className="absolute cursor-pointer touch-none"
                 data-graph-node
                 style={{
                   width: 1,
@@ -1074,15 +915,6 @@ const GraphView = () => {
                 }}
                 onPointerDown={(e) => {
                   e.stopPropagation();
-                  didDrag.current = false;
-                  const cur = offsets[node.id] || { dx: 0, dy: 0 };
-                  dragState.current = {
-                    nodeId: node.id,
-                    startX: e.clientX,
-                    startY: e.clientY,
-                    baseDx: cur.dx,
-                    baseDy: cur.dy,
-                  };
                   startLongPress(node.id, e.clientX, e.clientY);
                 }}
                 onPointerUp={cancelLongPress}
@@ -1434,40 +1266,6 @@ const GraphView = () => {
             </div>
           )}
         </div>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            void saveCurrentLayout();
-          }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
-          title="Guardar disposición actual del árbol"
-        >
-          <Save size={16} />
-        </button>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmDialog({
-              message: "¿Restablecer el árbol al reparto automático? Se perderán las posiciones guardadas.",
-              onConfirm: () => {
-                setOffsets({});
-                seededRef.current.clear();
-                void clearAllPositions();
-                setFocusNoteId(null);
-                fitFullTree();
-                setShowFilterPanel(false);
-                setConfirmDialog(null);
-              },
-            });
-          }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
-          title="Restablecer vista del árbol"
-        >
-          <TreePine size={16} />
-        </button>
-
 
         <button
           onClick={(e) => {
