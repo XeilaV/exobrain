@@ -224,30 +224,33 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, 500);
   }, []);
 
-  /** Guarda el desplazamiento manual de un nodo (posición relativa al layout automático). */
-  const updateNotePosition = useCallback(async (id: string, dx: number | null, dy: number | null) => {
-    setNotes(prev => prev.map(n => n.id === id ? { ...n, posDx: dx, posDy: dy } : n));
-    await supabase.from("notes").update({ pos_dx: dx, pos_dy: dy }).eq("id", id);
+  /** Guarda la posición absoluta de un nodo en el mapa. */
+  const updateNotePosition = useCallback(async (id: string, x: number | null, y: number | null) => {
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, posX: x, posY: y } : n));
+    await supabase.from("notes").update({ pos_x: x, pos_y: y }).eq("id", id);
   }, []);
 
-  /** Guarda de golpe varios desplazamientos manuales. */
-  const saveNotePositions = useCallback(async (entries: { id: string; dx: number; dy: number }[]) => {
+  /** Guarda de golpe varias posiciones absolutas. */
+  const saveNotePositions = useCallback(async (entries: { id: string; x: number; y: number }[]) => {
     if (entries.length === 0) return;
     const map = new Map(entries.map(e => [e.id, e]));
     setNotes(prev => prev.map(n => {
       const e = map.get(n.id);
-      return e ? { ...n, posDx: e.dx, posDy: e.dy } : n;
+      return e ? { ...n, posX: e.x, posY: e.y } : n;
     }));
     await Promise.all(
-      entries.map(e => supabase.from("notes").update({ pos_dx: e.dx, pos_dy: e.dy }).eq("id", e.id)),
+      entries.map(e => supabase.from("notes").update({ pos_x: e.x, pos_y: e.y }).eq("id", e.id)),
     );
   }, []);
 
-  /** Borra todos los desplazamientos manuales y vuelve al reparto automático. */
+  /** Borra todas las posiciones manuales y vuelve a sembrar con el reparto automático. */
   const clearAllPositions = useCallback(async () => {
     if (!user) return;
-    setNotes(prev => prev.map(n => ({ ...n, posDx: null, posDy: null })));
-    await supabase.from("notes").update({ pos_dx: null, pos_dy: null }).eq("user_id", user.id);
+    setNotes(prev => prev.map(n => ({ ...n, posX: null, posY: null, posDx: null, posDy: null })));
+    await supabase
+      .from("notes")
+      .update({ pos_x: null, pos_y: null, pos_dx: null, pos_dy: null })
+      .eq("user_id", user.id);
   }, [user]);
 
 
