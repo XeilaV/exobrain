@@ -840,7 +840,7 @@ const GraphView = () => {
 
             const kind = edge.kind ?? "branch";
             const isStructuralBlue = kind === "trunk" || kind === "connector";
-            const width = strokeForDepth(to.depth + 1, kind);
+            const width = STROKE_WIDTH;
             const z = Math.min(from.z ?? 1, to.z ?? 1);
             const focusDim = isStructuralBlue ? 1 : Math.min(dimFor(edge.from), dimFor(edge.to));
             const isActive = !!focusIds && focusIds.has(edge.to);
