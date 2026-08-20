@@ -7,13 +7,16 @@ Rehacer solo la geometría del árbol y su render SVG en la vista actual (`Graph
 Se abandona el modelo "coloco nodos y luego dibujo una curva entre madre e hija". El árbol pasa a construirse como **esqueleto de segmentos unidos por bifurcaciones**:
 
 - El tronco es vertical, ligeramente irregular y partido en varios tramos.
-- Cada tramo termina exactamente en un punto de bifurcación; el siguiente tramo (y cada rama hija) arranca exactamente en ese mismo punto. Ninguna línea atraviesa ni sobresale por detrás de un nodo.
+- Cada tramo termina exactamente en un punto de bifurcación; el siguiente tramo (y cada rama hija) arranca exactamente en ese mismo punto, con las mismas coordenadas. El nodo se pinta encima. **No existe ningún path continuo oculto que atraviese la bifurcación**: son segmentos independientes, uno por tramo.
 - Las notas raíz nacen del tronco a distintas alturas, alternando lados, con salidas laterales del mismo tipo que el SVG de referencia.
 - Hijas, nietas y niveles siguientes se generan recursivamente con los mismos motivos, más cortos y finos con la profundidad.
 - Copa asimétrica y orgánica: nada de abanicos uniformes ni hijas apiladas en vertical.
-- Todo el árbol se dibuja siempre; el zoom solo decide qué etiquetas se leen.
+- Todo el árbol se dibuja siempre.
 
-Las curvas no usan porcentajes genéricos de dx/dy: se derivan de una pequeña librería de motivos normalizados extraídos del SVG (continuación, bifurcación izquierda/derecha, subida, apertura lateral, ramificación corta), espejables y escalables por profundidad.
+**Los motivos se extraen de la geometría real de `Group 8.svg`**, no se reconstruyen "inspirándose" en él: se parsean sus `path d`, se toman sus puntos de control Bézier tal cual, se normalizan (origen en el inicio del tramo, longitud unitaria, dirección canónica) y se reutilizan aplicando escala, espejo y rotación. Nada de fórmulas genéricas de abanico, ángulos o porcentajes de dx/dy.
+
+**La geometría es estable**: ni la selección ni el zoom recalculan posiciones ni alteran la silueta. Solo cambian opacidad, visibilidad de etiquetas, glow y cámara (pan/zoom).
+
 
 ## Estilo visual
 
