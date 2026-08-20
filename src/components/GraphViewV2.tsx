@@ -376,12 +376,12 @@ const GraphView = () => {
     };
 
     allBySide.forEach((item, globalIndex) => {
-      const { root, side, sideIndex, sideCount, originalIndex } = item;
+      const { root, side, heightT, originalIndex } = item;
       const color = colorForRoot(root, originalIndex);
-      const sideT = sideCount <= 1 ? 0.5 : sideIndex / (sideCount - 1);
+      const sideT = heightT;
 
-      // Branches emerge from the middle / upper trunk at distinct heights.
-      const attachY = attachLow + (attachHigh - attachLow) * (0.22 + sideT * 0.68);
+      // Branches emerge progressively along the trunk, each at its own height.
+      const attachY = attachLow + (attachHigh - attachLow) * heightT;
       const attachId = `attach-${root.id}`;
       const branchZ = 0.76 + ((originalIndex * 37) % 24) / 100; // 0.76..0.99
 
