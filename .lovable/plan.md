@@ -15,8 +15,6 @@ Se abandona el modelo "coloco nodos y luego dibujo una curva entre madre e hija"
 
 **Los motivos se extraen de la geometría real de `Group 8.svg`**, no se reconstruyen "inspirándose" en él: se parsean sus `path d`, se toman sus puntos de control Bézier tal cual, se normalizan (origen en el inicio del tramo, longitud unitaria, dirección canónica) y se reutilizan aplicando escala, espejo y rotación. Nada de fórmulas genéricas de abanico, ángulos o porcentajes de dx/dy.
 
-El SVG se usa **solo durante la implementación** como fuente de extracción. Los motivos normalizados resultantes quedan escritos como constantes de datos dentro de `src/lib/treeGeometry.ts` (curvas completas, sin simplificar ni aproximar), de modo que en runtime el árbol no lee ningún archivo SVG y funciona de forma autónoma.
-
 **La geometría es estable**: ni la selección ni el zoom recalculan posiciones ni alteran la silueta. Solo cambian opacidad, visibilidad de etiquetas, glow y cámara (pan/zoom).
 
 

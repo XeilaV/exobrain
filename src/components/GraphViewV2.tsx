@@ -14,6 +14,7 @@ import {
   LogOut,
   LogIn,
   Brain,
+  TreePine,
   Sun,
   Moon,
   History,
@@ -35,15 +36,6 @@ import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { motifPath, strokeForDepth, type BranchMotif } from "@/lib/treeGeometry";
-import {
-  CANONICAL_BRANCHES,
-  CANONICAL_ROOT,
-  CANONICAL_SIZE,
-  CANONICAL_TRUNK_PATH,
-  branchForTitle,
-  stableSubtree,
-} from "@/lib/canonicalTree";
 
 type NodeType = "root" | "category" | "note";
 
@@ -72,10 +64,6 @@ interface Edge {
   from: string;
   to: string;
   kind?: "trunk" | "branch";
-  /** trazo precalculado a partir del motivo SVG */
-  d?: string;
-  motif?: BranchMotif;
-  mirror?: boolean;
 }
 
 const ROOT_R = 30;
@@ -134,11 +122,17 @@ const GraphView = () => {
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
+  const didDrag = useRef(false);
   const didPan = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didInitialFitRef = useRef(false);
   const viewZoomRef = useRef(1);
 
+  // Drag offsets per node id (session-local)
+  const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
+  const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(
+    null,
+  );
   const panState = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchState = useRef<{
@@ -193,85 +187,356 @@ const GraphView = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNoteId]);
 
-  // Escena canónica calcada de la captura de referencia. No depende del viewport,
-  // la selección, el zoom, los filtros ni el estado de plegado.
-  const { positions, edges } = useMemo(() => {
+  // Build a real tree: one shared trunk, main branches emerging at different
+  // heights, and descendants fanning out as smaller ramifications.
+  const { positions, edges, parentMap } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
-    if (rootNotes.length === 0) return { positions: pos, edges: eds };
+    const parent: Record<string, string> = {};
+    const W = size.w;
+    const H = size.h;
+    const isMobile = W < 640;
+
+    if (rootNotes.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
     const fallbackPalette = [
-      "262 62% 62%",
-      "196 58% 50%",
-      "24 78% 58%",
-      "332 62% 60%",
-      "145 42% 50%",
-      "220 68% 62%",
+      "262 62% 62%", // violet
+      "196 58% 50%", // cyan
+      "24 78% 58%", // orange
+      "332 62% 60%", // pink
+      "145 42% 50%", // green
+      "220 68% 62%", // blue
     ];
+
     const colorForRoot = (root: Note, index: number) => {
       const legacyCategory = categories.find((c) => c.id === root.categoryId);
       return root.color || legacyCategory?.color || fallbackPalette[index % fallbackPalette.length];
     };
-    pos.push({ id: "root", ...CANONICAL_ROOT, type: "root", label: brainName || "ExoBrain", color: "265 24% 44%", depth: -1, z: 1 });
-    pos.push({ id: "trunk-top", x: 314, y: 236, type: "category", label: "", color: "262 32% 58%", depth: -1, isVirtual: true, z: 1 });
-    eds.push({ from: "root", to: "trunk-top", kind: "trunk", d: CANONICAL_TRUNK_PATH });
 
-    rootNotes.forEach((root, rootIndex) => {
-      if (hiddenCategoryIds.has(root.id)) return;
-      const canonical = branchForTitle(root.title) ?? CANONICAL_BRANCHES[rootIndex % CANONICAL_BRANCHES.length];
-      const color = canonical?.color ?? colorForRoot(root, rootIndex);
-      const rootPoint = canonical?.root ?? { x: Number(root.posX) || 307, y: Number(root.posY) || 300 };
-      const attachId = `attach-${root.id}`;
-      const attachPoint = canonical?.attach ?? { x: 314, y: 236 };
-      pos.push({ id: attachId, ...attachPoint, type: "category", label: "", color, depth: -1, isVirtual: true, z: 1 });
-      pos.push({
-        id: `note-${root.id}`, ...rootPoint, type: "note", label: root.title, color,
-        categoryId: root.categoryId ?? undefined, noteId: root.id, parentNoteId: null,
-        noteType: root.noteType, hasChildren: notes.some((note) => note.parentNoteId === root.id),
-        isCollapsed: collapsedIds.has(root.id), isMain: true, depth: 0, branchRootId: root.id, z: 1,
+    const descendantsCount = (noteId: string): number => {
+      const children = notes.filter((n) => n.parentNoteId === noteId);
+      return children.reduce((sum, child) => sum + 1 + descendantsCount(child.id), 0);
+    };
+
+    // Shared vertical trunk. Exobrain is the base, not a radial hub.
+    const trunkX = W / 2;
+    const rootY = isMobile ? H - 88 : H - 72;
+    const trunkTopY = isMobile ? Math.max(96, H * 0.18) : Math.max(96, H * 0.16);
+    const trunkBottomY = rootY - (isMobile ? 34 : 38);
+
+    pos.push({
+      id: "root",
+      x: trunkX,
+      y: rootY,
+      type: "root",
+      label: brainName || "ExoBrain",
+      color: "265 24% 44%",
+      depth: -1,
+      z: 1,
+    });
+
+    // One virtual point at the crown so SVG can draw the uninterrupted trunk.
+    pos.push({
+      id: "trunk-top",
+      x: trunkX,
+      y: trunkTopY,
+      type: "category",
+      label: "",
+      color: "262 35% 58%",
+      depth: -1,
+      isVirtual: true,
+      z: 0.9,
+    });
+    parent["trunk-top"] = "root";
+    eds.push({ from: "root", to: "trunk-top", kind: "trunk" });
+
+    // Balance heavy subtrees between both sides so the crown does not become a list.
+    const weightedRoots = visibleRoots.map((root, originalIndex) => ({
+      root,
+      originalIndex,
+      weight: 1 + descendantsCount(root.id),
+    }));
+
+    const left: typeof weightedRoots = [];
+    const right: typeof weightedRoots = [];
+    let leftWeight = 0;
+    let rightWeight = 0;
+    weightedRoots
+      .slice()
+      .sort((a, b) => b.weight - a.weight)
+      .forEach((item) => {
+        if (leftWeight <= rightWeight) {
+          left.push(item);
+          leftWeight += item.weight;
+        } else {
+          right.push(item);
+          rightWeight += item.weight;
+        }
       });
-      eds.push({ from: attachId, to: `note-${root.id}`, kind: "branch", d: canonical?.mainPath });
 
-      const descendants = stableSubtree(notes, root.id);
-      descendants.forEach((note, index) => {
-        const slot = canonical?.slots[index];
-        const point = slot ?? {
-          x: note.posX != null ? Number(note.posX) : rootPoint.x + ((index % 5) - 2) * 42,
-          y: note.posY != null ? Number(note.posY) : rootPoint.y - 70 - Math.floor(index / 5) * 45,
-        };
+    // Restore chronological/visual order inside each side.
+    left.sort((a, b) => a.originalIndex - b.originalIndex);
+    right.sort((a, b) => a.originalIndex - b.originalIndex);
+
+    // Alternamos lados subiendo por el tronco: cada rama principal nace a una altura
+    // distinta, como en un árbol real (nunca dos ramas en el mismo punto).
+    const interleaved: { root: Note; originalIndex: number; weight: number; side: -1 | 1 }[] = [];
+    const maxLen = Math.max(left.length, right.length);
+    for (let i = 0; i < maxLen; i++) {
+      if (left[i]) interleaved.push({ ...left[i], side: -1 });
+      if (right[i]) interleaved.push({ ...right[i], side: 1 });
+    }
+
+    const trunkSpan = Math.max(180, trunkBottomY - trunkTopY);
+    const attachLow = trunkBottomY - trunkSpan * 0.1;
+    const attachHigh = trunkTopY + trunkSpan * 0.12;
+
+    const allBySide = interleaved.map((item, i) => ({
+      ...item,
+      heightT: interleaved.length <= 1 ? 0.35 : i / (interleaved.length - 1),
+    }));
+
+    const clampUpperAngle = (angle: number, side: -1 | 1) => {
+      // Keep descendants in the crown: sideways/upwards, never hanging beneath the parent.
+      if (side === 1) return Math.max(-1.58, Math.min(0.08, angle));
+      return Math.max(-3.22, Math.min(-1.58, angle));
+    };
+
+    const placeChildren = (
+      parentNote: Note,
+      parentX: number,
+      parentY: number,
+      outwardAngle: number,
+      color: string,
+      depth: number,
+      branchRootId: string,
+      side: -1 | 1,
+      branchZ: number,
+    ) => {
+      const children = notes.filter((n) => n.parentNoteId === parentNote.id);
+      if (children.length === 0 || collapsedIds.has(parentNote.id)) return;
+
+      const count = children.length;
+      // El abanico se estrecha con la profundidad; nunca hijas apiladas en vertical.
+      const spread = Math.min(depth === 1 ? 1.55 : Math.max(0.5, 1.3 - depth * 0.12), 0.45 + count * 0.16);
+      const baseRadius = isMobile
+        ? depth === 1
+          ? 96
+          : Math.max(62, 90 - depth * 6)
+        : depth === 1
+          ? 138
+          : Math.max(80, 122 - depth * 9);
+      // Ramas con más descendencia necesitan más aire.
+      const weights = children.map((c) => 1 + descendantsCount(c.id));
+      const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+      let acc = 0;
+      children.forEach((child, i) => {
+        const w = weights[i];
+        const t = totalWeight <= 0 ? 0 : (acc + w / 2) / totalWeight - 0.5;
+        acc += w;
+        const radius = baseRadius + Math.min(isMobile ? 46 : 92, Math.sqrt(w) * (isMobile ? 12 : 20));
+        // Small deterministic radius variation makes the crown less diagrammatic while
+        // preserving predictable positions between renders.
+        const radialJitter = ((i % 3) - 1) * (isMobile ? 8 : 15);
+        const rawAngle = outwardAngle + t * spread;
+        const angle = clampUpperAngle(rawAngle, side);
+        const childR = radius + radialJitter;
+        const x = parentX + Math.cos(angle) * childR;
+        const y = parentY + Math.sin(angle) * childR;
+        const childId = `note-${child.id}`;
+        const parentId = `note-${parentNote.id}`;
+        const childChildren = notes.filter((n) => n.parentNoteId === child.id);
+        const childExpanded = childChildren.length > 0 && !collapsedIds.has(child.id);
+
         pos.push({
-          id: `note-${note.id}`, ...point, type: "note", label: note.title, color,
-          categoryId: note.categoryId ?? undefined, noteId: note.id, parentNoteId: note.parentNoteId,
-          noteType: note.noteType, hasChildren: notes.some((child) => child.parentNoteId === note.id),
-          isCollapsed: collapsedIds.has(note.id), depth: 1, branchRootId: root.id, z: 0.92,
+          id: childId,
+          x,
+          y,
+          type: "note",
+          label: child.title,
+          color,
+          categoryId: child.categoryId ?? undefined,
+          noteId: child.id,
+          parentNoteId: child.parentNoteId,
+          noteType: child.noteType,
+          hasChildren: childChildren.length > 0,
+          isCollapsed: !childExpanded,
+          isMain: false,
+          depth,
+          branchRootId,
+          side,
+          z: Math.max(0.62, branchZ - depth * 0.035),
         });
+        parent[childId] = parentId;
+        eds.push({ from: parentId, to: childId, kind: "branch" });
+
+        placeChildren(child, x, y, angle, color, depth + 1, branchRootId, side, branchZ);
       });
+    };
+
+    allBySide.forEach((item, globalIndex) => {
+      const { root, side, heightT, originalIndex } = item;
+      const color = colorForRoot(root, originalIndex);
+      const sideT = heightT;
+
+      // Branches emerge progressively along the trunk, each at its own height.
+      const attachY = attachLow + (attachHigh - attachLow) * heightT;
+      const attachId = `attach-${root.id}`;
+      const branchZ = 0.76 + ((originalIndex * 37) % 24) / 100; // 0.76..0.99
+
+      pos.push({
+        id: attachId,
+        x: trunkX,
+        y: attachY,
+        type: "category",
+        label: "",
+        color,
+        depth: -1,
+        isVirtual: true,
+        branchRootId: root.id,
+        side,
+        z: branchZ,
+      });
+      parent[attachId] = "root";
+
+      // Main branches arc outward and upward from that shared trunk.
+      const horizontal = isMobile ? Math.min(W * 0.28, 128) : Math.min(W * 0.24, 250);
+      const vertical = isMobile ? 58 + sideT * 34 : 82 + sideT * 54;
+      const mainX = trunkX + side * horizontal;
+      const mainY = Math.max(trunkTopY + 42, attachY - vertical);
+      const mainAngle = Math.atan2(mainY - attachY, mainX - trunkX);
+      const children = notes.filter((n) => n.parentNoteId === root.id);
+      const expanded = children.length > 0 && !collapsedIds.has(root.id);
+      const mainId = `note-${root.id}`;
+
+      pos.push({
+        id: mainId,
+        x: mainX,
+        y: mainY,
+        type: "note",
+        label: root.title,
+        color,
+        categoryId: root.categoryId ?? undefined,
+        noteId: root.id,
+        parentNoteId: root.parentNoteId,
+        noteType: root.noteType,
+        hasChildren: children.length > 0,
+        isCollapsed: !expanded,
+        isMain: true,
+        depth: 0,
+        branchRootId: root.id,
+        side,
+        z: branchZ,
+      });
+      parent[mainId] = attachId;
+      eds.push({ from: attachId, to: mainId, kind: "branch" });
+
+      placeChildren(root, mainX, mainY, mainAngle, color, 1, root.id, side, branchZ);
     });
 
-    const ids = new Set(pos.map((node) => node.id));
-    pos.filter((node) => node.type === "note" && !node.isMain).forEach((node) => {
-      const parentId = node.parentNoteId ? `note-${node.parentNoteId}` : "";
-      if (ids.has(parentId)) eds.push({ from: parentId, to: node.id, kind: "branch" });
+    return { positions: pos, edges: eds, parentMap: parent };
+  }, [notes, categories, rootNotes, visibleRoots, brainName, size.w, size.h, collapsedIds]);
+
+  // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
+  // node moves its whole subtree along with it.
+  const positionsWithOffsets = useMemo(() => {
+    const accumulated: Record<string, { dx: number; dy: number }> = {};
+    const compute = (id: string): { dx: number; dy: number } => {
+      if (accumulated[id]) return accumulated[id];
+      const own = offsets[id] || { dx: 0, dy: 0 };
+      const parentId = parentMap[id];
+      if (!parentId) {
+        accumulated[id] = own;
+        return own;
+      }
+      const par = compute(parentId);
+      const total = { dx: own.dx + par.dx, dy: own.dy + par.dy };
+      accumulated[id] = total;
+      return total;
+    };
+    return positions.map((p) => {
+      const off = compute(p.id);
+      const nx = p.x + off.dx;
+      const ny = p.y + off.dy;
+      return off.dx !== 0 || off.dy !== 0 ? { ...p, x: nx, y: ny } : p;
     });
-
-    return { positions: pos, edges: eds };
-  }, [notes, categories, rootNotes, hiddenCategoryIds, brainName, collapsedIds]);
-
-
-  // Las coordenadas absolutas son la geometría final; no existen offsets de sesión.
-  const positionsWithOffsets = positions;
+  }, [positions, offsets, parentMap]);
 
   const getPos = (id: string) => positionsWithOffsets.find((p) => p.id === id);
 
+  const getNodeRadius = useCallback((node: NodePos) => {
+    if (node.isVirtual) return 0;
+    if (node.type === "root") return ROOT_R;
+    if (node.type === "note" && node.isMain) return CAT_R;
+    return NOTE_R;
+  }, []);
+
+  const getSubtreeIds = useCallback(
+    (nodeId: string) => {
+      const ids = new Set<string>();
+      const visitNote = (noteId: string) => {
+        ids.add(`note-${noteId}`);
+        notes.filter((n) => n.parentNoteId === noteId).forEach((child) => visitNote(child.id));
+      };
+
+      if (nodeId.startsWith("note-")) {
+        visitNote(nodeId.replace("note-", ""));
+      } else if (nodeId.startsWith("cat-")) {
+        const categoryId = nodeId.replace("cat-", "");
+        ids.add(nodeId);
+        notes.filter((n) => n.categoryId === categoryId && !n.parentNoteId).forEach((note) => visitNote(note.id));
+      } else {
+        positionsWithOffsets.forEach((node) => ids.add(node.id));
+      }
+
+      return ids;
+    },
+    [notes, positionsWithOffsets],
+  );
+
+  const getNodesBounds = useCallback(
+    (nodes: NodePos[]) => {
+      if (nodes.length === 0) return null;
+      return nodes.reduce(
+        (bounds, node) => {
+          const r = getNodeRadius(node);
+          const labelPadX = node.isVirtual ? 0 : node.type === "root" ? 86 : node.isMain ? 92 : 78;
+          const labelPadY = node.isVirtual ? 0 : node.type === "root" ? 24 : node.isMain ? 20 : 16;
+          return {
+            minX: Math.min(bounds.minX, node.x - Math.max(r, labelPadX)),
+            maxX: Math.max(bounds.maxX, node.x + Math.max(r, labelPadX)),
+            minY: Math.min(bounds.minY, node.y - Math.max(r, labelPadY)),
+            maxY: Math.max(bounds.maxY, node.y + Math.max(r, labelPadY)),
+          };
+        },
+        { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity },
+      );
+    },
+    [getNodeRadius],
+  );
+
   const fitFullTree = useCallback(() => {
-    const zoom = Math.min(1, Math.max(0.25, Math.min(size.w / CANONICAL_SIZE.width, size.h / CANONICAL_SIZE.height)));
+    const bounds = getNodesBounds(positionsWithOffsets);
+    if (!bounds) return;
+
+    const isMobile = size.w < 640;
+    const sideMargin = isMobile ? 12 : 36;
+    const topMargin = isMobile ? 48 : 56;
+    const bottomMargin = isMobile ? 48 : 56;
+    const availableW = Math.max(1, size.w - sideMargin * 2);
+    const availableH = Math.max(1, size.h - topMargin - bottomMargin);
+    const treeW = Math.max(1, bounds.maxX - bounds.minX);
+    const treeH = Math.max(1, bounds.maxY - bounds.minY);
+    const zoom = Math.min(1, Math.max(0.25, Math.min(availableW / treeW, availableH / treeH)));
+    const treeCenterX = (bounds.minX + bounds.maxX) / 2;
+    const treeCenterY = (bounds.minY + bounds.maxY) / 2;
+    const targetX = size.w / 2;
+    const targetY = (topMargin + (size.h - bottomMargin)) / 2;
 
     setViewZoom(zoom);
-    setPan({
-      x: (size.w - CANONICAL_SIZE.width * zoom) / 2,
-      y: (size.h - CANONICAL_SIZE.height * zoom) / 2,
-    });
-  }, [size.w, size.h]);
+    setPan({ x: targetX - treeCenterX * zoom, y: targetY - treeCenterY * zoom });
+  }, [getNodesBounds, positionsWithOffsets, size.w, size.h]);
 
   const layoutSignature = useMemo(() => {
     return positions.map((node) => `${node.id}:${Math.round(node.x)}:${Math.round(node.y)}`).join("|");
@@ -376,6 +641,7 @@ const GraphView = () => {
           return p;
         });
         panState.current = null;
+        dragState.current = null;
         cancelLongPress();
         didPan.current = true;
         setIsPanning(true);
@@ -419,6 +685,24 @@ const GraphView = () => {
         return;
       }
 
+      const ds = dragState.current;
+      if (ds) {
+        const rawDx = e.clientX - ds.startX;
+        const rawDy = e.clientY - ds.startY;
+        if (!didDrag.current && Math.hypot(rawDx, rawDy) > 5) {
+          didDrag.current = true;
+          cancelLongPress();
+        }
+        if (didDrag.current) {
+          const zoom = viewZoomRef.current || 1;
+          const dx = rawDx / zoom;
+          const dy = rawDy / zoom;
+          setOffsets((prev) => ({
+            ...prev,
+            [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
+          }));
+        }
+      }
       const ps = panState.current;
       if (!ps) return;
       const rawDx = e.clientX - ps.startX;
@@ -430,6 +714,8 @@ const GraphView = () => {
     };
     const onUp = (e: PointerEvent) => {
       pointersRef.current.delete(e.pointerId);
+      dragState.current = null;
+
       // Cancel canvas long-press if pointer released before timer fired
       if (canvasLongPressTimer.current) {
         clearTimeout(canvasLongPressTimer.current);
@@ -462,6 +748,10 @@ const GraphView = () => {
   // Click handling with double-click detection
   const handleNodeClick = useCallback(
     (nodeId: string, clientX: number, clientY: number) => {
+      if (didDrag.current) {
+        didDrag.current = false;
+        return;
+      }
       if (didLongPress.current) {
         didLongPress.current = false;
         return;
@@ -537,16 +827,7 @@ const GraphView = () => {
       return `M ${from.x} ${from.y} C ${from.x} ${from.y - rise}, ${to.x - dx * 0.26} ${to.y - dy * 0.08}, ${to.x} ${to.y}`;
     }
 
-    // Las bifurcaciones salen tangentes a la rama madre y solo después se abren:
-    // evita radios rectos y conserva la apariencia arborescente de la referencia.
-    const verticalBias = Math.abs(dy) >= Math.abs(dx);
-    const c1 = verticalBias
-      ? { x: from.x, y: from.y + dy * 0.58 }
-      : { x: from.x + dx * 0.54, y: from.y };
-    const c2 = verticalBias
-      ? { x: to.x - dx * 0.16, y: to.y - dy * 0.12 }
-      : { x: to.x - dx * 0.12, y: to.y - dy * 0.16 };
-    return `M ${from.x} ${from.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${to.x} ${to.y}`;
+    return `M ${from.x} ${from.y} C ${from.x + dx * 0.3} ${from.y + dy * 0.16}, ${from.x + dx * 0.74} ${from.y + dy * 0.88}, ${to.x} ${to.y}`;
   };
 
   // Trazo afilado: grueso junto al tronco, casi un pelo en las hojas.
@@ -565,23 +846,20 @@ const GraphView = () => {
       if (!p) break;
       cur = p;
     }
-    const ids = new Set<string>(["root"]);
-    positions.forEach((p) => {
-      if (p.isVirtual) ids.add(p.id);
-    });
+    const ids = new Set<string>(["root", "trunk-top", `attach-${cur.id}`]);
     const visit = (id: string) => {
       ids.add(`note-${id}`);
       notes.filter((n) => n.parentNoteId === id).forEach((c) => visit(c.id));
     };
     visit(cur.id);
     return ids;
-  }, [focusNoteId, notes, positions]);
+  }, [focusNoteId, notes]);
 
   const dimFor = useCallback((id: string) => (focusIds && !focusIds.has(id) ? 0.16 : 1), [focusIds]);
 
   // Nivel de detalle según zoom: la geometría no cambia, solo la legibilidad.
   // Cada nivel de profundidad pide un poco más de acercamiento para mostrar texto.
-  const labelVisibleAtDepth = useCallback((depth: number) => viewZoom >= 1.12 + Math.max(0, depth - 1) * 0.18, [viewZoom]);
+  const labelVisibleAtDepth = useCallback((depth: number) => viewZoom >= 0.5 + Math.max(0, depth) * 0.16, [viewZoom]);
 
   // Link edges (horizontal between notes)
   const linkEdges = useMemo(() => {
@@ -613,7 +891,7 @@ const GraphView = () => {
         // Always track pointer for pinch detection
         pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-          // Second pointer -> start pinch (cancel any in-flight pan or canvas long-press)
+        // Second pointer -> start pinch (cancel any in-flight pan, node drag or canvas long-press)
         if (pointersRef.current.size >= 2) {
           const pts = Array.from(pointersRef.current.values());
           const [p1, p2] = pts;
@@ -627,6 +905,7 @@ const GraphView = () => {
             centerY: (p1.y + p2.y) / 2,
           };
           panState.current = null;
+          dragState.current = null;
           cancelLongPress();
           if (canvasLongPressTimer.current) {
             clearTimeout(canvasLongPressTimer.current);
@@ -715,18 +994,14 @@ const GraphView = () => {
             const kind = edge.kind ?? "branch";
             const isTrunk = kind === "trunk";
             const isMain = to.type === "note" && to.isMain;
-            const width = isTrunk ? 2.6 : Math.max(0.5, strokeForDepth(to.depth + 1, "branch") * 1.6);
+            const width = isTrunk ? 2.75 : widthForDepth(to.depth, isMain);
             const z = Math.min(from.z ?? 1, to.z ?? 1);
             const focusDim = isTrunk ? 1 : Math.min(dimFor(edge.from), dimFor(edge.to));
             const isActive = !!focusIds && focusIds.has(edge.to);
             const baseOpacity = isTrunk ? 0.5 : isMain ? 0.78 : 0.56;
             const opacity = isActive ? Math.min(0.96, baseOpacity + 0.16) : baseOpacity * z * focusDim;
             const stroke = isTrunk ? "hsl(262 32% 58%)" : `hsl(${to.color})`;
-            // La rama siempre se traza entre las posiciones actuales de madre e hija,
-            // así nunca se desconecta al mover un nodo o su subárbol.
-            const d = edge.d ?? (edge.motif
-              ? motifPath(from, to, edge.motif, !!edge.mirror)
-              : branchPath(from, to, kind));
+            const d = branchPath(from, to, kind);
 
             return (
               <g key={`be-${idx}`} style={{ opacity, transition: "opacity 320ms ease" }}>
@@ -815,8 +1090,12 @@ const GraphView = () => {
                   top: node.y,
                 }}
                 exit={{ opacity: 0, scale: 0.88 }}
-                transition={{ type: "spring", stiffness: 290, damping: 28 }}
-                className="absolute cursor-pointer touch-none"
+                transition={
+                  dragState.current?.nodeId === node.id
+                    ? { duration: 0 }
+                    : { type: "spring", stiffness: 290, damping: 28 }
+                }
+                className="absolute cursor-grab active:cursor-grabbing touch-none"
                 data-graph-node
                 style={{
                   width: 1,
@@ -827,6 +1106,15 @@ const GraphView = () => {
                 }}
                 onPointerDown={(e) => {
                   e.stopPropagation();
+                  didDrag.current = false;
+                  const cur = offsets[node.id] || { dx: 0, dy: 0 };
+                  dragState.current = {
+                    nodeId: node.id,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    baseDx: cur.dx,
+                    baseDy: cur.dy,
+                  };
                   startLongPress(node.id, e.clientX, e.clientY);
                 }}
                 onPointerUp={cancelLongPress}
@@ -838,7 +1126,7 @@ const GraphView = () => {
               >
                 {isRoot ? (
                   <div
-                    className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-xl border bg-card/95 px-4 py-2 font-display text-xs font-semibold text-foreground shadow-sm"
+                    className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-2xl border bg-card/95 px-5 py-2.5 font-display font-semibold text-foreground shadow-sm"
                     style={{
                       borderColor: "hsl(262 30% 70% / 0.55)",
                       boxShadow: "0 8px 26px hsl(262 30% 40% / 0.10)",
@@ -850,7 +1138,7 @@ const GraphView = () => {
                   <div
                     className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center whitespace-nowrap rounded-full border bg-card/95 font-body text-foreground shadow-sm transition-shadow ${
                       isMainNote
-                         ? "gap-1.5 px-2.5 py-1 text-[10px] font-medium"
+                        ? "gap-2 px-3 py-1.5 text-[12px] font-semibold"
                         : "gap-1.5 px-2.5 py-1 text-[10px] font-medium"
                     } ${isLinkSource ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-background" : ""}`}
                     style={{
@@ -1178,6 +1466,20 @@ const GraphView = () => {
             </div>
           )}
         </div>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setOffsets({});
+            setFocusNoteId(null);
+            fitFullTree();
+            setShowFilterPanel(false);
+          }}
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
+          title="Restablecer vista del árbol"
+        >
+          <TreePine size={16} />
+        </button>
 
         <button
           onClick={(e) => {

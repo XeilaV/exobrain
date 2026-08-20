@@ -252,8 +252,6 @@ export type Database = {
           parent_note_id: string | null
           pos_dx: number | null
           pos_dy: number | null
-          pos_x: number | null
-          pos_y: number | null
           title: string
           updated_at: string
           user_id: string
@@ -272,8 +270,6 @@ export type Database = {
           parent_note_id?: string | null
           pos_dx?: number | null
           pos_dy?: number | null
-          pos_x?: number | null
-          pos_y?: number | null
           title?: string
           updated_at?: string
           user_id: string
@@ -292,8 +288,6 @@ export type Database = {
           parent_note_id?: string | null
           pos_dx?: number | null
           pos_dy?: number | null
-          pos_x?: number | null
-          pos_y?: number | null
           title?: string
           updated_at?: string
           user_id?: string
@@ -372,8 +366,6 @@ export type Database = {
           parent_note_id: string | null
           pos_dx: number | null
           pos_dy: number | null
-          pos_x: number | null
-          pos_y: number | null
           title: string
           updated_at: string
           user_id: string
@@ -401,8 +393,6 @@ export type Database = {
           parent_note_id: string | null
           pos_dx: number | null
           pos_dy: number | null
-          pos_x: number | null
-          pos_y: number | null
           title: string
           updated_at: string
           user_id: string
@@ -430,8 +420,6 @@ export type Database = {
           parent_note_id: string | null
           pos_dx: number | null
           pos_dy: number | null
-          pos_x: number | null
-          pos_y: number | null
           title: string
           updated_at: string
           user_id: string

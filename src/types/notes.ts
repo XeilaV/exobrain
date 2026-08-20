@@ -30,12 +30,6 @@ export interface Note {
   noteType: NoteType;
   isCollapsed: boolean;
   icon?: string | null;
-  posDx?: number | null;
-  posDy?: number | null;
-  /** Coordenadas absolutas guardadas del nodo en el mapa (posición manual). */
-  posX?: number | null;
-  posY?: number | null;
-
   createdAt: string;
   updatedAt: string;
 }

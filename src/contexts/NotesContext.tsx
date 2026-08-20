@@ -54,10 +54,6 @@ interface NotesContextType {
   canMoveTo: (noteId: string, targetId: string | null) => boolean;
   getRootNotes: () => Note[];
   updateNote: (id: string, updates: Partial<Note>) => void;
-  updateNotePosition: (id: string, dx: number | null, dy: number | null) => Promise<void>;
-  saveNotePositions: (entries: { id: string; x: number; y: number }[]) => Promise<void>;
-  clearAllPositions: () => Promise<void>;
-
   deleteNote: (id: string) => void;
   addCategory: (name: string, icon: string, color?: string, parentId?: string | null) => void;
   updateCategory: (id: string, updates: Partial<Pick<Category, "name" | "icon" | "color">>) => void;
@@ -109,13 +105,8 @@ const dbToNote = (row: any): Note => ({
   noteType: (row.note_type as NoteType) ?? "text",
   isCollapsed: row.is_collapsed ?? true,
   icon: row.icon ?? null,
-  posDx: row.pos_dx !== null && row.pos_dx !== undefined ? Number(row.pos_dx) : null,
-  posDy: row.pos_dy !== null && row.pos_dy !== undefined ? Number(row.pos_dy) : null,
-  posX: row.pos_x !== null && row.pos_x !== undefined ? Number(row.pos_x) : null,
-  posY: row.pos_y !== null && row.pos_y !== undefined ? Number(row.pos_y) : null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
-
 });
 
 const dbToCategory = (row: any): Category => ({
@@ -126,49 +117,6 @@ const dbToCategory = (row: any): Category => ({
   parentId: null,
   isCollapsed: row.is_collapsed ?? true,
 });
-
-const FIXED_ROOT = { x: 610, y: 540 };
-const NEW_NODE_DISTANCE = 92;
-const MIN_NODE_GAP = 70;
-
-/**
- * Busca un hueco corto alrededor de la madre sin redistribuir el árbol existente.
- * Si los huecos cercanos están ocupados, prolonga únicamente la nueva ramificación.
- */
-const getFixedNewNotePosition = (existing: Note[], parentId: string | null) => {
-  const parent = parentId ? existing.find((note) => note.id === parentId) : undefined;
-  const grandparent = parent?.parentNoteId
-    ? existing.find((note) => note.id === parent.parentNoteId)
-    : undefined;
-  const origin = parent?.posX != null && parent.posY != null
-    ? { x: parent.posX, y: parent.posY }
-    : FIXED_ROOT;
-  const inheritedAngle = grandparent?.posX != null && grandparent.posY != null && parent?.posX != null && parent.posY != null
-    ? Math.atan2(parent.posY - grandparent.posY, parent.posX - grandparent.posX)
-    : -Math.PI / 2;
-  const siblings = existing.filter((note) => note.parentNoteId === parentId).length;
-  const offsets = [0, 0.48, -0.48, 0.9, -0.9, 1.25, -1.25];
-  const occupied = existing.filter((note) => note.posX != null && note.posY != null);
-
-  for (let ring = 1; ring <= 4; ring += 1) {
-    for (let index = 0; index < offsets.length; index += 1) {
-      const offset = offsets[(index + siblings) % offsets.length];
-      const distance = NEW_NODE_DISTANCE + (ring - 1) * 42;
-      const candidate = {
-        x: origin.x + Math.cos(inheritedAngle + offset) * distance,
-        y: origin.y + Math.sin(inheritedAngle + offset) * distance,
-      };
-      const overlaps = occupied.some((note) => Math.hypot((note.posX ?? 0) - candidate.x, (note.posY ?? 0) - candidate.y) < MIN_NODE_GAP);
-      if (!overlaps) return candidate;
-    }
-  }
-
-  const distance = NEW_NODE_DISTANCE + 4 * 42;
-  return {
-    x: origin.x + Math.cos(inheritedAngle) * distance,
-    y: origin.y + Math.sin(inheritedAngle) * distance,
-  };
-};
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
@@ -230,7 +178,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         noteColor = parent.color ?? noteColor;
       }
     }
-    const position = getFixedNewNotePosition(notes, parentNoteId ?? null);
     const { data, error } = await supabase.from("notes").insert({
       user_id: user.id,
       category_id: catId,
@@ -241,8 +188,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       checklist: [],
       linked_note_ids: [],
       note_type: noteType,
-      pos_x: position.x,
-      pos_y: position.y,
     }).select().single();
     if (error) { toast.error("Error al crear nota"); return null; }
     const note = dbToNote(data);
@@ -269,37 +214,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       await supabase.from("notes").update(dbUpdates).eq("id", id);
     }, 500);
   }, []);
-
-  /** Guarda la posición absoluta de un nodo en el mapa. */
-  const updateNotePosition = useCallback(async (id: string, x: number | null, y: number | null) => {
-    setNotes(prev => prev.map(n => n.id === id ? { ...n, posX: x, posY: y } : n));
-    await supabase.from("notes").update({ pos_x: x, pos_y: y }).eq("id", id);
-  }, []);
-
-  /** Guarda de golpe varias posiciones absolutas. */
-  const saveNotePositions = useCallback(async (entries: { id: string; x: number; y: number }[]) => {
-    if (entries.length === 0) return;
-    const map = new Map(entries.map(e => [e.id, e]));
-    setNotes(prev => prev.map(n => {
-      const e = map.get(n.id);
-      return e ? { ...n, posX: e.x, posY: e.y } : n;
-    }));
-    await Promise.all(
-      entries.map(e => supabase.from("notes").update({ pos_x: e.x, pos_y: e.y }).eq("id", e.id)),
-    );
-  }, []);
-
-  /** Borra todas las posiciones manuales y vuelve a sembrar con el reparto automático. */
-  const clearAllPositions = useCallback(async () => {
-    if (!user) return;
-    setNotes(prev => prev.map(n => ({ ...n, posX: null, posY: null, posDx: null, posDy: null })));
-    await supabase
-      .from("notes")
-      .update({ pos_x: null, pos_y: null, pos_dx: null, pos_dy: null })
-      .eq("user_id", user.id);
-  }, [user]);
-
-
 
   const deleteNote = useCallback(async (id: string) => {
     setNotes(prev => prev.filter(n => n.id !== id).map(n => ({
@@ -460,7 +374,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const parent = notes.find(n => n.id === payload.parentNoteId);
           if (parent) catId = parent.categoryId;
         }
-        const position = getFixedNewNotePosition(notes, payload.parentNoteId ?? null);
         const { data, error } = await supabase.from("notes").insert({
           user_id: user.id,
           category_id: catId,
@@ -470,8 +383,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           checklist: [],
           linked_note_ids: [],
           note_type: noteType,
-          pos_x: position.x,
-          pos_y: position.y,
         }).select().single();
         if (error) throw error;
         const note = dbToNote(data);
@@ -660,8 +571,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       notes, categories, selectedCategoryId, selectedNoteId, activeView, loading,
       setActiveView, setSelectedCategoryId, setSelectedNoteId,
       addNote, moveNote, getDescendantIds, canMoveTo, getRootNotes, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
-      updateNotePosition, saveNotePositions, clearAllPositions,
-
       addChecklistItem, toggleChecklistItem, deleteChecklistItem,
       toggleNoteCollapsed, toggleCategoryCollapsed,
       linkNotes, unlinkNotes,
