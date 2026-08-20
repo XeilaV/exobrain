@@ -463,26 +463,35 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
   if (roots.length > 0) {
     const weights = roots.map((r) => weightOf(r.id));
     const total = weights.reduce((a, b) => a + b, 0) || 1;
-    const ARC = 2.5; // arco superior repartido entre las ramas raíz
+    const ARC = 2.35; // arco superior repartido entre las ramas raíz
     const start = UP - ARC / 2;
+
+    // Cuñas consecutivas (no solapadas) de izquierda a derecha.
+    const sectors: { a0: number; a1: number; mid: number; idx: number }[] = [];
     let acc = 0;
-    // Alterna lados para que las ramas grandes no se apilen del mismo lado.
-    const orderedIdx = roots.map((_, i) => i);
-    orderedIdx.forEach((ri, k) => {
-      const w = weights[ri];
+    roots.forEach((_, i) => {
       const a0 = start + (acc / total) * ARC;
-      const a1 = start + ((acc + w) / total) * ARC;
-      acc += w;
-      const root = roots[ri];
-      const mid = (a0 + a1) / 2;
-      const from = trunkPoints[k + 1] ?? rootJunction;
-      const rootW = weightOf(root.id);
-      const scale = (compact ? 92 : 132) * (1 + Math.min(0.6, Math.sqrt(rootW) * 0.12));
+      const a1 = start + ((acc + weights[i]) / total) * ARC;
+      acc += weights[i];
+      sectors.push({ a0, a1, mid: (a0 + a1) / 2, idx: i });
+    });
+
+    // Las cuñas más laterales salen de los puntos bajos del tronco y las
+    // centrales de los altos: así ninguna rama cruza sobre otra.
+    const order = sectors
+      .slice()
+      .sort((a, b) => Math.abs(b.mid - UP) - Math.abs(a.mid - UP));
+
+    order.forEach((sec, k) => {
+      const root = roots[sec.idx];
+      const from = trunkPoints[k + 1] ?? trunkPoints[trunkPoints.length - 1] ?? rootJunction;
+      const rootW = weights[sec.idx];
+      const scale = (compact ? 88 : 124) * (1 + Math.min(0.6, Math.sqrt(rootW) * 0.12));
       placeGroup(
         from,
-        mid,
-        Math.max(0.14, (mid - a0) * 0.92),
-        Math.max(0.14, (a1 - mid) * 0.92),
+        sec.mid,
+        Math.max(0.14, (sec.mid - sec.a0) * 0.92),
+        Math.max(0.14, (sec.a1 - sec.mid) * 0.92),
         [root],
         scale,
         1,
@@ -491,6 +500,7 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
       );
     });
   }
+
 
   return { junctions, segments, byNote, rootJunction, branchRootOf };
 };
