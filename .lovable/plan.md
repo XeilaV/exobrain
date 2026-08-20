@@ -1,37 +1,33 @@
-# Nuevo árbol tipo mapa mental (estilo referencia)
+# Árbol orgánico: tronco vertical y copa ramificada
 
-Rehacer la vista de grafo para que se parezca a la imagen: tronco central desde el nodo raíz "ExoBrain" abajo, ramas curvas que se abren hacia arriba y a los lados, nodos como píldoras blancas con un punto de color encima, fondo claro con retícula de puntos, controles de zoom y minimapa.
+Rehacer únicamente el **layout y el dibujo** del mapa (la vista `GraphViewV2`, que es la que ve la app) para que parezca un árbol real y no un diagrama radial. No se toca la base de datos, la jerarquía, la IA, las tareas ni el editor de notas.
 
-## Comportamiento
+## Estructura del árbol
 
-- Todos los nodos aparecen **abiertos por defecto** (sin plegado inicial); el doble clic sigue plegando/desplegando.
-- Navegación libre del lienzo:
-  - Arrastrar el fondo = mover (pan).
-  - Rueda / pellizco = zoom suave anclado al cursor (sin saltos ni compounding).
-  - Rotación del árbol: control para girar todo el lienzo (rueda con Shift o gesto de dos dedos) más botón de "reset vista".
-  - Doble clic en el fondo o botón "ajustar" = encuadrar todo el árbol.
-- Arrastrar un nodo lo reposiciona y arrastra su descendencia, como ahora.
-- Al expandir una rama, el foco se desplaza suavemente hacia ella.
-- Minimapa abajo a la derecha con el recuadro del viewport, clicable para saltar.
-- Barra de zoom abajo a la izquierda (mano / + / − / ajustar) y porcentaje arriba a la derecha.
+- **Tronco**: desde el nodo base "ExoBrain" sube una sola línea vertical fina y ligeramente curvada.
+- **Ramas principales**: en lugar de salir todas del mismo punto, nacen del tronco a **alturas distintas y alternando lados** (izquierda / derecha / centro), abriéndose hacia arriba y hacia fuera.
+- **Bifurcaciones orgánicas**: cada nodo reparte a sus hijas en abanico alrededor de su propia dirección de crecimiento, con un ángulo que se estrecha y una longitud que se acorta según la profundidad. Nunca hijas apiladas en vertical bajo la madre.
+- Separación anti-solape: el abanico de cada rama se dimensiona según cuántos descendientes tiene, de modo que las ramas grandes ocupan más arco.
+- Todo el árbol permanece siempre visible (sin plegado por defecto); el doble clic sigue plegando/desplegando.
 
-## Layout
+## Líneas y nodos
 
-Layout de árbol radial-orgánico calculado por capas:
-- Raíz abajo al centro, tronco vertical hasta un punto de reparto.
-- Ramas de primer nivel repartidas en abanico (izquierda / centro / derecha).
-- Cada nivel hijo se reparte en un arco alrededor de su madre, con radio creciente según el número de descendientes para evitar solapes.
-- Enlaces con curvas Bézier de grosor decreciente por profundidad.
+- Curvas Bézier suaves, **más gruesas cerca del tronco y afinándose con la profundidad** hasta casi un pelo en las hojas.
+- Cada rama principal hereda un color propio, aplicado con baja saturación: la línea usa un degradado del color de la rama, sin brillos ni neón.
+- Nodos = etiquetas pequeñas y discretas junto a la bifurcación, con un punto del color de la rama. Tamaño de texto menor a mayor profundidad.
+- **Profundidad por niveles**: los niveles profundos se dibujan con menos opacidad y, por debajo de cierto zoom, sin texto (solo el punto); al acercarse aparecen las etiquetas.
+- Ligera sensación 3D: sombra muy sutil bajo cada nodo y las ramas lejanas algo más claras y finas.
+
+## Navegación
+
+- Pan arrastrando el fondo, zoom con rueda/pellizco anclado al cursor, botón de encuadrar todo. Se mantiene el arrastre de nodos con su descendencia y el foco automático al abrir una rama.
 
 ## Detalles técnicos
 
-- Se reescribe `src/components/GraphView.tsx` (la vista que usan `Index.tsx` y `MobileLayout.tsx`); `GraphViewV2.tsx` se deja como está.
-- Transformación única `translate(pan) rotate(θ) scale(zoom)` sobre un grupo SVG; el hit-testing y el arrastre convierten coordenadas de pantalla a espacio del grafo con la matriz inversa.
-- Listener `wheel` nativo no pasivo (`{ passive: false }`) con `deltaMode` normalizado y zoom exponencial anclado al cursor; pinch (`ctrlKey`) y dos dedos con Pointer Events y `touch-action: none`.
-- Se conservan datos y contexto actuales (`NotesContext`, RPC `move_note`, colores, iconos, colapsos persistidos); solo cambia el render/interacción. El estado de colapso persistido se ignora en la carga inicial (todo abierto) y se guarda al plegar manualmente.
-- Estilos con tokens semánticos de `index.css`; nodo = píldora `surface-glass`, punto superior con el color del tema.
-- Móvil: mismos gestos, tamaños y separaciones reducidos.
+- Cambios acotados a `src/components/GraphViewV2.tsx`: se sustituye el bloque de cálculo `positions/edges` por un layout de tronco + abanico recursivo (dirección heredada, ángulo y longitud decrecientes, peso por número de descendientes) y se reescribe el dibujo de aristas con trazo afilado por profundidad y `linearGradient` por rama.
+- Se conservan `NotesContext`, colores por raíz, offsets de arrastre, `getSubtreeIds`, `fitFullTree`, gestos y todos los diálogos existentes.
+- Estilos con tokens semánticos de `index.css`; sin nuevas dependencias ni migraciones.
 
 ## Fuera de alcance
 
-- Sin cambios en el editor de notas, chat IA, tareas ni backend.
+- Editor de notas, chat IA, tareas, exportación y backend quedan igual.
