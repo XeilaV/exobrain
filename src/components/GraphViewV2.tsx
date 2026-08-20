@@ -125,10 +125,7 @@ const GraphView = () => {
   const didDrag = useRef(false);
   const didPan = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastExpandedRef = useRef<string | null>(null);
-  const lastCollapsedRef = useRef<string | null>(null);
   const didInitialFitRef = useRef(false);
-  const previousHasOpenBranchRef = useRef(false);
   const viewZoomRef = useRef(1);
 
   // Drag offsets per node id (session-local)
