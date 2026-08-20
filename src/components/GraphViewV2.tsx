@@ -160,42 +160,49 @@ const GraphView = () => {
     centerY: number;
   } | null>(null);
 
-  // Hidratación: aplicar los desplazamientos guardados en cuanto llegan las notas.
-  useEffect(() => {
-    if (hydratedPositionsRef.current) return;
-    if (loading || notes.length === 0) return;
-    hydratedPositionsRef.current = true;
-    const saved: Record<string, { dx: number; dy: number }> = {};
-    notes.forEach((n) => {
-      if (n.posDx != null || n.posDy != null) {
-        saved[`note-${n.id}`] = { dx: Number(n.posDx ?? 0), dy: Number(n.posDy ?? 0) };
-      }
-    });
-    if (Object.keys(saved).length > 0) {
-      setOffsets((prev) => ({ ...saved, ...prev }));
-    }
-  }, [notes, loading]);
+  // Posiciones finales de los nodos en el mundo del árbol (para poder persistirlas).
+  const finalPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
 
-  const persistOffset = useCallback(
+  /** Guarda la posición absoluta del nodo arrastrado y de todo su subárbol. */
+  const persistDragged = useCallback(
     (nodeId: string) => {
       if (!nodeId.startsWith("note-")) return;
-      const noteId = nodeId.replace("note-", "");
-      const off = offsetsRef.current[nodeId];
-      if (!off) return;
-      void updateNotePosition(noteId, off.dx, off.dy);
+      const rootNoteId = nodeId.replace("note-", "");
+      const ids: string[] = [];
+      const visit = (id: string) => {
+        ids.push(id);
+        notesRef.current.filter((n) => n.parentNoteId === id).forEach((c) => visit(c.id));
+      };
+      visit(rootNoteId);
+      const entries = ids
+        .map((id) => {
+          const p = finalPositionsRef.current.get(`note-${id}`);
+          return p ? { id, x: p.x, y: p.y } : null;
+        })
+        .filter(Boolean) as { id: string; x: number; y: number }[];
+      if (entries.length === 0) return;
+      // Las coordenadas pasan a ser el dato oficial: se limpian los offsets de sesión.
+      setOffsets((prev) => {
+        const next = { ...prev };
+        ids.forEach((id) => delete next[`note-${id}`]);
+        return next;
+      });
+      void saveNotePositions(entries);
     },
-    [updateNotePosition],
+    [saveNotePositions],
   );
 
-  /** Guarda de golpe toda la disposición actual de la sesión. */
+  /** Guarda de golpe toda la disposición actual del árbol. */
   const saveCurrentLayout = useCallback(async () => {
-    const entries = Object.entries(offsetsRef.current)
-      .filter(([id]) => id.startsWith("note-"))
-      .map(([id, off]) => ({ id: id.replace("note-", ""), dx: off.dx, dy: off.dy }));
+    const entries: { id: string; x: number; y: number }[] = [];
+    finalPositionsRef.current.forEach((p, id) => {
+      if (id.startsWith("note-")) entries.push({ id: id.replace("note-", ""), x: p.x, y: p.y });
+    });
     if (entries.length === 0) {
-      toast.info("No hay cambios de posición que guardar");
+      toast.info("No hay posiciones que guardar");
       return;
     }
+    setOffsets({});
     await saveNotePositions(entries);
     toast.success("Disposición guardada");
   }, [saveNotePositions]);
