@@ -54,6 +54,10 @@ interface NotesContextType {
   canMoveTo: (noteId: string, targetId: string | null) => boolean;
   getRootNotes: () => Note[];
   updateNote: (id: string, updates: Partial<Note>) => void;
+  updateNotePosition: (id: string, dx: number | null, dy: number | null) => Promise<void>;
+  saveNotePositions: (entries: { id: string; dx: number; dy: number }[]) => Promise<void>;
+  clearAllPositions: () => Promise<void>;
+
   deleteNote: (id: string) => void;
   addCategory: (name: string, icon: string, color?: string, parentId?: string | null) => void;
   updateCategory: (id: string, updates: Partial<Pick<Category, "name" | "icon" | "color">>) => void;
@@ -105,8 +109,11 @@ const dbToNote = (row: any): Note => ({
   noteType: (row.note_type as NoteType) ?? "text",
   isCollapsed: row.is_collapsed ?? true,
   icon: row.icon ?? null,
+  posDx: row.pos_dx !== null && row.pos_dx !== undefined ? Number(row.pos_dx) : null,
+  posDy: row.pos_dy !== null && row.pos_dy !== undefined ? Number(row.pos_dy) : null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+
 });
 
 const dbToCategory = (row: any): Category => ({
@@ -214,6 +221,34 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       await supabase.from("notes").update(dbUpdates).eq("id", id);
     }, 500);
   }, []);
+
+  /** Guarda el desplazamiento manual de un nodo (posición relativa al layout automático). */
+  const updateNotePosition = useCallback(async (id: string, dx: number | null, dy: number | null) => {
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, posDx: dx, posDy: dy } : n));
+    await supabase.from("notes").update({ pos_dx: dx, pos_dy: dy }).eq("id", id);
+  }, []);
+
+  /** Guarda de golpe varios desplazamientos manuales. */
+  const saveNotePositions = useCallback(async (entries: { id: string; dx: number; dy: number }[]) => {
+    if (entries.length === 0) return;
+    const map = new Map(entries.map(e => [e.id, e]));
+    setNotes(prev => prev.map(n => {
+      const e = map.get(n.id);
+      return e ? { ...n, posDx: e.dx, posDy: e.dy } : n;
+    }));
+    await Promise.all(
+      entries.map(e => supabase.from("notes").update({ pos_dx: e.dx, pos_dy: e.dy }).eq("id", e.id)),
+    );
+  }, []);
+
+  /** Borra todos los desplazamientos manuales y vuelve al reparto automático. */
+  const clearAllPositions = useCallback(async () => {
+    if (!user) return;
+    setNotes(prev => prev.map(n => ({ ...n, posDx: null, posDy: null })));
+    await supabase.from("notes").update({ pos_dx: null, pos_dy: null }).eq("user_id", user.id);
+  }, [user]);
+
+
 
   const deleteNote = useCallback(async (id: string) => {
     setNotes(prev => prev.filter(n => n.id !== id).map(n => ({
@@ -571,6 +606,8 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       notes, categories, selectedCategoryId, selectedNoteId, activeView, loading,
       setActiveView, setSelectedCategoryId, setSelectedNoteId,
       addNote, moveNote, getDescendantIds, canMoveTo, getRootNotes, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
+      updateNotePosition, saveNotePositions, clearAllPositions,
+
       addChecklistItem, toggleChecklistItem, deleteChecklistItem,
       toggleNoteCollapsed, toggleCategoryCollapsed,
       linkNotes, unlinkNotes,

@@ -30,6 +30,9 @@ export interface Note {
   noteType: NoteType;
   isCollapsed: boolean;
   icon?: string | null;
+  posDx?: number | null;
+  posDy?: number | null;
+
   createdAt: string;
   updatedAt: string;
 }

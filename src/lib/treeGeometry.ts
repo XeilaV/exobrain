@@ -156,7 +156,9 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
   const roots = (childrenOf.get(null) ?? []).filter((n) => !hidden.has(n.id));
 
   // --- Tronco: vertical, ligeramente irregular, partido en tramos ---
-  const trunkStep = (compact ? 78 : 108) * (roots.length > 6 ? 0.92 : 1);
+  // Paso del tronco algo mayor para que las cabezas de rama no se crucen.
+  const trunkStep = (compact ? 88 : 124) * (roots.length > 6 ? 0.94 : 1);
+
   let prev = rootJunction;
   const trunkPoints: TreeJunction[] = [rootJunction];
 
@@ -257,12 +259,13 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
 
     const weights = kids.map((k) => weightOf(k.id));
     const total = weights.reduce((a, b) => a + b, 0) || 1;
-    // Apertura del ramaje: más ancha si la rama carga mucha descendencia,
-    // más estrecha a medida que se profundiza.
-    const spread = Math.min(
-      (depth === 1 ? 1.6 : 1.25) * (0.6 + Math.min(1, total / 10) * 0.75),
-      2.0,
-    );
+    // Apertura del ramaje: amplia en el primer nivel para que las hijas no se
+    // apilen, y progresivamente más contenida al profundizar.
+    const baseSpread = depth === 1 ? 2.0 : depth === 2 ? 1.35 : 1.05;
+    const spread = Math.min(baseSpread * (0.7 + Math.min(1, total / 8) * 0.7), 2.4);
+    // Separación angular mínima entre hermanas, mayor cuanta más descendencia hay.
+    const minGap = Math.min(0.85, (depth === 1 ? 0.42 : 0.3) + Math.min(0.3, total * 0.03));
+    const angles: number[] = [];
 
     let acc = 0;
     kids.forEach((kid, i) => {
@@ -270,32 +273,41 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
       const t = kids.length === 1 ? 0 : (acc + w / 2) / total - 0.5;
       acc += w;
       // Irregularidad determinista: la copa nunca es un abanico perfecto.
-      const jitter = (hash(`${kid.id}-a`) - 0.5) * (depth === 1 ? 0.5 : 0.38);
-      const single = kids.length === 1 ? (hash(`${kid.id}-s`) - 0.5) * 0.9 : 0;
+      const jitter = (hash(`${kid.id}-a`) - 0.5) * (depth === 1 ? 0.42 : 0.3);
+      const single = kids.length === 1 ? (hash(`${kid.id}-s`) - 0.5) * 0.8 : 0;
       let a = angle + t * spread + jitter + single;
       // Nunca crecer hacia abajo: se mantiene la silueta de copa.
       const limit = 1.32;
       const rel = ((a - UP + Math.PI * 3) % TAU) - Math.PI;
       if (rel > limit) a = UP + limit;
       if (rel < -limit) a = UP - limit;
+      // Anti-solape determinista: empujar si queda demasiado cerca de una hermana.
+      angles.forEach((prevA) => {
+        const diff = a - prevA;
+        if (Math.abs(diff) < minGap) a = prevA + (diff >= 0 ? minGap : -minGap);
+      });
+      angles.push(a);
 
+      // Tramos cortos: decrecimiento marcado con la profundidad.
+      const decay = depth === 1 ? 0.58 : depth === 2 ? 0.66 : 0.7;
       const len =
         length *
-        (0.62 + hash(`${kid.id}-l`) * 0.26) *
-        (1 + Math.min(0.55, Math.sqrt(w) * 0.16));
-      grow(kid, j, a, Math.max(compact ? 44 : 62, len), depth + 1, branchRootId);
+        (decay + hash(`${kid.id}-l`) * 0.18) *
+        (1 + Math.min(0.4, Math.sqrt(w) * 0.12));
+      grow(kid, j, a, Math.max(compact ? 34 : 46, len), depth + 1, branchRootId);
     });
   };
 
   roots.forEach((root, i) => {
     const from = trunkPoints[i + 1] ?? rootJunction;
     const side = i % 2 === 0 ? 1 : -1;
-    const tilt = 0.55 + hash(`${root.id}-t`) * 0.5;
+    const tilt = 0.6 + hash(`${root.id}-t`) * 0.45;
     const angle = UP + side * tilt;
     const w = weightOf(root.id);
-    const length = (compact ? 96 : 138) * (1 + Math.min(0.7, Math.sqrt(w) * 0.14));
+    const length = (compact ? 84 : 118) * (1 + Math.min(0.55, Math.sqrt(w) * 0.12));
     grow(root, from, angle, length, 1, root.id);
   });
+
 
   return { junctions, segments, byNote, rootJunction, branchRootOf };
 };

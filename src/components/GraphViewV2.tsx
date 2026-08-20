@@ -15,6 +15,8 @@ import {
   LogIn,
   Brain,
   TreePine,
+  Save,
+
   Sun,
   Moon,
   History,
@@ -84,6 +86,10 @@ const GraphView = () => {
     moveNote,
     canMoveTo,
     updateNote,
+    updateNotePosition,
+    saveNotePositions,
+    clearAllPositions,
+
     linkNotes,
     toggleNoteCollapsed,
     setSelectedNoteId,
@@ -133,11 +139,16 @@ const GraphView = () => {
   const didInitialFitRef = useRef(false);
   const viewZoomRef = useRef(1);
 
-  // Drag offsets per node id (session-local)
+  // Desplazamientos manuales por nodo. Se hidratan desde la base de datos
+  // (notes.pos_dx / pos_dy) y se vuelven a guardar al terminar cada arrastre.
   const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
+  const offsetsRef = useRef(offsets);
+  offsetsRef.current = offsets;
+  const hydratedPositionsRef = useRef(false);
   const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(
     null,
   );
+
   const panState = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchState = useRef<{
@@ -148,6 +159,47 @@ const GraphView = () => {
     centerX: number;
     centerY: number;
   } | null>(null);
+
+  // Hidratación: aplicar los desplazamientos guardados en cuanto llegan las notas.
+  useEffect(() => {
+    if (hydratedPositionsRef.current) return;
+    if (loading || notes.length === 0) return;
+    hydratedPositionsRef.current = true;
+    const saved: Record<string, { dx: number; dy: number }> = {};
+    notes.forEach((n) => {
+      if (n.posDx != null || n.posDy != null) {
+        saved[`note-${n.id}`] = { dx: Number(n.posDx ?? 0), dy: Number(n.posDy ?? 0) };
+      }
+    });
+    if (Object.keys(saved).length > 0) {
+      setOffsets((prev) => ({ ...saved, ...prev }));
+    }
+  }, [notes, loading]);
+
+  const persistOffset = useCallback(
+    (nodeId: string) => {
+      if (!nodeId.startsWith("note-")) return;
+      const noteId = nodeId.replace("note-", "");
+      const off = offsetsRef.current[nodeId];
+      if (!off) return;
+      void updateNotePosition(noteId, off.dx, off.dy);
+    },
+    [updateNotePosition],
+  );
+
+  /** Guarda de golpe toda la disposición actual de la sesión. */
+  const saveCurrentLayout = useCallback(async () => {
+    const entries = Object.entries(offsetsRef.current)
+      .filter(([id]) => id.startsWith("note-"))
+      .map(([id, off]) => ({ id: id.replace("note-", ""), dx: off.dx, dy: off.dy }));
+    if (entries.length === 0) {
+      toast.info("No hay cambios de posición que guardar");
+      return;
+    }
+    await saveNotePositions(entries);
+    toast.success("Disposición guardada");
+  }, [saveNotePositions]);
+
 
   // Hidden main-branch filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
@@ -585,7 +637,10 @@ const GraphView = () => {
     };
     const onUp = (e: PointerEvent) => {
       pointersRef.current.delete(e.pointerId);
+      const endedDrag = dragState.current;
       dragState.current = null;
+      if (endedDrag && didDrag.current) persistOffset(endedDrag.nodeId);
+
 
       // Cancel canvas long-press if pointer released before timer fired
       if (canvasLongPressTimer.current) {
@@ -614,7 +669,7 @@ const GraphView = () => {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [cancelLongPress]);
+  }, [cancelLongPress, persistOffset]);
 
   // Click handling with double-click detection
   const handleNodeClick = useCallback(
@@ -1351,16 +1406,35 @@ const GraphView = () => {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            setOffsets({});
-            setFocusNoteId(null);
-            fitFullTree();
-            setShowFilterPanel(false);
+            void saveCurrentLayout();
+          }}
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
+          title="Guardar disposición actual del árbol"
+        >
+          <Save size={16} />
+        </button>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmDialog({
+              message: "¿Restablecer el árbol al reparto automático? Se perderán las posiciones guardadas.",
+              onConfirm: () => {
+                setOffsets({});
+                void clearAllPositions();
+                setFocusNoteId(null);
+                fitFullTree();
+                setShowFilterPanel(false);
+                setConfirmDialog(null);
+              },
+            });
           }}
           className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
           title="Restablecer vista del árbol"
         >
           <TreePine size={16} />
         </button>
+
 
         <button
           onClick={(e) => {
