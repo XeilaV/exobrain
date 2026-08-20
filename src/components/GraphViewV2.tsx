@@ -544,10 +544,6 @@ const GraphView = () => {
   }, [layoutSignature, size.w, size.h]);
 
   // Zoom con rueda / pinch de trackpad anclado al cursor (listener nativo no pasivo).
-  const fitRef = useRef(fitFullTree);
-  useEffect(() => {
-    fitRef.current = fitFullTree;
-  }, [fitFullTree]);
 
   const zoomAt = useCallback((px: number, py: number, factor: number) => {
     setViewZoom((z) => {
