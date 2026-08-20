@@ -127,6 +127,49 @@ const dbToCategory = (row: any): Category => ({
   isCollapsed: row.is_collapsed ?? true,
 });
 
+const FIXED_ROOT = { x: 610, y: 540 };
+const NEW_NODE_DISTANCE = 92;
+const MIN_NODE_GAP = 70;
+
+/**
+ * Busca un hueco corto alrededor de la madre sin redistribuir el árbol existente.
+ * Si los huecos cercanos están ocupados, prolonga únicamente la nueva ramificación.
+ */
+const getFixedNewNotePosition = (existing: Note[], parentId: string | null) => {
+  const parent = parentId ? existing.find((note) => note.id === parentId) : undefined;
+  const grandparent = parent?.parentNoteId
+    ? existing.find((note) => note.id === parent.parentNoteId)
+    : undefined;
+  const origin = parent?.posX != null && parent.posY != null
+    ? { x: parent.posX, y: parent.posY }
+    : FIXED_ROOT;
+  const inheritedAngle = grandparent?.posX != null && grandparent.posY != null && parent?.posX != null && parent.posY != null
+    ? Math.atan2(parent.posY - grandparent.posY, parent.posX - grandparent.posX)
+    : -Math.PI / 2;
+  const siblings = existing.filter((note) => note.parentNoteId === parentId).length;
+  const offsets = [0, 0.48, -0.48, 0.9, -0.9, 1.25, -1.25];
+  const occupied = existing.filter((note) => note.posX != null && note.posY != null);
+
+  for (let ring = 1; ring <= 4; ring += 1) {
+    for (let index = 0; index < offsets.length; index += 1) {
+      const offset = offsets[(index + siblings) % offsets.length];
+      const distance = NEW_NODE_DISTANCE + (ring - 1) * 42;
+      const candidate = {
+        x: origin.x + Math.cos(inheritedAngle + offset) * distance,
+        y: origin.y + Math.sin(inheritedAngle + offset) * distance,
+      };
+      const overlaps = occupied.some((note) => Math.hypot((note.posX ?? 0) - candidate.x, (note.posY ?? 0) - candidate.y) < MIN_NODE_GAP);
+      if (!overlaps) return candidate;
+    }
+  }
+
+  const distance = NEW_NODE_DISTANCE + 4 * 42;
+  return {
+    x: origin.x + Math.cos(inheritedAngle) * distance,
+    y: origin.y + Math.sin(inheritedAngle) * distance,
+  };
+};
+
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
@@ -187,6 +230,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         noteColor = parent.color ?? noteColor;
       }
     }
+    const position = getFixedNewNotePosition(notes, parentNoteId ?? null);
     const { data, error } = await supabase.from("notes").insert({
       user_id: user.id,
       category_id: catId,
@@ -197,6 +241,8 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       checklist: [],
       linked_note_ids: [],
       note_type: noteType,
+      pos_x: position.x,
+      pos_y: position.y,
     }).select().single();
     if (error) { toast.error("Error al crear nota"); return null; }
     const note = dbToNote(data);
@@ -414,6 +460,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const parent = notes.find(n => n.id === payload.parentNoteId);
           if (parent) catId = parent.categoryId;
         }
+        const position = getFixedNewNotePosition(notes, payload.parentNoteId ?? null);
         const { data, error } = await supabase.from("notes").insert({
           user_id: user.id,
           category_id: catId,
@@ -423,6 +470,8 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           checklist: [],
           linked_note_ids: [],
           note_type: noteType,
+          pos_x: position.x,
+          pos_y: position.y,
         }).select().single();
         if (error) throw error;
         const note = dbToNote(data);

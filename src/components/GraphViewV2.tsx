@@ -14,9 +14,6 @@ import {
   LogOut,
   LogIn,
   Brain,
-  TreePine,
-  Save,
-
   Sun,
   Moon,
   History,
@@ -86,9 +83,7 @@ const GraphView = () => {
     moveNote,
     canMoveTo,
     updateNote,
-    updateNotePosition,
     saveNotePositions,
-    clearAllPositions,
 
     linkNotes,
     toggleNoteCollapsed,
@@ -133,23 +128,10 @@ const GraphView = () => {
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
-  const didDrag = useRef(false);
   const didPan = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didInitialFitRef = useRef(false);
   const viewZoomRef = useRef(1);
-
-  // Desplazamientos de sesión mientras se arrastra. Al soltar se convierten en
-  // coordenadas absolutas guardadas (notes.pos_x / pos_y) y se limpian.
-  const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
-  const offsetsRef = useRef(offsets);
-  offsetsRef.current = offsets;
-  const notesRef = useRef(notes);
-  notesRef.current = notes;
-  const seededRef = useRef<Set<string>>(new Set());
-  const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(
-    null,
-  );
 
   const panState = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
@@ -161,54 +143,6 @@ const GraphView = () => {
     centerX: number;
     centerY: number;
   } | null>(null);
-
-  // Posiciones finales de los nodos en el mundo del árbol (para poder persistirlas).
-  const finalPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
-
-  /** Guarda la posición absoluta del nodo arrastrado y de todo su subárbol. */
-  const persistDragged = useCallback(
-    (nodeId: string) => {
-      if (!nodeId.startsWith("note-")) return;
-      const rootNoteId = nodeId.replace("note-", "");
-      const ids: string[] = [];
-      const visit = (id: string) => {
-        ids.push(id);
-        notesRef.current.filter((n) => n.parentNoteId === id).forEach((c) => visit(c.id));
-      };
-      visit(rootNoteId);
-      const entries = ids
-        .map((id) => {
-          const p = finalPositionsRef.current.get(`note-${id}`);
-          return p ? { id, x: p.x, y: p.y } : null;
-        })
-        .filter(Boolean) as { id: string; x: number; y: number }[];
-      if (entries.length === 0) return;
-      // Las coordenadas pasan a ser el dato oficial: se limpian los offsets de sesión.
-      setOffsets((prev) => {
-        const next = { ...prev };
-        ids.forEach((id) => delete next[`note-${id}`]);
-        return next;
-      });
-      void saveNotePositions(entries);
-    },
-    [saveNotePositions],
-  );
-
-  /** Guarda de golpe toda la disposición actual del árbol. */
-  const saveCurrentLayout = useCallback(async () => {
-    const entries: { id: string; x: number; y: number }[] = [];
-    finalPositionsRef.current.forEach((p, id) => {
-      if (id.startsWith("note-")) entries.push({ id: id.replace("note-", ""), x: p.x, y: p.y });
-    });
-    if (entries.length === 0) {
-      toast.info("No hay posiciones que guardar");
-      return;
-    }
-    setOffsets({});
-    await saveNotePositions(entries);
-    toast.success("Disposición guardada");
-  }, [saveNotePositions]);
-
 
   // Hidden main-branch filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
@@ -260,10 +194,6 @@ const GraphView = () => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
     const parent: Record<string, string> = {};
-    const W = size.w;
-    const H = size.h;
-    const isMobile = W < 640;
-
     if (rootNotes.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
     const fallbackPalette = [
@@ -284,9 +214,9 @@ const GraphView = () => {
     const skeleton = buildTreeSkeleton(
       notes.map((n) => ({ id: n.id, parentId: n.parentNoteId ?? null })),
       {
-        rootX: W / 2,
-        rootY: H - (isMobile ? 96 : 84),
-        compact: isMobile,
+        rootX: 610,
+        rootY: 540,
+        compact: false,
         collapsed: collapsedIds,
         hiddenRootIds: hiddenCategoryIds,
       },
@@ -369,59 +299,26 @@ const GraphView = () => {
     });
 
     return { positions: pos, edges: eds, parentMap: parent };
-  }, [notes, categories, rootNotes, hiddenCategoryIds, brainName, size.w, size.h, collapsedIds]);
+  }, [notes, categories, rootNotes, hiddenCategoryIds, brainName, collapsedIds]);
 
 
-  // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
-  // node moves its whole subtree along with it.
-  const positionsWithOffsets = useMemo(() => {
-    const accumulated: Record<string, { dx: number; dy: number }> = {};
-    const compute = (id: string): { dx: number; dy: number } => {
-      if (accumulated[id]) return accumulated[id];
-      const own = offsets[id] || { dx: 0, dy: 0 };
-      const parentId = parentMap[id];
-      if (!parentId) {
-        accumulated[id] = own;
-        return own;
-      }
-      const par = compute(parentId);
-      const total = { dx: own.dx + par.dx, dy: own.dy + par.dy };
-      accumulated[id] = total;
-      return total;
-    };
-    return positions.map((p) => {
-      const off = compute(p.id);
-      const nx = p.x + off.dx;
-      const ny = p.y + off.dy;
-      return off.dx !== 0 || off.dy !== 0 ? { ...p, x: nx, y: ny } : p;
-    });
-  }, [positions, offsets, parentMap]);
+  // Las coordenadas absolutas son la geometría final; no existen offsets de sesión.
+  const positionsWithOffsets = positions;
 
   const getPos = (id: string) => positionsWithOffsets.find((p) => p.id === id);
 
-  // Mantener el mapa de posiciones finales para poder persistirlas al soltar.
-  useEffect(() => {
-    const map = new Map<string, { x: number; y: number }>();
-    positionsWithOffsets.forEach((p) => map.set(p.id, { x: p.x, y: p.y }));
-    finalPositionsRef.current = map;
-  }, [positionsWithOffsets]);
-
-  // Siembra inicial: fija en la base de datos la posición automática de las notas
-  // que aún no tienen coordenadas, para que el árbol no se recoloque al recargar.
+  // Compatibilidad con datos antiguos: asigna una única vez las coordenadas ausentes.
   useEffect(() => {
     if (loading || notes.length === 0) return;
-    if (dragState.current) return;
     const pending: { id: string; x: number; y: number }[] = [];
     notes.forEach((n) => {
       if (n.posX != null && n.posY != null) return;
-      if (seededRef.current.has(n.id)) return;
-      const p = finalPositionsRef.current.get(`note-${n.id}`);
+      const p = positions.find((position) => position.id === `note-${n.id}`);
       if (!p) return;
-      seededRef.current.add(n.id);
       pending.push({ id: n.id, x: p.x, y: p.y });
     });
     if (pending.length > 0) void saveNotePositions(pending);
-  }, [notes, loading, positionsWithOffsets, saveNotePositions]);
+  }, [notes, loading, positions, saveNotePositions]);
 
   const getNodeRadius = useCallback((node: NodePos) => {
     if (node.isVirtual) return 0;
