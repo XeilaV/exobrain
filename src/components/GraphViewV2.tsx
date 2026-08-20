@@ -851,7 +851,7 @@ const GraphView = () => {
             // IMPORTANTE: el path se calcula SIEMPRE desde las posiciones finales.
             // Si una madre se arrastra, su offset acumulado también mueve a hijas y
             // esta misma geometría vuelve a unir exactamente ambos junctions.
-            const d = segmentPath(from, to, kind);
+            const d = segmentPath(from, to, kind, edge.to);
 
             return (
               <g key={`be-${idx}`} style={{ opacity, transition: "opacity 320ms ease" }}>
