@@ -158,6 +158,47 @@ const GraphView = () => {
     centerY: number;
   } | null>(null);
 
+  // Hidratación: aplicar los desplazamientos guardados en cuanto llegan las notas.
+  useEffect(() => {
+    if (hydratedPositionsRef.current) return;
+    if (loading || notes.length === 0) return;
+    hydratedPositionsRef.current = true;
+    const saved: Record<string, { dx: number; dy: number }> = {};
+    notes.forEach((n) => {
+      if (n.posDx != null || n.posDy != null) {
+        saved[`note-${n.id}`] = { dx: Number(n.posDx ?? 0), dy: Number(n.posDy ?? 0) };
+      }
+    });
+    if (Object.keys(saved).length > 0) {
+      setOffsets((prev) => ({ ...saved, ...prev }));
+    }
+  }, [notes, loading]);
+
+  const persistOffset = useCallback(
+    (nodeId: string) => {
+      if (!nodeId.startsWith("note-")) return;
+      const noteId = nodeId.replace("note-", "");
+      const off = offsetsRef.current[nodeId];
+      if (!off) return;
+      void updateNotePosition(noteId, off.dx, off.dy);
+    },
+    [updateNotePosition],
+  );
+
+  /** Guarda de golpe toda la disposición actual de la sesión. */
+  const saveCurrentLayout = useCallback(async () => {
+    const entries = Object.entries(offsetsRef.current)
+      .filter(([id]) => id.startsWith("note-"))
+      .map(([id, off]) => ({ id: id.replace("note-", ""), dx: off.dx, dy: off.dy }));
+    if (entries.length === 0) {
+      toast.info("No hay cambios de posición que guardar");
+      return;
+    }
+    await saveNotePositions(entries);
+    toast.success("Disposición guardada");
+  }, [saveNotePositions]);
+
+
   // Hidden main-branch filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
   const [showFilterPanel, setShowFilterPanel] = useState(false);
