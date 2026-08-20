@@ -36,6 +36,7 @@ import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { buildTreeSkeleton, motifPath, strokeForDepth, type BranchMotif } from "@/lib/treeGeometry";
 
 type NodeType = "root" | "category" | "note";
 
@@ -64,6 +65,10 @@ interface Edge {
   from: string;
   to: string;
   kind?: "trunk" | "branch";
+  /** trazo precalculado a partir del motivo SVG */
+  d?: string;
+  motif?: BranchMotif;
+  mirror?: boolean;
 }
 
 const ROOT_R = 30;
@@ -187,8 +192,6 @@ const GraphView = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNoteId]);
 
-  // Build a real tree: one shared trunk, main branches emerging at different
-  // heights, and descendants fanning out as smaller ramifications.
   // Esqueleto del árbol: geometría estática construida con los motivos Bézier
   // extraídos de `Group 8.svg` (ver src/lib/treeGeometry.ts). Ni la selección ni
   // el zoom recalculan posiciones: solo cámara, opacidad y etiquetas.
@@ -714,14 +717,17 @@ const GraphView = () => {
       if (!p) break;
       cur = p;
     }
-    const ids = new Set<string>(["root", "trunk-top", `attach-${cur.id}`]);
+    const ids = new Set<string>(["root"]);
+    positions.forEach((p) => {
+      if (p.isVirtual) ids.add(p.id);
+    });
     const visit = (id: string) => {
       ids.add(`note-${id}`);
       notes.filter((n) => n.parentNoteId === id).forEach((c) => visit(c.id));
     };
     visit(cur.id);
     return ids;
-  }, [focusNoteId, notes]);
+  }, [focusNoteId, notes, positions]);
 
   const dimFor = useCallback((id: string) => (focusIds && !focusIds.has(id) ? 0.16 : 1), [focusIds]);
 
@@ -862,14 +868,21 @@ const GraphView = () => {
             const kind = edge.kind ?? "branch";
             const isTrunk = kind === "trunk";
             const isMain = to.type === "note" && to.isMain;
-            const width = isTrunk ? 2.75 : widthForDepth(to.depth, isMain);
+            const width = isTrunk ? 2.6 : Math.max(0.5, strokeForDepth(to.depth + 1, "branch") * 1.6);
             const z = Math.min(from.z ?? 1, to.z ?? 1);
             const focusDim = isTrunk ? 1 : Math.min(dimFor(edge.from), dimFor(edge.to));
             const isActive = !!focusIds && focusIds.has(edge.to);
             const baseOpacity = isTrunk ? 0.5 : isMain ? 0.78 : 0.56;
             const opacity = isActive ? Math.min(0.96, baseOpacity + 0.16) : baseOpacity * z * focusDim;
             const stroke = isTrunk ? "hsl(262 32% 58%)" : `hsl(${to.color})`;
-            const d = branchPath(from, to, kind);
+            // Geometría estática del motivo; solo se recalcula si el nodo se ha arrastrado.
+            const moved =
+              (offsets[edge.from] && (offsets[edge.from].dx || offsets[edge.from].dy)) ||
+              (offsets[edge.to] && (offsets[edge.to].dx || offsets[edge.to].dy));
+            const d =
+              edge.motif && (moved || !edge.d)
+                ? motifPath(from, to, edge.motif, !!edge.mirror)
+                : (edge.d ?? branchPath(from, to, kind));
 
             return (
               <g key={`be-${idx}`} style={{ opacity, transition: "opacity 320ms ease" }}>
