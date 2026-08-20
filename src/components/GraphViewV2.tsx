@@ -974,8 +974,8 @@ const GraphView = () => {
                         isLinkSource ? "ring-2 ring-primary/55 ring-offset-2 ring-offset-background" : ""
                       }`}
                       style={{
-                        width: isMainNote ? 22 : isFocused ? 11 : 8,
-                        height: isMainNote ? 22 : isFocused ? 11 : 8,
+                        width: isMainNote ? 15 : childCount > 0 ? 7 : 5,
+                        height: isMainNote ? 15 : childCount > 0 ? 7 : 5,
                         backgroundColor: `hsl(${node.color})`,
                         boxShadow: isFocused ? `0 0 0 4px hsl(${node.color} / 0.10)` : "none",
                       }}
