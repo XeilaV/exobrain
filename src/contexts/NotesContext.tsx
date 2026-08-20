@@ -606,6 +606,8 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       notes, categories, selectedCategoryId, selectedNoteId, activeView, loading,
       setActiveView, setSelectedCategoryId, setSelectedNoteId,
       addNote, moveNote, getDescendantIds, canMoveTo, getRootNotes, updateNote, deleteNote, addCategory, updateCategory, deleteCategory,
+      updateNotePosition, saveNotePositions, clearAllPositions,
+
       addChecklistItem, toggleChecklistItem, deleteChecklistItem,
       toggleNoteCollapsed, toggleCategoryCollapsed,
       linkNotes, unlinkNotes,
