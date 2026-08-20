@@ -1404,16 +1404,35 @@ const GraphView = () => {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            setOffsets({});
-            setFocusNoteId(null);
-            fitFullTree();
-            setShowFilterPanel(false);
+            void saveCurrentLayout();
+          }}
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
+          title="Guardar disposición actual del árbol"
+        >
+          <Save size={16} />
+        </button>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmDialog({
+              message: "¿Restablecer el árbol al reparto automático? Se perderán las posiciones guardadas.",
+              onConfirm: () => {
+                setOffsets({});
+                void clearAllPositions();
+                setFocusNoteId(null);
+                fitFullTree();
+                setShowFilterPanel(false);
+                setConfirmDialog(null);
+              },
+            });
           }}
           className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
           title="Restablecer vista del árbol"
         >
           <TreePine size={16} />
         </button>
+
 
         <button
           onClick={(e) => {
