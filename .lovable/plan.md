@@ -1,38 +1,58 @@
-# Por qué se rompe el árbol y cómo arreglarlo
+# Bifurcaciones reales del SVG + sectores por rama
 
-He cargado la vista real y comparado con tu captura. El árbol sí se dibuja (tronco, bifurcaciones y motivos del SVG funcionan), lo que falla es el **reparto del espacio en la copa**: ramas de temas distintos se cruzan y las etiquetas se pisan.
+El diagnóstico de colisiones se mantiene, pero el generador interno cambia: las hijas dejan de colocarse con `tilt/spread/jitter/angle` y pasan a colocarse con **motivos completos de bifurcación** extraídos de `Group 8.svg`. Los sectores solo reservan espacio y orientan.
 
 ## Diagnóstico (verificado en `src/lib/treeGeometry.ts` y en la vista renderizada)
 
-1. **No hay sectores reservados por rama.** Cada nota raíz sale del tronco alternando lado con una inclinación aleatoria (`tilt = 0.55 + hash*0.5`) y sus hijas se abren con un abanico más *jitter* aleatorio. Nada impide que la copa de un tema invada la de otro: por eso la rama mint de "Reflexiónes" cruza media pantalla y se solapa con la rosa de "TDA".
-2. **Las longitudes apenas decaen.** Nivel 1 mide hasta ~235px y las hijas conservan un 62–88% con un mínimo de 62px, así que nietos y bisnietos siguen siendo largos y se salen del área de su rama.
-3. **Las etiquetas se colocan tal cual en la bifurcación**, sin ninguna pasada de separación: "Árbol genealógico"/"Refraneiro", "CV"/"Casa", "Reflexiónes"/"TDA" e "Índice" quedan superpuestas.
-4. **Motivos muy curvados en tramos largos.** Con `maxBend` 0.16 y segmentos de 200px, el trazo se aleja hasta ~30px de la recta madre-hija, lo que hace que la línea parezca no tocar el nodo aunque los extremos coincidan.
+1. **No hay espacio reservado por rama raíz.** Cada raíz sale alternando lado con `tilt = 0.55 + hash*0.5` y sus hijas se abren con abanico + jitter aleatorio: la copa de un tema invade la de otro (la rama mint de "Reflexiónes" cruza media pantalla sobre la rosa de "TDA").
+2. **Solo se extrajo la forma de las líneas, no la geometría de las bifurcaciones.** `BRANCH_MOTIFS` son curvas sueltas aplicadas entre dos puntos ya decididos por trigonometría.
+3. **Las longitudes apenas decaen** (nivel 1 hasta ~235px, hijas 62–88% con mínimo 62px), así que nietos y bisnietos siguen siendo largos.
+4. **Las etiquetas se colocan tal cual en la bifurcación**, sin pasada de separación: "Árbol genealógico"/"Refraneiro", "CV"/"Casa", "Reflexiónes"/"TDA", "Índice" se pisan.
+5. **Motivos muy curvados en tramos largos** (`maxBend` 0.16 sobre 200px) alejan el trazo hasta ~30px de la recta madre-hija.
 
-## Correcciones
+## Extracción de motivos de bifurcación
 
-**Sectores angulares no solapados**
-- Repartir la copa en cuñas: cada nota raíz recibe un sector propio calculado por su peso (nº de descendientes), distribuido en el arco superior alternando lados pero sin que dos sectores se pisen.
-- La recursión pasa a subdividir el sector del padre entre sus hijas por peso: una rama nunca puede salirse de su cuña. El jitter se mantiene pero recortado al interior del sector (nunca más del 35% del ancho disponible), para conservar la irregularidad orgánica sin cruces.
+Nueva pasada de extracción sobre `Group 8.svg` (solo en tiempo de implementación; el resultado queda como datos en `src/lib/treeGeometry.ts`):
 
-**Longitudes y curvatura**
-- Decaimiento real por profundidad (≈0.72 por nivel) con mínimos más bajos, para que la copa se cierre en vez de expandirse.
-- `maxBend` decreciente con la profundidad y limitado en valor absoluto: en tramos largos se eligen motivos suaves; los motivos fuertes se reservan para las ramitas cortas. Los motivos siguen siendo los extraídos del SVG, solo cambia cuál se elige.
+- Parsear todos los `path d` y muestrear sus extremos.
+- Agrupar por **puntos de unión**: paths cuyo punto inicial coincide (dentro de una tolerancia pequeña) con el punto final de otro forman una bifurcación real del dibujo.
+- Cada bifurcación produce un `ForkMotif`: el eje de entrada (dirección de la rama madre entrante) define la orientación canónica, y cada salida se guarda con su curva cúbica completa y su punto final (`anchor`), normalizados respecto a ese eje y a la longitud de la salida más larga.
 
-**Etiquetas**
-- Pasada de resolución de solapes en `GraphViewV2`: se estiman las cajas de las píldoras y se desplazan perpendicularmente a la rama (unos pocos px) hasta que no colisionan; el punto del nodo permanece exactamente en la bifurcación.
-- Si tras la pasada dos etiquetas siguen chocando a zoom bajo, gana la de menor profundidad y la otra queda solo como punto hasta acercar el zoom.
+```text
+ForkMotif {
+  arity: 1 | 2 | 3 | ...
+  children: [ { anchor: Vec, curves: [[c1, c2, end], ...] }, ... ]
+  extent: { minX, maxX, minY, maxY }   // caja normalizada, para encajar en el sector
+}
+```
+
+Las curvas se copian tal cual (sin simplificar ni aproximar) y el conjunto se aplica como **una unidad**: una sola escala, una rotación y un espejo opcional por bifurcación.
+
+## Generador
+
+- **Sectores no solapados**: cada nota raíz recibe una cuña del arco superior proporcional a su peso (nº de descendientes). La cuña se subdivide al descender, de modo que un subtree nunca puede salir de su espacio.
+- **El sector solo hace tres cosas**: reservar espacio, elegir la orientación global de la bifurcación (bisectriz de la cuña) y calcular la escala máxima con la que el `extent` del motivo cabe dentro de la cuña.
+- **La posición de cada hija la decide el motivo**: se elige un `ForkMotif` con la aridad del nodo (o el más cercano, recortando/reutilizando salidas cuando no hay coincidencia exacta), se escala/rota/espeja como unidad y sus `anchor` transformados son las junctions de las hijas. **No hay `spread` ni `jitter` por hija.**
+- La variación entre bifurcaciones iguales viene de la elección determinista de motivo (hash del id) y del espejo, no de ruido angular.
+- **Decaimiento de longitud** por profundidad (≈0.72 por nivel) aplicado a la escala del motivo.
+- **Curvatura por profundidad**: en tramos largos se prefieren motivos de baja curvatura; los de curvatura fuerte se reservan para las ramitas cortas.
+- Los segmentos siguen siendo independientes: la madre termina en la unión, cada hija arranca exactamente ahí, sin path continuo oculto.
+
+## Etiquetas
+
+- Pasada de resolución de solapes en `GraphViewV2`: se estiman las cajas de las píldoras y se desplazan perpendicularmente a la rama unos pocos px hasta que no colisionan; el punto del nodo permanece exactamente en la bifurcación.
+- Si a zoom bajo dos siguen chocando, gana la de menor profundidad y la otra queda solo como punto hasta acercar.
 
 ## Se conserva
 
-Geometría estática (selección y zoom solo afectan cámara, opacidad, glow y etiquetas), bifurcaciones exactas madre-hija, motivos Bézier del SVG como datos, doble clic para plegar, pan/zoom anclado y todos los diálogos.
+Geometría estática (selección y zoom solo afectan cámara, opacidad, glow y etiquetas), bifurcaciones exactas madre-hija, motivos como datos sin lectura de SVG en runtime, doble clic para plegar, pan/zoom anclado y todos los diálogos.
 
 ## Detalles técnicos
 
-- `src/lib/treeGeometry.ts`: `buildTreeSkeleton` recibe/propaga `sectorStart`/`sectorEnd` por rama; nuevo reparto de raíces por peso sobre el arco superior; ajuste de `length` y de la selección de motivo por profundidad.
-- `src/components/GraphViewV2.tsx`: pasada de separación de etiquetas sobre `positionsWithOffsets` y regla de prioridad por profundidad al renderizar píldoras.
+- `src/lib/treeGeometry.ts`: nuevo tipo `ForkMotif` y constante `FORK_MOTIFS` (extraída del SVG, agrupada por aridad); `buildTreeSkeleton` propaga `sectorStart`/`sectorEnd` y escala, y sustituye el bloque de `tilt/spread/jitter/angle/length` por aplicación de motivos. Se conservan `motifPath`/`BRANCH_MOTIFS` solo para los tramos de tronco.
+- `src/components/GraphViewV2.tsx`: pasada de separación de etiquetas y prioridad por profundidad al renderizar píldoras. El consumo de junctions y segmentos no cambia de forma.
 - Sin cambios de backend ni de datos.
 
 ## Criterio de aceptación
 
-Ninguna rama de un tema invade el área de otro, no hay líneas cruzando por encima de etiquetas ajenas, y en el encuadre de tu captura las píldoras se leen sin superponerse.
+Cada bifurcación reproduce una unión real del SVG (misma relación entre salidas, no un abanico calculado), ningún tema invade el área de otro y las píldoras del encuadre de tu captura se leen sin superponerse.
