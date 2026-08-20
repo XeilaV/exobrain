@@ -139,12 +139,14 @@ const GraphView = () => {
   const didInitialFitRef = useRef(false);
   const viewZoomRef = useRef(1);
 
-  // Desplazamientos manuales por nodo. Se hidratan desde la base de datos
-  // (notes.pos_dx / pos_dy) y se vuelven a guardar al terminar cada arrastre.
+  // Desplazamientos de sesión mientras se arrastra. Al soltar se convierten en
+  // coordenadas absolutas guardadas (notes.pos_x / pos_y) y se limpian.
   const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
   const offsetsRef = useRef(offsets);
   offsetsRef.current = offsets;
-  const hydratedPositionsRef = useRef(false);
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+  const seededRef = useRef<Set<string>>(new Set());
   const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(
     null,
   );
