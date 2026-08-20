@@ -1073,19 +1073,29 @@ const GraphView = () => {
                     {node.label}
                   </div>
                 ) : showChildLabel ? (
-                  <div
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center whitespace-nowrap rounded-full border bg-card/95 font-body text-foreground shadow-sm transition-shadow ${
-                      isMainNote
-                        ? "gap-2 px-3 py-1.5 text-[12px] font-semibold"
-                        : "gap-1.5 px-2.5 py-1 text-[10px] font-medium"
-                    } ${isLinkSource ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-background" : ""}`}
-                    style={{
-                      borderColor: `hsl(${node.color} / ${isFocused ? 0.72 : isMainNote ? 0.48 : 0.3})`,
-                      boxShadow: isFocused
-                        ? `0 5px 18px hsl(${node.color} / 0.18)`
-                        : `0 3px 12px hsl(${node.color} / 0.08)`,
-                    }}
-                  >
+                  <>
+                    {(shift.dx !== 0 || shift.dy !== 0) && (
+                      <span
+                        className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+                        style={{ width: 5, height: 5, backgroundColor: `hsl(${node.color})` }}
+                      />
+                    )}
+                    <div
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center whitespace-nowrap rounded-full border bg-card/95 font-body text-foreground shadow-sm transition-shadow ${
+                        isMainNote
+                          ? "gap-2 px-3 py-1.5 text-[12px] font-semibold"
+                          : "gap-1.5 px-2.5 py-1 text-[10px] font-medium"
+                      } ${isLinkSource ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-background" : ""}`}
+                      style={{
+                        left: shift.dx,
+                        top: shift.dy,
+                        borderColor: `hsl(${node.color} / ${isFocused ? 0.72 : isMainNote ? 0.48 : 0.3})`,
+                        boxShadow: isFocused
+                          ? `0 5px 18px hsl(${node.color} / 0.18)`
+                          : `0 3px 12px hsl(${node.color} / 0.08)`,
+                      }}
+                    >
+
                     <span
                       className={isMainNote ? "h-2 w-2 shrink-0 rounded-full" : "h-1.5 w-1.5 shrink-0 rounded-full"}
                       style={{ backgroundColor: `hsl(${node.color})` }}
