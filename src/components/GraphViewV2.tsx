@@ -137,11 +137,16 @@ const GraphView = () => {
   const didInitialFitRef = useRef(false);
   const viewZoomRef = useRef(1);
 
-  // Drag offsets per node id (session-local)
+  // Desplazamientos manuales por nodo. Se hidratan desde la base de datos
+  // (notes.pos_dx / pos_dy) y se vuelven a guardar al terminar cada arrastre.
   const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
+  const offsetsRef = useRef(offsets);
+  offsetsRef.current = offsets;
+  const hydratedPositionsRef = useRef(false);
   const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(
     null,
   );
+
   const panState = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchState = useRef<{
