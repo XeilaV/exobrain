@@ -35,7 +35,15 @@ import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { buildTreeSkeleton, motifPath, strokeForDepth, type BranchMotif } from "@/lib/treeGeometry";
+import { motifPath, strokeForDepth, type BranchMotif } from "@/lib/treeGeometry";
+import {
+  CANONICAL_BRANCHES,
+  CANONICAL_ROOT,
+  CANONICAL_SIZE,
+  CANONICAL_TRUNK_PATH,
+  branchForTitle,
+  stableSubtree,
+} from "@/lib/canonicalTree";
 
 type NodeType = "root" | "category" | "note";
 
@@ -83,8 +91,6 @@ const GraphView = () => {
     moveNote,
     canMoveTo,
     updateNote,
-    saveNotePositions,
-
     linkNotes,
     toggleNoteCollapsed,
     setSelectedNoteId,
@@ -187,13 +193,11 @@ const GraphView = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNoteId]);
 
-  // Esqueleto del árbol: geometría estática construida con los motivos Bézier
-  // extraídos de `Group 8.svg` (ver src/lib/treeGeometry.ts). Ni la selección ni
-  // el zoom recalculan posiciones: solo cámara, opacidad y etiquetas.
+  // Escena canónica calcada de la captura de referencia. No depende del viewport,
+  // la selección, el zoom, los filtros ni el estado de plegado.
   const { positions, edges } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
-    const parent: Record<string, string> = {};
     if (rootNotes.length === 0) return { positions: pos, edges: eds };
 
     const fallbackPalette = [
@@ -208,94 +212,46 @@ const GraphView = () => {
       const legacyCategory = categories.find((c) => c.id === root.categoryId);
       return root.color || legacyCategory?.color || fallbackPalette[index % fallbackPalette.length];
     };
-    const rootColors = new Map<string, string>();
-    rootNotes.forEach((r, i) => rootColors.set(r.id, colorForRoot(r, i)));
+    pos.push({ id: "root", ...CANONICAL_ROOT, type: "root", label: brainName || "ExoBrain", color: "265 24% 44%", depth: -1, z: 1 });
+    pos.push({ id: "trunk-top", x: 314, y: 236, type: "category", label: "", color: "262 32% 58%", depth: -1, isVirtual: true, z: 1 });
+    eds.push({ from: "root", to: "trunk-top", kind: "trunk", d: CANONICAL_TRUNK_PATH });
 
-    const skeleton = buildTreeSkeleton(
-      notes.map((n) => ({ id: n.id, parentId: n.parentNoteId ?? null })),
-      {
-        rootX: 610,
-        rootY: 540,
-        compact: false,
-        collapsed: collapsedIds,
-        hiddenRootIds: hiddenCategoryIds,
-      },
-    );
-
-    const posIdFor = (junctionId: string) => {
-      const j = skeleton.junctions.find((x) => x.id === junctionId);
-      if (!j) return junctionId;
-      if (j.id === skeleton.rootJunction.id) return "root";
-      return j.noteId ? `note-${j.noteId}` : j.id;
-    };
-
-    const branchZ = (branchRootId?: string) => {
-      if (!branchRootId || branchRootId === "trunk") return 1;
-      const idx = rootNotes.findIndex((r) => r.id === branchRootId);
-      return 0.78 + ((Math.max(0, idx) * 37) % 22) / 100;
-    };
-
-    skeleton.junctions.forEach((j) => {
-      if (j.id === skeleton.rootJunction.id) {
-        pos.push({
-          id: "root",
-          x: j.x,
-          y: j.y,
-          type: "root",
-          label: brainName || "ExoBrain",
-          color: "265 24% 44%",
-          depth: -1,
-          z: 1,
-        });
-        return;
-      }
-
-      if (!j.noteId) {
-        pos.push({
-          id: j.id,
-          x: j.x,
-          y: j.y,
-          type: "category",
-          label: "",
-          color: "262 32% 58%",
-          depth: -1,
-          isVirtual: true,
-          z: 1,
-        });
-        return;
-      }
-
-      const note = notes.find((n) => n.id === j.noteId);
-      if (!note) return;
-      const children = notes.filter((n) => n.parentNoteId === note.id);
-      const color = rootColors.get(j.branchRootId ?? note.id) || fallbackPalette[0];
-      // Si la nota tiene posición manual guardada, manda sobre el reparto automático.
-      const hasSaved = note.posX != null && note.posY != null;
+    rootNotes.forEach((root, rootIndex) => {
+      if (hiddenCategoryIds.has(root.id)) return;
+      const canonical = branchForTitle(root.title) ?? CANONICAL_BRANCHES[rootIndex % CANONICAL_BRANCHES.length];
+      const color = canonical?.color ?? colorForRoot(root, rootIndex);
+      const rootPoint = canonical?.root ?? { x: Number(root.posX) || 307, y: Number(root.posY) || 300 };
+      const attachId = `attach-${root.id}`;
+      const attachPoint = canonical?.attach ?? { x: 314, y: 236 };
+      pos.push({ id: attachId, ...attachPoint, type: "category", label: "", color, depth: -1, isVirtual: true, z: 1 });
       pos.push({
-        id: `note-${note.id}`,
-        x: hasSaved ? Number(note.posX) : j.x,
-        y: hasSaved ? Number(note.posY) : j.y,
-        type: "note",
-        label: note.title,
-        color,
-        categoryId: note.categoryId ?? undefined,
-        noteId: note.id,
-        parentNoteId: note.parentNoteId,
-        noteType: note.noteType,
-        hasChildren: children.length > 0,
-        isCollapsed: collapsedIds.has(note.id) || children.length === 0,
-        isMain: j.depth === 1,
-        depth: Math.max(0, j.depth - 1),
-        branchRootId: j.branchRootId,
-        z: Math.max(0.6, branchZ(j.branchRootId) - Math.max(0, j.depth - 1) * 0.035),
+        id: `note-${root.id}`, ...rootPoint, type: "note", label: root.title, color,
+        categoryId: root.categoryId ?? undefined, noteId: root.id, parentNoteId: null,
+        noteType: root.noteType, hasChildren: notes.some((note) => note.parentNoteId === root.id),
+        isCollapsed: collapsedIds.has(root.id), isMain: true, depth: 0, branchRootId: root.id, z: 1,
+      });
+      eds.push({ from: attachId, to: `note-${root.id}`, kind: "branch", d: canonical?.mainPath });
+
+      const descendants = stableSubtree(notes, root.id);
+      descendants.forEach((note, index) => {
+        const slot = canonical?.slots[index];
+        const point = slot ?? {
+          x: note.posX != null ? Number(note.posX) : rootPoint.x + ((index % 5) - 2) * 42,
+          y: note.posY != null ? Number(note.posY) : rootPoint.y - 70 - Math.floor(index / 5) * 45,
+        };
+        pos.push({
+          id: `note-${note.id}`, ...point, type: "note", label: note.title, color,
+          categoryId: note.categoryId ?? undefined, noteId: note.id, parentNoteId: note.parentNoteId,
+          noteType: note.noteType, hasChildren: notes.some((child) => child.parentNoteId === note.id),
+          isCollapsed: collapsedIds.has(note.id), depth: 1, branchRootId: root.id, z: 0.92,
+        });
       });
     });
 
-    skeleton.segments.forEach((seg) => {
-      const from = posIdFor(seg.fromJunctionId);
-      const to = posIdFor(seg.toJunctionId);
-      eds.push({ from, to, kind: seg.kind, d: seg.d, motif: seg.motif, mirror: seg.mirror });
-      parent[to] = from;
+    const ids = new Set(pos.map((node) => node.id));
+    pos.filter((node) => node.type === "note" && !node.isMain).forEach((node) => {
+      const parentId = node.parentNoteId ? `note-${node.parentNoteId}` : "";
+      if (ids.has(parentId)) eds.push({ from: parentId, to: node.id, kind: "branch" });
     });
 
     return { positions: pos, edges: eds };
@@ -307,68 +263,15 @@ const GraphView = () => {
 
   const getPos = (id: string) => positionsWithOffsets.find((p) => p.id === id);
 
-  // Compatibilidad con datos antiguos: asigna una única vez las coordenadas ausentes.
-  useEffect(() => {
-    if (loading || notes.length === 0) return;
-    const pending: { id: string; x: number; y: number }[] = [];
-    notes.forEach((n) => {
-      if (n.posX != null && n.posY != null) return;
-      const p = positions.find((position) => position.id === `note-${n.id}`);
-      if (!p) return;
-      pending.push({ id: n.id, x: p.x, y: p.y });
-    });
-    if (pending.length > 0) void saveNotePositions(pending);
-  }, [notes, loading, positions, saveNotePositions]);
-
-  const getNodeRadius = useCallback((node: NodePos) => {
-    if (node.isVirtual) return 0;
-    if (node.type === "root") return ROOT_R;
-    if (node.type === "note" && node.isMain) return CAT_R;
-    return NOTE_R;
-  }, []);
-
-  const getNodesBounds = useCallback(
-    (nodes: NodePos[]) => {
-      if (nodes.length === 0) return null;
-      return nodes.reduce(
-        (bounds, node) => {
-          const r = getNodeRadius(node);
-          const labelPadX = node.isVirtual ? 0 : node.type === "root" ? 86 : node.isMain ? 92 : 78;
-          const labelPadY = node.isVirtual ? 0 : node.type === "root" ? 24 : node.isMain ? 20 : 16;
-          return {
-            minX: Math.min(bounds.minX, node.x - Math.max(r, labelPadX)),
-            maxX: Math.max(bounds.maxX, node.x + Math.max(r, labelPadX)),
-            minY: Math.min(bounds.minY, node.y - Math.max(r, labelPadY)),
-            maxY: Math.max(bounds.maxY, node.y + Math.max(r, labelPadY)),
-          };
-        },
-        { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity },
-      );
-    },
-    [getNodeRadius],
-  );
-
   const fitFullTree = useCallback(() => {
-    const bounds = getNodesBounds(positionsWithOffsets);
-    if (!bounds) return;
-
-    const isMobile = size.w < 640;
-    const sideMargin = isMobile ? 12 : 36;
-    const topMargin = isMobile ? 48 : 56;
-    const bottomMargin = isMobile ? 48 : 56;
-    const availableW = Math.max(1, size.w - sideMargin * 2);
-    const availableH = Math.max(1, size.h - topMargin - bottomMargin);
-    const treeW = Math.max(1, bounds.maxX - bounds.minX);
-    const treeH = Math.max(1, bounds.maxY - bounds.minY);
-    const zoom = Math.min(1, Math.max(0.25, Math.min(availableW / treeW, availableH / treeH)));
-    const treeCenterX = (bounds.minX + bounds.maxX) / 2;
-    const treeCenterY = (bounds.minY + bounds.maxY) / 2;
-    const targetX = size.w / 2;
-    const targetY = (topMargin + (size.h - bottomMargin)) / 2;
+    const zoom = Math.min(1, Math.max(0.25, Math.min(size.w / CANONICAL_SIZE.width, size.h / CANONICAL_SIZE.height)));
 
     setViewZoom(zoom);
-    setPan({ x: targetX - treeCenterX * zoom, y: targetY - treeCenterY * zoom });
-  }, [getNodesBounds, positionsWithOffsets, size.w, size.h]);
+    setPan({
+      x: (size.w - CANONICAL_SIZE.width * zoom) / 2,
+      y: (size.h - CANONICAL_SIZE.height * zoom) / 2,
+    });
+  }, [size.w, size.h]);
 
   const layoutSignature = useMemo(() => {
     return positions.map((node) => `${node.id}:${Math.round(node.x)}:${Math.round(node.y)}`).join("|");
@@ -634,7 +537,16 @@ const GraphView = () => {
       return `M ${from.x} ${from.y} C ${from.x} ${from.y - rise}, ${to.x - dx * 0.26} ${to.y - dy * 0.08}, ${to.x} ${to.y}`;
     }
 
-    return `M ${from.x} ${from.y} C ${from.x + dx * 0.3} ${from.y + dy * 0.16}, ${from.x + dx * 0.74} ${from.y + dy * 0.88}, ${to.x} ${to.y}`;
+    // Las bifurcaciones salen tangentes a la rama madre y solo después se abren:
+    // evita radios rectos y conserva la apariencia arborescente de la referencia.
+    const verticalBias = Math.abs(dy) >= Math.abs(dx);
+    const c1 = verticalBias
+      ? { x: from.x, y: from.y + dy * 0.58 }
+      : { x: from.x + dx * 0.54, y: from.y };
+    const c2 = verticalBias
+      ? { x: to.x - dx * 0.16, y: to.y - dy * 0.12 }
+      : { x: to.x - dx * 0.12, y: to.y - dy * 0.16 };
+    return `M ${from.x} ${from.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${to.x} ${to.y}`;
   };
 
   // Trazo afilado: grueso junto al tronco, casi un pelo en las hojas.
@@ -669,7 +581,7 @@ const GraphView = () => {
 
   // Nivel de detalle según zoom: la geometría no cambia, solo la legibilidad.
   // Cada nivel de profundidad pide un poco más de acercamiento para mostrar texto.
-  const labelVisibleAtDepth = useCallback((depth: number) => viewZoom >= 0.5 + Math.max(0, depth) * 0.16, [viewZoom]);
+  const labelVisibleAtDepth = useCallback((depth: number) => viewZoom >= 1.12 + Math.max(0, depth - 1) * 0.18, [viewZoom]);
 
   // Link edges (horizontal between notes)
   const linkEdges = useMemo(() => {
@@ -812,9 +724,9 @@ const GraphView = () => {
             const stroke = isTrunk ? "hsl(262 32% 58%)" : `hsl(${to.color})`;
             // La rama siempre se traza entre las posiciones actuales de madre e hija,
             // así nunca se desconecta al mover un nodo o su subárbol.
-            const d = edge.motif
+            const d = edge.d ?? (edge.motif
               ? motifPath(from, to, edge.motif, !!edge.mirror)
-              : branchPath(from, to, kind);
+              : branchPath(from, to, kind));
 
             return (
               <g key={`be-${idx}`} style={{ opacity, transition: "opacity 320ms ease" }}>
@@ -926,7 +838,7 @@ const GraphView = () => {
               >
                 {isRoot ? (
                   <div
-                    className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-2xl border bg-card/95 px-5 py-2.5 font-display font-semibold text-foreground shadow-sm"
+                    className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-xl border bg-card/95 px-4 py-2 font-display text-xs font-semibold text-foreground shadow-sm"
                     style={{
                       borderColor: "hsl(262 30% 70% / 0.55)",
                       boxShadow: "0 8px 26px hsl(262 30% 40% / 0.10)",
@@ -938,7 +850,7 @@ const GraphView = () => {
                   <div
                     className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center whitespace-nowrap rounded-full border bg-card/95 font-body text-foreground shadow-sm transition-shadow ${
                       isMainNote
-                        ? "gap-2 px-3 py-1.5 text-[12px] font-semibold"
+                         ? "gap-1.5 px-2.5 py-1 text-[10px] font-medium"
                         : "gap-1.5 px-2.5 py-1 text-[10px] font-medium"
                     } ${isLinkSource ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-background" : ""}`}
                     style={{
