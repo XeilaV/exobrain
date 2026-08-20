@@ -1010,6 +1010,8 @@ const GraphView = () => {
             const nodeNote = node.noteId ? notes.find((n) => n.id === node.noteId) : null;
             const childCount = nodeNote ? notes.filter((n) => n.parentNoteId === nodeNote.id).length : 0;
             const dim = dimFor(node.id);
+            const shift = labelShifts[node.id] ?? { dx: 0, dy: 0 };
+
             const z = node.z ?? 1;
             const isFocused = !!focusIds && focusIds.has(node.id);
             const isLinkSource = linkingNoteId && node.noteId === linkingNoteId;
