@@ -36,7 +36,7 @@ import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { buildTreeSkeleton, segmentPath, strokeForDepth, type SegmentKind } from "@/lib/treeGeometry";
+import { buildTreeSkeleton, segmentPath, STROKE_WIDTH, type SegmentKind } from "@/lib/treeShape";
 
 type NodeType = "root" | "category" | "note";
 
@@ -840,7 +840,7 @@ const GraphView = () => {
 
             const kind = edge.kind ?? "branch";
             const isStructuralBlue = kind === "trunk" || kind === "connector";
-            const width = strokeForDepth(to.depth + 1, kind);
+            const width = STROKE_WIDTH;
             const z = Math.min(from.z ?? 1, to.z ?? 1);
             const focusDim = isStructuralBlue ? 1 : Math.min(dimFor(edge.from), dimFor(edge.to));
             const isActive = !!focusIds && focusIds.has(edge.to);
@@ -851,7 +851,7 @@ const GraphView = () => {
             // IMPORTANTE: el path se calcula SIEMPRE desde las posiciones finales.
             // Si una madre se arrastra, su offset acumulado también mueve a hijas y
             // esta misma geometría vuelve a unir exactamente ambos junctions.
-            const d = segmentPath(from, to, kind);
+            const d = segmentPath(from, to, kind, edge.to);
 
             return (
               <g key={`be-${idx}`} style={{ opacity, transition: "opacity 320ms ease" }}>
@@ -974,8 +974,8 @@ const GraphView = () => {
                         isLinkSource ? "ring-2 ring-primary/55 ring-offset-2 ring-offset-background" : ""
                       }`}
                       style={{
-                        width: isMainNote ? 22 : isFocused ? 11 : 8,
-                        height: isMainNote ? 22 : isFocused ? 11 : 8,
+                        width: isMainNote ? 15 : childCount > 0 ? 7 : 5,
+                        height: isMainNote ? 15 : childCount > 0 ? 7 : 5,
                         backgroundColor: `hsl(${node.color})`,
                         boxShadow: isFocused ? `0 0 0 4px hsl(${node.color} / 0.10)` : "none",
                       }}

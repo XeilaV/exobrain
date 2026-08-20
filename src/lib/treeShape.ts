@@ -1,7 +1,8 @@
-// Objetivo visual: tronco central + ramas principales separadas por sectores,
-// como en la referencia del usuario. Cada rama raíz recibe una zona exclusiva
-// del lienzo; toda su descendencia se mantiene dentro de esa zona. No hay jitter
-// angular ni crecimiento radial, por lo que ramas de temas distintos no se cruzan.
+// Forma del árbol inspirada en Group-8-2.svg:
+// tronco vertical azul, racimos que salen a los lados alternando (der/der/izq/izq),
+// ramas con curva en S de tangente horizontal, grosor uniforme y tramos que se
+// acortan al alejarse del tronco. Geometría determinista: ni selección ni zoom la
+// modifican.
 
 export type Vec = { x: number; y: number };
 
@@ -51,7 +52,7 @@ export interface TreeSkeleton {
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-/** Hash estable, usado solo para microvariaciones de forma. Nunca decide el sector. */
+/** Hash estable: solo se usa para microvariaciones de forma, nunca para la topología. */
 const hash = (s: string) => {
   let h = 2166136261;
   for (let i = 0; i < s.length; i += 1) {
@@ -62,45 +63,44 @@ const hash = (s: string) => {
 };
 
 /**
- * Curva de un segmento entre dos junctions.
- * Se recalcula también después de arrastrar un nodo, de modo que línea y nodo
- * comparten siempre las mismas coordenadas finales.
+ * Curva de un segmento. Se recalcula también tras arrastrar un nodo, de modo que
+ * línea y nodo comparten siempre las mismas coordenadas finales.
  */
-export const segmentPath = (from: Vec, to: Vec, kind: SegmentKind = "branch"): string => {
+export const segmentPath = (from: Vec, to: Vec, kind: SegmentKind = "branch", seed = ""): string => {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
+  const M = `M ${from.x.toFixed(2)} ${from.y.toFixed(2)}`;
+  const C = (c1: Vec, c2: Vec) =>
+    `${M} C ${c1.x.toFixed(2)} ${c1.y.toFixed(2)}, ${c2.x.toFixed(2)} ${c2.y.toFixed(2)}, ${to.x.toFixed(2)} ${to.y.toFixed(2)}`;
 
   if (kind === "trunk") {
-    // Tronco casi vertical y suave. Los controles siguen el eje Y para evitar
-    // serpenteos y cruces visuales.
-    const c1 = { x: from.x + dx * 0.18, y: from.y + dy * 0.34 };
-    const c2 = { x: to.x - dx * 0.18, y: from.y + dy * 0.72 };
-    return `M ${from.x.toFixed(2)} ${from.y.toFixed(2)} C ${c1.x.toFixed(2)} ${c1.y.toFixed(2)}, ${c2.x.toFixed(2)} ${c2.y.toFixed(2)}, ${to.x.toFixed(2)} ${to.y.toFixed(2)}`;
+    // Tronco casi recto, con una inflexión mínima para que no parezca una regla.
+    return C(
+      { x: from.x + dx * 0.12, y: from.y + dy * 0.36 },
+      { x: to.x - dx * 0.12, y: from.y + dy * 0.74 },
+    );
   }
 
   if (kind === "connector") {
-    // Salida azul desde el tronco hacia la raíz de cada tema: primero acompaña
-    // al tronco y después se abre lateralmente, como en el diseño de referencia.
-    const c1 = { x: from.x + dx * 0.08, y: from.y + dy * 0.48 };
-    const c2 = { x: from.x + dx * 0.58, y: to.y - dy * 0.1 };
-    return `M ${from.x.toFixed(2)} ${from.y.toFixed(2)} C ${c1.x.toFixed(2)} ${c1.y.toFixed(2)}, ${c2.x.toFixed(2)} ${c2.y.toFixed(2)}, ${to.x.toFixed(2)} ${to.y.toFixed(2)}`;
+    // Salida azul del tronco hacia la raíz del tema: acompaña al tronco y luego
+    // se abre lateralmente, como en el SVG de referencia.
+    return C(
+      { x: from.x + dx * 0.06, y: from.y + dy * 0.55 },
+      { x: from.x + dx * 0.62, y: to.y - dy * 0.08 },
+    );
   }
 
-  // Ramificación de color. Los controles son mayoritariamente horizontales:
-  // la rama sale suave de la bifurcación y llega tangente al nodo hijo.
+  // Rama de color: sale casi horizontal de la bifurcación, ondula levemente y
+  // llega tangente al nodo hijo.
   const side = dx >= 0 ? 1 : -1;
-  const absDx = Math.abs(dx);
-  const handle = Math.max(18, absDx * 0.46);
-  const c1 = {
-    x: from.x + side * handle,
-    y: from.y + dy * 0.12,
-  };
-  const c2 = {
-    x: to.x - side * Math.max(14, absDx * 0.3),
-    y: to.y - dy * 0.1,
-  };
+  const dist = Math.hypot(dx, dy) || 1;
+  const handle = Math.max(20, Math.abs(dx) * 0.5);
+  const wobble = (hash(`${seed}-w`) - 0.5) * Math.min(24, dist * 0.26);
 
-  return `M ${from.x.toFixed(2)} ${from.y.toFixed(2)} C ${c1.x.toFixed(2)} ${c1.y.toFixed(2)}, ${c2.x.toFixed(2)} ${c2.y.toFixed(2)}, ${to.x.toFixed(2)} ${to.y.toFixed(2)}`;
+  return C(
+    { x: from.x + side * handle, y: from.y + dy * 0.1 + wobble },
+    { x: to.x - side * Math.max(16, Math.abs(dx) * 0.34), y: to.y - dy * 0.08 - wobble },
+  );
 };
 
 interface RootSector {
@@ -117,49 +117,29 @@ interface RootPlacement {
 }
 
 /**
- * Posición conceptual de cada rama principal.
- * Los cuatro primeros temas conservan exactamente la composición de referencia:
- * 0 abajo-izquierda, 1 abajo-derecha, 2 arriba-derecha, 3 arriba-izquierda.
- * A partir del quinto se siguen apilando sectores independientes hacia arriba.
+ * Posición conceptual de cada racimo, siguiendo el reparto del SVG:
+ * dos racimos a la derecha y dos espejados a la izquierda.
  */
 const placementForRoot = (index: number, total: number): RootPlacement => {
   if (total === 1) return { side: 1, orderFromBottom: 0 };
-
-  if (total === 2) {
-    return index === 0 ? { side: -1, orderFromBottom: 0 } : { side: 1, orderFromBottom: 0 };
-  }
-
+  if (total === 2) return index === 0 ? { side: 1, orderFromBottom: 0 } : { side: -1, orderFromBottom: 0 };
   if (total === 3) {
     const slots: RootPlacement[] = [
-      { side: -1, orderFromBottom: 0 },
       { side: 1, orderFromBottom: 0 },
+      { side: -1, orderFromBottom: 0 },
       { side: 1, orderFromBottom: 1 },
     ];
     return slots[index];
   }
-
-  if (total === 4) {
-    const slots: RootPlacement[] = [
-      { side: -1, orderFromBottom: 0 }, // abajo izquierda
-      { side: 1, orderFromBottom: 0 }, // abajo derecha
-      { side: 1, orderFromBottom: 1 }, // arriba derecha
-      { side: -1, orderFromBottom: 1 }, // arriba izquierda
-    ];
-    return slots[index];
-  }
-
-  // Más de cuatro ramas principales: seguimos alternando lados y apilando
-  // verticalmente. Nunca comparten una misma banda.
   return {
-    side: index % 2 === 0 ? -1 : 1,
+    side: index % 2 === 0 ? 1 : -1,
     orderFromBottom: Math.floor(index / 2),
   };
 };
 
 /**
- * Construye sectores de altura DINÁMICA.
- * Una rama con 30 hojas ocupa más alto que una con 3: nunca se comprime todo
- * dentro de una franja fija ni se permite que invada la franja de otro tema.
+ * Sectores de altura dinámica: una rama con muchas hojas ocupa más alto que una
+ * con pocas, y ninguna invade la franja de otra.
  */
 const buildRootSectors = (
   roots: TreeNoteInput[],
@@ -167,10 +147,10 @@ const buildRootSectors = (
   compact: boolean,
   laneCountForRoot: (rootId: string) => number,
 ): RootSector[] => {
-  const minBandHeight = compact ? 150 : 205;
-  const laneGap = compact ? 30 : 42;
-  const bandPadding = compact ? 26 : 38;
-  const sectorGap = compact ? 34 : 52;
+  const minBandHeight = compact ? 140 : 190;
+  const laneGap = compact ? 28 : 38;
+  const bandPadding = compact ? 24 : 34;
+  const sectorGap = compact ? 32 : 48;
   const bottomClearance = compact ? 26 : 34;
 
   const placements = roots.map((_, index) => placementForRoot(index, roots.length));
@@ -190,19 +170,15 @@ const buildRootSectors = (
       const bandBottom = cursorBottom;
       const bandTop = bandBottom - requiredHeight;
 
-      // Si hay una sola rama en ese lado queda centrada. En una pila, la rama
-      // inferior nace cerca de la parte alta de su sector y las superiores cerca
-      // de la parte baja. Así cada copa crece alejándose de la zona de separación.
       const onlyOne = indices.length === 1;
-      const rootFactor = onlyOne ? 0.5 : stackIndex === 0 ? 0.3 : 0.7;
-      const computedRootY = bandTop + requiredHeight * rootFactor;
+      const rootFactor = onlyOne ? 0.5 : stackIndex === 0 ? 0.32 : 0.68;
 
       result[rootIndex] = {
         side,
-        rootY: computedRootY,
+        rootY: bandTop + requiredHeight * rootFactor,
         bandTop,
         bandBottom,
-        attachYOffset: stackIndex === 0 ? 5 : -5,
+        attachYOffset: stackIndex === 0 ? 6 : -6,
       };
 
       cursorBottom = bandTop - sectorGap;
@@ -233,12 +209,7 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
   const byNote = new Map<string, TreeJunction>();
   const branchRootOf = new Map<string, string>();
 
-  const rootJunction: TreeJunction = {
-    id: "trunk-0",
-    x: rootX,
-    y: rootY,
-    depth: 0,
-  };
+  const rootJunction: TreeJunction = { id: "trunk-0", x: rootX, y: rootY, depth: 0 };
   junctions.push(rootJunction);
 
   if (roots.length === 0) {
@@ -247,8 +218,6 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
 
   const rootOffsetX = compact ? 34 : 46;
 
-  // Peso vertical real de un subárbol. Cada hoja necesita su propio carril.
-  // Al añadir más notas, la banda de esa rama crece en lugar de comprimirlas.
   const laneCount = (id: string): number => {
     if (collapsed.has(id)) return 1;
     const kids = childrenOf.get(id) ?? [];
@@ -259,7 +228,6 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
   const sectors = buildRootSectors(roots, rootY, compact, laneCount);
 
   // ----- Tronco central -----
-  // Un junction del tronco por cada punto de salida, ordenado de abajo a arriba.
   const attachments = roots
     .map((root, index) => ({
       root,
@@ -273,8 +241,7 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
   const attachmentByRoot = new Map<string, TreeJunction>();
 
   attachments.forEach((item, trunkIndex) => {
-    // Microdesplazamiento de 2-4 px, nunca suficiente para deformar el eje.
-    const wobble = (hash(`${item.root.id}-trunk`) - 0.5) * (compact ? 4 : 7);
+    const wobble = (hash(`${item.root.id}-trunk`) - 0.5) * (compact ? 4 : 6);
     const junction: TreeJunction = {
       id: `trunk-${trunkIndex + 1}`,
       x: rootX + wobble,
@@ -295,7 +262,7 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
     previous = junction;
   });
 
-  // ----- Cada rama principal vive dentro de su sector -----
+  // ----- Cada racimo vive dentro de su sector -----
   roots.forEach((root, rootIndex) => {
     const sector = sectors[rootIndex];
     const attach = attachmentByRoot.get(root.id) ?? rootJunction;
@@ -313,8 +280,6 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
     byNote.set(root.id, rootNode);
     branchRootOf.set(root.id, root.id);
 
-    // La conexión tronco -> raíz sigue siendo azul. El color del tema empieza
-    // a partir del círculo raíz hacia sus hijas, igual que en la referencia.
     segments.push({
       id: `seg-root-${root.id}`,
       fromJunctionId: attach.id,
@@ -327,9 +292,9 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
 
     if (collapsed.has(root.id)) return;
 
-    const leafWeight = (id: string): number => laneCount(id);
-
-    const levelGap = compact ? 52 : 72;
+    const baseStep = compact ? 62 : 84;
+    const minStep = compact ? 26 : 34;
+    const DECAY = 0.75;
 
     const placeChildren = (
       parentNote: TreeNoteInput,
@@ -342,10 +307,13 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
       const kids = childrenOf.get(parentNote.id) ?? [];
       if (kids.length === 0) return;
 
-      const weights = kids.map((kid) => leafWeight(kid.id));
+      const weights = kids.map((kid) => laneCount(kid.id));
       const totalWeight = weights.reduce((sum, value) => sum + value, 0) || 1;
       let cursor = intervalTop;
       const intervalHeight = Math.max(1, intervalBottom - intervalTop);
+
+      // Tramos cada vez más cortos al alejarse del tronco, como en el SVG.
+      const step = Math.max(minStep, baseStep * Math.pow(DECAY, depthFromRoot - 1));
 
       kids.forEach((kid, childIndex) => {
         const share = intervalHeight * (weights[childIndex] / totalWeight);
@@ -355,23 +323,18 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
 
         let y = (childTop + childBottom) / 2;
 
-        // En cadenas de un solo hijo evitamos una línea totalmente recta, pero
-        // la variación queda siempre dentro del sector reservado.
         if (kids.length === 1) {
-          const driftSign = hash(`${kid.id}-vertical`) > 0.5 ? 1 : -1;
-          const drift = Math.min(compact ? 14 : 22, intervalHeight * 0.08);
-          const localPad = compact ? 5 : 7;
-          const localMin = Math.min(childTop + localPad, childBottom - localPad);
-          const localMax = Math.max(childTop + localPad, childBottom - localPad);
+          // Cadena de un solo hijo: se evita la línea recta sin salir del sector.
+          const driftSign = hash(`${kid.id}-v`) > 0.5 ? 1 : -1;
+          const drift = Math.min(compact ? 16 : 24, intervalHeight * 0.1);
+          const pad = compact ? 5 : 7;
+          const localMin = Math.min(childTop + pad, childBottom - pad);
+          const localMax = Math.max(childTop + pad, childBottom - pad);
           y = clamp(parentJunction.y + driftSign * drift, localMin, localMax);
         }
 
-        // Crecimiento horizontal sin límite fijo. Cada nivel avanza una distancia
-        // mínima real; si el árbol gana profundidad, se ensancha en vez de colocar
-        // nietas/bisnietas encima de la misma X.
-        const variation = 0.88 + hash(`${kid.id}-x`) * 0.24;
-        const step = levelGap * variation;
-        const x = parentJunction.x + sector.side * step;
+        const variation = 0.88 + hash(`${kid.id}-x`) * 0.26;
+        const x = parentJunction.x + sector.side * step * variation;
 
         const junction: TreeJunction = {
           id: `j-${kid.id}`,
@@ -390,7 +353,7 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
           id: `seg-${kid.id}`,
           fromJunctionId: parentJunction.id,
           toJunctionId: junction.id,
-          d: segmentPath(parentJunction, junction, "branch"),
+          d: segmentPath(parentJunction, junction, "branch", kid.id),
           branchRootId: root.id,
           depth: depthFromRoot + 1,
           kind: "branch",
@@ -406,16 +369,14 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
   return { junctions, segments, byNote, rootJunction, branchRootOf };
 };
 
-/** Grosor de trazo en píxeles de pantalla. Se usa con vector-effect non-scaling-stroke. */
-export const strokeForDepth = (depth: number, kind: SegmentKind) => {
-  if (kind === "trunk") return 3.2;
-  if (kind === "connector") return 3.0;
-  if (depth <= 2) return 3.0;
-  if (depth === 3) return 2.4;
-  if (depth === 4) return 1.9;
-  return Math.max(1.15, 1.75 - (depth - 4) * 0.16);
+/** Grosor uniforme, como en el SVG (stroke-width 2 en todos los trazos). */
+export const STROKE_WIDTH = 2;
+
+/** Tamaños de punto del SVG: 15 raíz de tema, 7 intermedio, 5 hoja. */
+export const dotSizeForDepth = (depth: number, hasChildren: boolean) => {
+  if (depth <= 0) return 15;
+  return hasChildren ? 7 : 5;
 };
 
-// Se conservan estos exports por compatibilidad con posibles imports antiguos.
-export const BRANCH_PALETTE = ["#7A6BFF", "#42E1C6", "#FFB06B", "#F57BC8", "#F3D75F", "#6BB8FF", "#B98BFF", "#7FE08A"];
+export const BRANCH_PALETTE = ["#45C9BE", "#E7B48C", "#FAADE2", "#F5E076", "#6BB8FF", "#B98BFF"];
 export const paletteColorFor = (_id: string, index: number) => BRANCH_PALETTE[index % BRANCH_PALETTE.length];
