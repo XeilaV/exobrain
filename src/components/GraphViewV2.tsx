@@ -965,14 +965,11 @@ const GraphView = () => {
             const baseOpacity = isTrunk ? 0.5 : isMain ? 0.78 : 0.56;
             const opacity = isActive ? Math.min(0.96, baseOpacity + 0.16) : baseOpacity * z * focusDim;
             const stroke = isTrunk ? "hsl(262 32% 58%)" : `hsl(${to.color})`;
-            // Geometría estática del motivo; solo se recalcula si el nodo se ha arrastrado.
-            const moved =
-              (offsets[edge.from] && (offsets[edge.from].dx || offsets[edge.from].dy)) ||
-              (offsets[edge.to] && (offsets[edge.to].dx || offsets[edge.to].dy));
-            const d =
-              edge.motif && (moved || !edge.d)
-                ? motifPath(from, to, edge.motif, !!edge.mirror)
-                : (edge.d ?? branchPath(from, to, kind));
+            // La rama siempre se traza entre las posiciones actuales de madre e hija,
+            // así nunca se desconecta al mover un nodo o su subárbol.
+            const d = edge.motif
+              ? motifPath(from, to, edge.motif, !!edge.mirror)
+              : branchPath(from, to, kind);
 
             return (
               <g key={`be-${idx}`} style={{ opacity, transition: "opacity 320ms ease" }}>
