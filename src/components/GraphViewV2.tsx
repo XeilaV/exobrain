@@ -399,6 +399,30 @@ const GraphView = () => {
 
   const getPos = (id: string) => positionsWithOffsets.find((p) => p.id === id);
 
+  // Mantener el mapa de posiciones finales para poder persistirlas al soltar.
+  useEffect(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    positionsWithOffsets.forEach((p) => map.set(p.id, { x: p.x, y: p.y }));
+    finalPositionsRef.current = map;
+  }, [positionsWithOffsets]);
+
+  // Siembra inicial: fija en la base de datos la posición automática de las notas
+  // que aún no tienen coordenadas, para que el árbol no se recoloque al recargar.
+  useEffect(() => {
+    if (loading || notes.length === 0) return;
+    if (dragState.current) return;
+    const pending: { id: string; x: number; y: number }[] = [];
+    notes.forEach((n) => {
+      if (n.posX != null && n.posY != null) return;
+      if (seededRef.current.has(n.id)) return;
+      const p = finalPositionsRef.current.get(`note-${n.id}`);
+      if (!p) return;
+      seededRef.current.add(n.id);
+      pending.push({ id: n.id, x: p.x, y: p.y });
+    });
+    if (pending.length > 0) void saveNotePositions(pending);
+  }, [notes, loading, positionsWithOffsets, saveNotePositions]);
+
   const getNodeRadius = useCallback((node: NodePos) => {
     if (node.isVirtual) return 0;
     if (node.type === "root") return ROOT_R;
