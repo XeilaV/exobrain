@@ -125,10 +125,7 @@ const GraphView = () => {
   const didDrag = useRef(false);
   const didPan = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastExpandedRef = useRef<string | null>(null);
-  const lastCollapsedRef = useRef<string | null>(null);
   const didInitialFitRef = useRef(false);
-  const previousHasOpenBranchRef = useRef(false);
   const viewZoomRef = useRef(1);
 
   // Drag offsets per node id (session-local)
@@ -150,6 +147,10 @@ const GraphView = () => {
   // Hidden main-branch filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+
+  // Todo el árbol nace desplegado: el plegado es manual (doble clic) y vive en sesión,
+  // ignorando el estado persistido `isCollapsed`.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
   const rootNotes = useMemo(() => notes.filter((n) => !n.parentNoteId), [notes]);
   const visibleRoots = useMemo(
@@ -277,14 +278,23 @@ const GraphView = () => {
     left.sort((a, b) => a.originalIndex - b.originalIndex);
     right.sort((a, b) => a.originalIndex - b.originalIndex);
 
-    const allBySide = [
-      ...left.map((item, i) => ({ ...item, side: -1 as const, sideIndex: i, sideCount: left.length })),
-      ...right.map((item, i) => ({ ...item, side: 1 as const, sideIndex: i, sideCount: right.length })),
-    ];
+    // Alternamos lados subiendo por el tronco: cada rama principal nace a una altura
+    // distinta, como en un árbol real (nunca dos ramas en el mismo punto).
+    const interleaved: { root: Note; originalIndex: number; weight: number; side: -1 | 1 }[] = [];
+    const maxLen = Math.max(left.length, right.length);
+    for (let i = 0; i < maxLen; i++) {
+      if (left[i]) interleaved.push({ ...left[i], side: -1 });
+      if (right[i]) interleaved.push({ ...right[i], side: 1 });
+    }
 
     const trunkSpan = Math.max(180, trunkBottomY - trunkTopY);
-    const attachLow = trunkBottomY - trunkSpan * 0.18;
-    const attachHigh = trunkTopY + trunkSpan * 0.18;
+    const attachLow = trunkBottomY - trunkSpan * 0.1;
+    const attachHigh = trunkTopY + trunkSpan * 0.12;
+
+    const allBySide = interleaved.map((item, i) => ({
+      ...item,
+      heightT: interleaved.length <= 1 ? 0.35 : i / (interleaved.length - 1),
+    }));
 
     const clampUpperAngle = (angle: number, side: -1 | 1) => {
       // Keep descendants in the crown: sideways/upwards, never hanging beneath the parent.
@@ -304,22 +314,28 @@ const GraphView = () => {
       branchZ: number,
     ) => {
       const children = notes.filter((n) => n.parentNoteId === parentNote.id);
-      const expanded = parentNote.isCollapsed === false && children.length > 0;
-      if (!expanded) return;
+      if (children.length === 0 || collapsedIds.has(parentNote.id)) return;
 
       const count = children.length;
-      const spread = Math.min(depth === 1 ? 1.5 : 1.18, 0.5 + count * 0.12);
+      // El abanico se estrecha con la profundidad; nunca hijas apiladas en vertical.
+      const spread = Math.min(depth === 1 ? 1.55 : Math.max(0.5, 1.3 - depth * 0.12), 0.45 + count * 0.16);
       const baseRadius = isMobile
         ? depth === 1
-          ? 92
-          : Math.max(68, 88 - depth * 5)
+          ? 96
+          : Math.max(62, 90 - depth * 6)
         : depth === 1
-          ? 132
-          : Math.max(86, 116 - depth * 7);
-      const radius = baseRadius + Math.min(isMobile ? 42 : 88, count * (isMobile ? 5 : 8));
+          ? 138
+          : Math.max(80, 122 - depth * 9);
+      // Ramas con más descendencia necesitan más aire.
+      const weights = children.map((c) => 1 + descendantsCount(c.id));
+      const totalWeight = weights.reduce((a, b) => a + b, 0);
 
+      let acc = 0;
       children.forEach((child, i) => {
-        const t = count === 1 ? 0 : i / (count - 1) - 0.5;
+        const w = weights[i];
+        const t = totalWeight <= 0 ? 0 : (acc + w / 2) / totalWeight - 0.5;
+        acc += w;
+        const radius = baseRadius + Math.min(isMobile ? 46 : 92, Math.sqrt(w) * (isMobile ? 12 : 20));
         // Small deterministic radius variation makes the crown less diagrammatic while
         // preserving predictable positions between renders.
         const radialJitter = ((i % 3) - 1) * (isMobile ? 8 : 15);
@@ -331,7 +347,7 @@ const GraphView = () => {
         const childId = `note-${child.id}`;
         const parentId = `note-${parentNote.id}`;
         const childChildren = notes.filter((n) => n.parentNoteId === child.id);
-        const childExpanded = child.isCollapsed === false && childChildren.length > 0;
+        const childExpanded = childChildren.length > 0 && !collapsedIds.has(child.id);
 
         pos.push({
           id: childId,
@@ -360,12 +376,12 @@ const GraphView = () => {
     };
 
     allBySide.forEach((item, globalIndex) => {
-      const { root, side, sideIndex, sideCount, originalIndex } = item;
+      const { root, side, heightT, originalIndex } = item;
       const color = colorForRoot(root, originalIndex);
-      const sideT = sideCount <= 1 ? 0.5 : sideIndex / (sideCount - 1);
+      const sideT = heightT;
 
-      // Branches emerge from the middle / upper trunk at distinct heights.
-      const attachY = attachLow + (attachHigh - attachLow) * (0.22 + sideT * 0.68);
+      // Branches emerge progressively along the trunk, each at its own height.
+      const attachY = attachLow + (attachHigh - attachLow) * heightT;
       const attachId = `attach-${root.id}`;
       const branchZ = 0.76 + ((originalIndex * 37) % 24) / 100; // 0.76..0.99
 
@@ -391,7 +407,7 @@ const GraphView = () => {
       const mainY = Math.max(trunkTopY + 42, attachY - vertical);
       const mainAngle = Math.atan2(mainY - attachY, mainX - trunkX);
       const children = notes.filter((n) => n.parentNoteId === root.id);
-      const expanded = root.isCollapsed === false && children.length > 0;
+      const expanded = children.length > 0 && !collapsedIds.has(root.id);
       const mainId = `note-${root.id}`;
 
       pos.push({
@@ -420,7 +436,7 @@ const GraphView = () => {
     });
 
     return { positions: pos, edges: eds, parentMap: parent };
-  }, [notes, categories, rootNotes, visibleRoots, brainName, size.w, size.h]);
+  }, [notes, categories, rootNotes, visibleRoots, brainName, size.w, size.h, collapsedIds]);
 
   // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
   // node moves its whole subtree along with it.
@@ -500,31 +516,6 @@ const GraphView = () => {
     [getNodeRadius],
   );
 
-  const focusBranch = useCallback(
-    (nodeId: string) => {
-      const subtreeIds = getSubtreeIds(nodeId);
-      const branchNodes = positionsWithOffsets.filter((node) => subtreeIds.has(node.id));
-      const bounds = getNodesBounds(branchNodes);
-      if (!bounds) return;
-
-      const isMobile = size.w < 640;
-      const panelReserve = !isMobile && openPostIt ? 390 : 0;
-      const availableW = Math.max(240, size.w - panelReserve - (isMobile ? 36 : 90));
-      const availableH = Math.max(240, size.h - (isMobile ? 120 : 100));
-      const branchW = Math.max(1, bounds.maxX - bounds.minX);
-      const branchH = Math.max(1, bounds.maxY - bounds.minY);
-      const zoom = Math.min(1.42, Math.max(0.88, Math.min(availableW / branchW, availableH / branchH) * 0.82));
-      const targetX = (size.w - panelReserve) / 2;
-      const targetY = size.h * 0.48;
-      const branchCenterX = (bounds.minX + bounds.maxX) / 2;
-      const branchCenterY = (bounds.minY + bounds.maxY) / 2;
-
-      setViewZoom(zoom);
-      setPan({ x: targetX - branchCenterX * zoom, y: targetY - branchCenterY * zoom });
-    },
-    [getNodesBounds, getSubtreeIds, positionsWithOffsets, size.w, size.h, openPostIt],
-  );
-
   const fitFullTree = useCallback(() => {
     const bounds = getNodesBounds(positionsWithOffsets);
     if (!bounds) return;
@@ -537,7 +528,7 @@ const GraphView = () => {
     const availableH = Math.max(1, size.h - topMargin - bottomMargin);
     const treeW = Math.max(1, bounds.maxX - bounds.minX);
     const treeH = Math.max(1, bounds.maxY - bounds.minY);
-    const zoom = Math.min(1, Math.max(0.4, Math.min(availableW / treeW, availableH / treeH)));
+    const zoom = Math.min(1, Math.max(0.25, Math.min(availableW / treeW, availableH / treeH)));
     const treeCenterX = (bounds.minX + bounds.maxX) / 2;
     const treeCenterY = (bounds.minY + bounds.maxY) / 2;
     const targetX = size.w / 2;
@@ -547,50 +538,46 @@ const GraphView = () => {
     setPan({ x: targetX - treeCenterX * zoom, y: targetY - treeCenterY * zoom });
   }, [getNodesBounds, positionsWithOffsets, size.w, size.h]);
 
-  const hasOpenVisibleBranch = useMemo(() => {
-    return positionsWithOffsets.some(
-      (node) =>
-        node.id !== "hub" &&
-        (node.type === "note" || node.type === "category") &&
-        node.hasChildren &&
-        node.isCollapsed === false,
-    );
-  }, [positionsWithOffsets]);
-
   const layoutSignature = useMemo(() => {
-    return positions
-      .map((node) => `${node.id}:${Math.round(node.x)}:${Math.round(node.y)}:${node.isCollapsed ? 1 : 0}`)
-      .join("|");
+    return positions.map((node) => `${node.id}:${Math.round(node.x)}:${Math.round(node.y)}`).join("|");
   }, [positions]);
 
+  // Solo encuadramos el árbol la primera vez que hay layout. A partir de ahí la
+  // navegación es siempre manual: ni la selección ni el plegado tocan pan/zoom.
   useEffect(() => {
     if (positionsWithOffsets.length === 0) return;
+    if (didInitialFitRef.current) return;
+    fitFullTree();
+    didInitialFitRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutSignature, size.w, size.h]);
 
-    const expandedNodeId = lastExpandedRef.current;
-    if (expandedNodeId) {
-      if (!positionsWithOffsets.some((node) => node.id === expandedNodeId)) return;
-      focusBranch(expandedNodeId);
-      lastExpandedRef.current = null;
-      didInitialFitRef.current = true;
-      previousHasOpenBranchRef.current = hasOpenVisibleBranch;
-      return;
-    }
+  // Zoom con rueda / pinch de trackpad anclado al cursor (listener nativo no pasivo).
 
-    if (lastCollapsedRef.current) {
-      fitFullTree();
-      lastCollapsedRef.current = null;
-      didInitialFitRef.current = true;
-      previousHasOpenBranchRef.current = hasOpenVisibleBranch;
-      return;
-    }
+  const zoomAt = useCallback((px: number, py: number, factor: number) => {
+    setViewZoom((z) => {
+      const next = Math.max(0.2, Math.min(4, z * factor));
+      const k = next / z;
+      setPan((p) => ({ x: px - (px - p.x) * k, y: py - (py - p.y) * k }));
+      viewZoomRef.current = next;
+      return next;
+    });
+  }, []);
 
-    if (!didInitialFitRef.current || (!hasOpenVisibleBranch && previousHasOpenBranchRef.current)) {
-      fitFullTree();
-      didInitialFitRef.current = true;
-    }
-
-    previousHasOpenBranchRef.current = hasOpenVisibleBranch;
-  }, [layoutSignature, size.w, size.h, hasOpenVisibleBranch]);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1);
+      const factor = Math.exp(-dy * (e.ctrlKey ? 0.0025 : 0.0015));
+      setIsPanning(true);
+      zoomAt(e.clientX - rect.left, e.clientY - rect.top, factor);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [zoomAt]);
 
   // Long-press handlers
   const startLongPress = useCallback(
@@ -777,15 +764,17 @@ const GraphView = () => {
       if (clickTimer.current) {
         clearTimeout(clickTimer.current);
         clickTimer.current = null;
-        // Double click
+        // Double click: plegar/desplegar manualmente (no altera pan ni zoom)
         if (nodeId.startsWith("note-")) {
           const nId = nodeId.replace("note-", "");
-          const note = notes.find((n) => n.id === nId);
           const hasChildren = notes.some((n) => n.parentNoteId === nId);
-          if (hasChildren && note) {
-            lastExpandedRef.current = note.isCollapsed ? nodeId : null;
-            lastCollapsedRef.current = note.isCollapsed ? null : nodeId;
-            setFocusNoteId(note.isCollapsed ? nId : null);
+          if (hasChildren) {
+            setCollapsedIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(nId)) next.delete(nId);
+              else next.add(nId);
+              return next;
+            });
             toggleNoteCollapsed(nId);
           }
         } else if (nodeId === "root") {
@@ -810,14 +799,8 @@ const GraphView = () => {
             });
             return;
           }
+          // Selección puramente visual: resalta la rama y atenúa el resto.
           setFocusNoteId(nId);
-          // En escritorio el panel lateral ocupa la derecha: desplazamos el mapa
-          // para que el nodo activo siga siendo visible.
-          if (window.innerWidth >= 768) {
-            const panelW = 400;
-            const overlapX = clientX - (window.innerWidth - panelW - 24);
-            if (overlapX > -40) setPan((p) => ({ x: p.x - (overlapX + 80), y: p.y }));
-          }
           setOpenPostIt({ noteId: nId, x: clientX, y: clientY });
         } else if (nodeId === "root") {
           // single click on root opens rename
@@ -847,11 +830,11 @@ const GraphView = () => {
     return `M ${from.x} ${from.y} C ${from.x + dx * 0.3} ${from.y + dy * 0.16}, ${from.x + dx * 0.74} ${from.y + dy * 0.88}, ${to.x} ${to.y}`;
   };
 
-  // Thin graphic lines rather than a literal / realistic trunk.
+  // Trazo afilado: grueso junto al tronco, casi un pelo en las hojas.
   const widthForDepth = (depth: number, isMain = false) => {
-    if (depth < 0) return 2.7;
-    if (isMain || depth === 0) return 2.35;
-    return Math.max(0.95, 1.8 - depth * 0.18);
+    if (depth < 0) return 2.9;
+    if (isMain || depth === 0) return 2.5;
+    return Math.max(0.5, 1.9 / (1 + depth * 0.55));
   };
   // Rama con protagonismo: subárbol de la raíz del nodo enfocado
   const focusIds = useMemo(() => {
@@ -874,8 +857,9 @@ const GraphView = () => {
 
   const dimFor = useCallback((id: string) => (focusIds && !focusIds.has(id) ? 0.16 : 1), [focusIds]);
 
-  // Nivel de detalle según zoom: con la vista alejada solo ramas principales
-  const showLeafLabels = viewZoom > 0.62;
+  // Nivel de detalle según zoom: la geometría no cambia, solo la legibilidad.
+  // Cada nivel de profundidad pide un poco más de acercamiento para mostrar texto.
+  const labelVisibleAtDepth = useCallback((depth: number) => viewZoom >= 0.5 + Math.max(0, depth) * 0.16, [viewZoom]);
 
   // Link edges (horizontal between notes)
   const linkEdges = useMemo(() => {
@@ -1091,7 +1075,7 @@ const GraphView = () => {
             const z = node.z ?? 1;
             const isFocused = !!focusIds && focusIds.has(node.id);
             const isLinkSource = linkingNoteId && node.noteId === linkingNoteId;
-            const showChildLabel = isMainNote || showLeafLabels || isFocused;
+            const showChildLabel = isMainNote || isFocused || labelVisibleAtDepth(node.depth);
             const baseScale = focusIds ? (isFocused ? (isMainNote ? 1.06 : 1.025) : 0.96) : 0.96 + z * 0.04;
             const visualOpacity = dim * (focusIds ? 1 : Math.max(0.68, z));
 
