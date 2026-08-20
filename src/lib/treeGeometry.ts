@@ -260,7 +260,7 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
     // Apertura del ramaje: más ancha si la rama carga mucha descendencia,
     // más estrecha a medida que se profundiza.
     const spread = Math.min(
-      (depth === 1 ? 1.5 : 1.15) * (0.55 + Math.min(1, total / 10) * 0.7),
+      (depth === 1 ? 1.6 : 1.25) * (0.6 + Math.min(1, total / 10) * 0.75),
       2.0,
     );
 
@@ -283,7 +283,7 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
         length *
         (0.62 + hash(`${kid.id}-l`) * 0.26) *
         (1 + Math.min(0.55, Math.sqrt(w) * 0.16));
-      grow(kid, j, a, Math.max(compact ? 34 : 48, len), depth + 1, branchRootId);
+      grow(kid, j, a, Math.max(compact ? 44 : 62, len), depth + 1, branchRootId);
     });
   };
 
