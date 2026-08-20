@@ -648,7 +648,7 @@ const GraphView = () => {
       pointersRef.current.delete(e.pointerId);
       const endedDrag = dragState.current;
       dragState.current = null;
-      if (endedDrag && didDrag.current) persistOffset(endedDrag.nodeId);
+      if (endedDrag && didDrag.current) persistDragged(endedDrag.nodeId);
 
 
       // Cancel canvas long-press if pointer released before timer fired
@@ -678,7 +678,7 @@ const GraphView = () => {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [cancelLongPress, persistOffset]);
+  }, [cancelLongPress, persistDragged]);
 
   // Click handling with double-click detection
   const handleNodeClick = useCallback(
