@@ -55,7 +55,7 @@ interface NotesContextType {
   getRootNotes: () => Note[];
   updateNote: (id: string, updates: Partial<Note>) => void;
   updateNotePosition: (id: string, dx: number | null, dy: number | null) => Promise<void>;
-  saveNotePositions: (entries: { id: string; dx: number; dy: number }[]) => Promise<void>;
+  saveNotePositions: (entries: { id: string; x: number; y: number }[]) => Promise<void>;
   clearAllPositions: () => Promise<void>;
 
   deleteNote: (id: string) => void;
