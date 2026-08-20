@@ -36,7 +36,7 @@ import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { buildTreeSkeleton, motifPath, strokeForDepth, type BranchMotif } from "@/lib/treeGeometry";
+import { buildTreeSkeleton, motifPath, strokeForDepth, type BranchMotif } from "@/lib/treeGeometryV3";
 
 type NodeType = "root" | "category" | "note";
 
@@ -75,7 +75,7 @@ const ROOT_R = 30;
 const CAT_R = 22;
 const NOTE_R = 12;
 
-const GraphView = () => {
+const GraphViewV3 = () => {
   const {
     notes,
     categories,
@@ -205,14 +205,7 @@ const GraphView = () => {
 
     if (rootNotes.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
-    const fallbackPalette = [
-      "262 62% 62%",
-      "196 58% 50%",
-      "24 78% 58%",
-      "332 62% 60%",
-      "145 42% 50%",
-      "220 68% 62%",
-    ];
+    const fallbackPalette = ["262 62% 62%", "196 58% 50%", "24 78% 58%", "332 62% 60%", "145 42% 50%", "220 68% 62%"];
     const colorForRoot = (root: Note, index: number) => {
       const legacyCategory = categories.find((c) => c.id === root.categoryId);
       return root.color || legacyCategory?.color || fallbackPalette[index % fallbackPalette.length];
@@ -225,6 +218,8 @@ const GraphView = () => {
       {
         rootX: W / 2,
         rootY: H - (isMobile ? 96 : 84),
+        canvasWidth: W,
+        canvasHeight: H,
         compact: isMobile,
         collapsed: collapsedIds,
         hiddenRootIds: hiddenCategoryIds,
@@ -294,7 +289,8 @@ const GraphView = () => {
         isMain: j.depth === 1,
         depth: Math.max(0, j.depth - 1),
         branchRootId: j.branchRootId,
-        z: Math.max(0.6, branchZ(j.branchRootId) - Math.max(0, j.depth - 1) * 0.035),
+        side: j.x >= W / 2 ? 1 : -1,
+        z: Math.max(0.72, branchZ(j.branchRootId) - Math.max(0, j.depth - 1) * 0.025),
       });
     });
 
@@ -307,7 +303,6 @@ const GraphView = () => {
 
     return { positions: pos, edges: eds, parentMap: parent };
   }, [notes, categories, rootNotes, hiddenCategoryIds, brainName, size.w, size.h, collapsedIds]);
-
 
   // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
   // node moves its whole subtree along with it.
@@ -334,64 +329,7 @@ const GraphView = () => {
     });
   }, [positions, offsets, parentMap]);
 
-  // Pasada de resolución de solapes de etiquetas: la píldora se desplaza
-  // perpendicularmente a su rama unos pocos px; el punto del nodo permanece
-  // exactamente en la bifurcación. Prioridad por profundidad (gana la más cercana
-  // al tronco).
-  const labelShifts = useMemo(() => {
-    const shifts: Record<string, { dx: number; dy: number }> = {};
-    const byId = new Map(positionsWithOffsets.map((p) => [p.id, p]));
-    const boxOf = (n: NodePos) => {
-      const isRoot = n.type === "root";
-      const chars = Math.min(18, (n.label || "").length);
-      const w = isRoot ? 40 + chars * 9 : (n.isMain ? 34 : 28) + chars * (n.isMain ? 6.6 : 5.6);
-      const h = isRoot ? 40 : n.isMain ? 28 : 22;
-      return { w, h };
-    };
-    const placed: { x: number; y: number; w: number; h: number }[] = [];
-    const ordered = positionsWithOffsets
-      .filter((n) => !n.isVirtual)
-      .slice()
-      .sort((a, b) => a.depth - b.depth);
-
-    ordered.forEach((n) => {
-      const { w, h } = boxOf(n);
-      const parentId = parentMap[n.id];
-      const par = parentId ? byId.get(parentId) : undefined;
-      let px = 0;
-      let py = -1;
-      if (par) {
-        const dx = n.x - par.x;
-        const dy = n.y - par.y;
-        const len = Math.hypot(dx, dy) || 1;
-        px = -dy / len;
-        py = dx / len;
-      }
-      const hits = (x: number, y: number) =>
-        placed.some((b) => Math.abs(b.x - x) < (b.w + w) / 2 + 4 && Math.abs(b.y - y) < (b.h + h) / 2 + 3);
-
-      let best = { dx: 0, dy: 0 };
-      for (let step = 0; step <= 5; step++) {
-        const cands: { dx: number; dy: number }[] =
-          step === 0 ? [{ dx: 0, dy: 0 }] : [
-            { dx: px * step * 9, dy: py * step * 9 },
-            { dx: -px * step * 9, dy: -py * step * 9 },
-          ];
-        const found = cands.find((c) => !hits(n.x + c.dx, n.y + c.dy));
-        if (found) {
-          best = found;
-          break;
-        }
-        if (step === 5) best = cands[0];
-      }
-      placed.push({ x: n.x + best.dx, y: n.y + best.dy, w, h });
-      if (best.dx !== 0 || best.dy !== 0) shifts[n.id] = best;
-    });
-    return shifts;
-  }, [positionsWithOffsets, parentMap]);
-
   const getPos = (id: string) => positionsWithOffsets.find((p) => p.id === id);
-
 
   const getNodeRadius = useCallback((node: NodePos) => {
     if (node.isVirtual) return 0;
@@ -811,7 +749,14 @@ const GraphView = () => {
     <div
       ref={containerRef}
       className="flex-1 h-full w-full canvas-wash overflow-hidden relative select-none"
-      style={{ touchAction: "none" }}
+      style={{
+        touchAction: "none",
+        backgroundImage:
+          theme === "dark"
+            ? "radial-gradient(circle at 1px 1px, hsl(225 30% 75% / 0.055) 1px, transparent 1.15px), radial-gradient(520px 300px at 50% 92%, hsl(258 78% 70% / 0.12), transparent 72%), var(--canvas-wash)"
+            : undefined,
+        backgroundSize: theme === "dark" ? "22px 22px, auto, auto" : undefined,
+      }}
       onPointerDown={(e) => {
         if (e.button !== 0 && e.pointerType === "mouse") return;
         const target = e.target as HTMLElement;
@@ -925,7 +870,7 @@ const GraphView = () => {
             const kind = edge.kind ?? "branch";
             const isTrunk = kind === "trunk";
             const isMain = to.type === "note" && to.isMain;
-            const width = isTrunk ? 2.6 : Math.max(0.5, strokeForDepth(to.depth + 1, "branch") * 1.6);
+            const width = isTrunk ? strokeForDepth(0, "trunk") : strokeForDepth(to.depth + 1, "branch");
             const z = Math.min(from.z ?? 1, to.z ?? 1);
             const focusDim = isTrunk ? 1 : Math.min(dimFor(edge.from), dimFor(edge.to));
             const isActive = !!focusIds && focusIds.has(edge.to);
@@ -949,10 +894,10 @@ const GraphView = () => {
                     d={d}
                     fill="none"
                     stroke={stroke}
-                    strokeWidth={width + 3.2}
+                    strokeWidth={width + 2.0}
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    opacity={isActive ? 0.09 : 0.045}
+                    opacity={isActive ? 0.08 : 0.03}
                     filter="url(#branch-soft-depth)"
                   />
                 )}
@@ -1010,8 +955,6 @@ const GraphView = () => {
             const nodeNote = node.noteId ? notes.find((n) => n.id === node.noteId) : null;
             const childCount = nodeNote ? notes.filter((n) => n.parentNoteId === nodeNote.id).length : 0;
             const dim = dimFor(node.id);
-            const shift = labelShifts[node.id] ?? { dx: 0, dy: 0 };
-
             const z = node.z ?? 1;
             const isFocused = !!focusIds && focusIds.has(node.id);
             const isLinkSource = linkingNoteId && node.noteId === linkingNoteId;
@@ -1035,7 +978,7 @@ const GraphView = () => {
                     ? { duration: 0 }
                     : { type: "spring", stiffness: 290, damping: 28 }
                 }
-                className="absolute cursor-grab active:cursor-grabbing touch-none"
+                className="absolute cursor-pointer touch-none"
                 data-graph-node
                 style={{
                   width: 1,
@@ -1047,14 +990,8 @@ const GraphView = () => {
                 onPointerDown={(e) => {
                   e.stopPropagation();
                   didDrag.current = false;
-                  const cur = offsets[node.id] || { dx: 0, dy: 0 };
-                  dragState.current = {
-                    nodeId: node.id,
-                    startX: e.clientX,
-                    startY: e.clientY,
-                    baseDx: cur.dx,
-                    baseDy: cur.dy,
-                  };
+                  // V3: posición fija para no romper la continuidad del árbol.
+                  dragState.current = null;
                   startLongPress(node.id, e.clientX, e.clientY);
                 }}
                 onPointerUp={cancelLongPress}
@@ -1076,40 +1013,36 @@ const GraphView = () => {
                   </div>
                 ) : showChildLabel ? (
                   <>
-                    {(shift.dx !== 0 || shift.dy !== 0) && (
-                      <span
-                        className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
-                        style={{ width: 5, height: 5, backgroundColor: `hsl(${node.color})` }}
-                      />
-                    )}
+                    <span
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${isMainNote ? "h-2.5 w-2.5" : "h-2 w-2"}`}
+                      style={{
+                        backgroundColor: `hsl(${node.color})`,
+                        boxShadow: isFocused
+                          ? `0 0 10px hsl(${node.color} / 0.38)`
+                          : `0 0 7px hsl(${node.color} / 0.16)`,
+                      }}
+                    />
                     <div
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center whitespace-nowrap rounded-full border bg-card/95 font-body text-foreground shadow-sm transition-shadow ${
-                        isMainNote
-                          ? "gap-2 px-3 py-1.5 text-[12px] font-semibold"
-                          : "gap-1.5 px-2.5 py-1 text-[10px] font-medium"
+                      className={`absolute -translate-y-1/2 flex items-center whitespace-nowrap rounded-full border bg-card/90 font-body text-foreground backdrop-blur-sm transition-shadow ${
+                        isMainNote ? "px-3 py-1.5 text-[12px] font-semibold" : "px-2.5 py-1 text-[10px] font-medium"
                       } ${isLinkSource ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-background" : ""}`}
                       style={{
-                        left: shift.dx,
-                        top: shift.dy,
-                        borderColor: `hsl(${node.color} / ${isFocused ? 0.72 : isMainNote ? 0.48 : 0.3})`,
+                        ...(node.side === -1 ? { right: 10 } : { left: 10 }),
+                        borderColor: `hsl(${node.color} / ${isFocused ? 0.68 : isMainNote ? 0.4 : 0.24})`,
                         boxShadow: isFocused
-                          ? `0 5px 18px hsl(${node.color} / 0.18)`
-                          : `0 3px 12px hsl(${node.color} / 0.08)`,
+                          ? `0 4px 16px hsl(${node.color} / 0.14)`
+                          : `0 2px 10px hsl(${node.color} / 0.05)`,
                       }}
                     >
-
-                    <span
-                      className={isMainNote ? "h-2 w-2 shrink-0 rounded-full" : "h-1.5 w-1.5 shrink-0 rounded-full"}
-                      style={{ backgroundColor: `hsl(${node.color})` }}
-                    />
-                    {nodeNote?.icon && <span className="text-[10px] leading-none opacity-80">{nodeNote.icon}</span>}
-                    <span className="max-w-[150px] overflow-hidden text-ellipsis">{node.label}</span>
-                    {childCount > 0 && (
-                      <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">{childCount}</span>
-                    )}
+                      {nodeNote?.icon && (
+                        <span className="mr-1 text-[10px] leading-none opacity-80">{nodeNote.icon}</span>
+                      )}
+                      <span className="max-w-[150px] overflow-hidden text-ellipsis">{node.label}</span>
+                      {childCount > 0 && (
+                        <span className="ml-1 text-[9px] font-normal text-muted-foreground">{childCount}</span>
+                      )}
                     </div>
                   </>
-
                 ) : (
                   <span
                     className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-card"
@@ -1650,4 +1583,4 @@ const GraphView = () => {
   );
 };
 
-export default GraphView;
+export default GraphViewV3;
