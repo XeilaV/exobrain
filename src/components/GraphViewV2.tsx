@@ -36,7 +36,7 @@ import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { buildTreeSkeleton, motifPath, strokeForDepth, type BranchMotif } from "@/lib/treeGeometry";
+import { buildTreeSkeleton, segmentPath, strokeForDepth, type SegmentKind } from "@/lib/treeGeometry";
 
 type NodeType = "root" | "category" | "note";
 
@@ -64,18 +64,16 @@ interface NodePos {
 interface Edge {
   from: string;
   to: string;
-  kind?: "trunk" | "branch";
-  /** trazo precalculado a partir del motivo SVG */
+  kind?: SegmentKind;
+  /** Path base del layout. En render se recalcula siempre desde las posiciones finales. */
   d?: string;
-  motif?: BranchMotif;
-  mirror?: boolean;
 }
 
 const ROOT_R = 30;
 const CAT_R = 22;
 const NOTE_R = 12;
 
-const GraphViewV3 = () => {
+const GraphView = () => {
   const {
     notes,
     categories,
@@ -192,9 +190,9 @@ const GraphViewV3 = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNoteId]);
 
-  // Esqueleto del árbol: geometría estática construida con los motivos Bézier
-  // extraídos de `Group 8.svg` (ver src/lib/treeGeometry.ts). Ni la selección ni
-  // el zoom recalculan posiciones: solo cámara, opacidad y etiquetas.
+  // Esqueleto del árbol: geometría determinista por sectores. Cada rama principal
+  // dispone de su propia banda y esa banda crece cuando aumenta su subárbol.
+  // Selección y zoom solo cambian cámara/opacidad/etiquetas, no la jerarquía.
   const { positions, edges, parentMap } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
@@ -218,8 +216,6 @@ const GraphViewV3 = () => {
       {
         rootX: W / 2,
         rootY: H - (isMobile ? 96 : 84),
-        canvasWidth: W,
-        canvasHeight: H,
         compact: isMobile,
         collapsed: collapsedIds,
         hiddenRootIds: hiddenCategoryIds,
@@ -289,15 +285,15 @@ const GraphViewV3 = () => {
         isMain: j.depth === 1,
         depth: Math.max(0, j.depth - 1),
         branchRootId: j.branchRootId,
-        side: j.x >= W / 2 ? 1 : -1,
-        z: Math.max(0.72, branchZ(j.branchRootId) - Math.max(0, j.depth - 1) * 0.025),
+        side: j.side ?? (j.x >= W / 2 ? 1 : -1),
+        z: Math.max(0.6, branchZ(j.branchRootId) - Math.max(0, j.depth - 1) * 0.035),
       });
     });
 
     skeleton.segments.forEach((seg) => {
       const from = posIdFor(seg.fromJunctionId);
       const to = posIdFor(seg.toJunctionId);
-      eds.push({ from, to, kind: seg.kind, d: seg.d, motif: seg.motif, mirror: seg.mirror });
+      eds.push({ from, to, kind: seg.kind, d: seg.d });
       parent[to] = from;
     });
 
@@ -367,8 +363,8 @@ const GraphViewV3 = () => {
       return nodes.reduce(
         (bounds, node) => {
           const r = getNodeRadius(node);
-          const labelPadX = node.isVirtual ? 0 : node.type === "root" ? 86 : node.isMain ? 92 : 78;
-          const labelPadY = node.isVirtual ? 0 : node.type === "root" ? 24 : node.isMain ? 20 : 16;
+          const labelPadX = node.isVirtual ? 0 : node.type === "root" ? 54 : node.isMain ? 46 : 18;
+          const labelPadY = node.isVirtual ? 0 : node.type === "root" ? 22 : node.isMain ? 16 : 10;
           return {
             minX: Math.min(bounds.minX, node.x - Math.max(r, labelPadX)),
             maxX: Math.max(bounds.maxX, node.x + Math.max(r, labelPadX)),
@@ -394,7 +390,7 @@ const GraphViewV3 = () => {
     const availableH = Math.max(1, size.h - topMargin - bottomMargin);
     const treeW = Math.max(1, bounds.maxX - bounds.minX);
     const treeH = Math.max(1, bounds.maxY - bounds.minY);
-    const zoom = Math.min(1, Math.max(0.25, Math.min(availableW / treeW, availableH / treeH)));
+    const zoom = Math.min(1, Math.max(0.1, Math.min(availableW / treeW, availableH / treeH)));
     const treeCenterX = (bounds.minX + bounds.maxX) / 2;
     const treeCenterY = (bounds.minY + bounds.maxY) / 2;
     const targetX = size.w / 2;
@@ -422,7 +418,7 @@ const GraphViewV3 = () => {
 
   const zoomAt = useCallback((px: number, py: number, factor: number) => {
     setViewZoom((z) => {
-      const next = Math.max(0.2, Math.min(4, z * factor));
+      const next = Math.max(0.1, Math.min(4, z * factor));
       const k = next / z;
       setPan((p) => ({ x: px - (px - p.x) * k, y: py - (py - p.y) * k }));
       viewZoomRef.current = next;
@@ -677,30 +673,12 @@ const GraphViewV3 = () => {
     [contextMenu, notes, toggleNoteCollapsed, linkingNoteId, linkNotes],
   );
 
-  // Smooth branch path. Main branches leave the shared trunk almost vertically
-  // and then bend outward; inner ramifications continue in the direction of growth.
-  const branchPath = (from: NodePos, to: NodePos, kind: "trunk" | "branch" = "branch") => {
-    if (kind === "trunk") {
-      const dy = to.y - from.y;
-      return `M ${from.x} ${from.y - ROOT_R * 0.55} C ${from.x - 2} ${from.y + dy * 0.34}, ${to.x + 2} ${from.y + dy * 0.72}, ${to.x} ${to.y}`;
-    }
-
+  // Los enlaces cruzados no forman parte del árbol jerárquico. Se dibujan
+  // aparte, en gris discontinuo, para que nunca se confundan con una rama.
+  const crossLinkPath = (from: NodePos, to: NodePos) => {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
-    const leavesTrunk = from.isVirtual && from.id.startsWith("attach-");
-    if (leavesTrunk) {
-      const rise = Math.max(28, Math.abs(dy) * 0.42);
-      return `M ${from.x} ${from.y} C ${from.x} ${from.y - rise}, ${to.x - dx * 0.26} ${to.y - dy * 0.08}, ${to.x} ${to.y}`;
-    }
-
-    return `M ${from.x} ${from.y} C ${from.x + dx * 0.3} ${from.y + dy * 0.16}, ${from.x + dx * 0.74} ${from.y + dy * 0.88}, ${to.x} ${to.y}`;
-  };
-
-  // Trazo afilado: grueso junto al tronco, casi un pelo en las hojas.
-  const widthForDepth = (depth: number, isMain = false) => {
-    if (depth < 0) return 2.9;
-    if (isMain || depth === 0) return 2.5;
-    return Math.max(0.5, 1.9 / (1 + depth * 0.55));
+    return `M ${from.x} ${from.y} C ${from.x + dx * 0.34} ${from.y + dy * 0.08}, ${from.x + dx * 0.66} ${from.y + dy * 0.92}, ${to.x} ${to.y}`;
   };
   // Rama con protagonismo: subárbol de la raíz del nodo enfocado
   const focusIds = useMemo(() => {
@@ -749,14 +727,7 @@ const GraphViewV3 = () => {
     <div
       ref={containerRef}
       className="flex-1 h-full w-full canvas-wash overflow-hidden relative select-none"
-      style={{
-        touchAction: "none",
-        backgroundImage:
-          theme === "dark"
-            ? "radial-gradient(circle at 1px 1px, hsl(225 30% 75% / 0.055) 1px, transparent 1.15px), radial-gradient(520px 300px at 50% 92%, hsl(258 78% 70% / 0.12), transparent 72%), var(--canvas-wash)"
-            : undefined,
-        backgroundSize: theme === "dark" ? "22px 22px, auto, auto" : undefined,
-      }}
+      style={{ touchAction: "none" }}
       onPointerDown={(e) => {
         if (e.button !== 0 && e.pointerType === "mouse") return;
         const target = e.target as HTMLElement;
@@ -868,39 +839,22 @@ const GraphViewV3 = () => {
             if (!from || !to) return null;
 
             const kind = edge.kind ?? "branch";
-            const isTrunk = kind === "trunk";
-            const isMain = to.type === "note" && to.isMain;
-            const width = isTrunk ? strokeForDepth(0, "trunk") : strokeForDepth(to.depth + 1, "branch");
+            const isStructuralBlue = kind === "trunk" || kind === "connector";
+            const width = strokeForDepth(to.depth + 1, kind);
             const z = Math.min(from.z ?? 1, to.z ?? 1);
-            const focusDim = isTrunk ? 1 : Math.min(dimFor(edge.from), dimFor(edge.to));
+            const focusDim = isStructuralBlue ? 1 : Math.min(dimFor(edge.from), dimFor(edge.to));
             const isActive = !!focusIds && focusIds.has(edge.to);
-            const baseOpacity = isTrunk ? 0.5 : isMain ? 0.78 : 0.56;
-            const opacity = isActive ? Math.min(0.96, baseOpacity + 0.16) : baseOpacity * z * focusDim;
-            const stroke = isTrunk ? "hsl(262 32% 58%)" : `hsl(${to.color})`;
-            // Geometría estática del motivo; solo se recalcula si el nodo se ha arrastrado.
-            const moved =
-              (offsets[edge.from] && (offsets[edge.from].dx || offsets[edge.from].dy)) ||
-              (offsets[edge.to] && (offsets[edge.to].dx || offsets[edge.to].dy));
-            const d =
-              edge.motif && (moved || !edge.d)
-                ? motifPath(from, to, edge.motif, !!edge.mirror)
-                : (edge.d ?? branchPath(from, to, kind));
+            const baseOpacity = isStructuralBlue ? 0.92 : 0.84;
+            const opacity = isActive ? 1 : baseOpacity * z * focusDim;
+            const stroke = isStructuralBlue ? "hsl(218 72% 48%)" : `hsl(${to.color})`;
+
+            // IMPORTANTE: el path se calcula SIEMPRE desde las posiciones finales.
+            // Si una madre se arrastra, su offset acumulado también mueve a hijas y
+            // esta misma geometría vuelve a unir exactamente ambos junctions.
+            const d = segmentPath(from, to, kind);
 
             return (
               <g key={`be-${idx}`} style={{ opacity, transition: "opacity 320ms ease" }}>
-                {/* very soft under-line gives depth without neon */}
-                {!isTrunk && (
-                  <path
-                    d={d}
-                    fill="none"
-                    stroke={stroke}
-                    strokeWidth={width + 2.0}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    opacity={isActive ? 0.08 : 0.03}
-                    filter="url(#branch-soft-depth)"
-                  />
-                )}
                 <path
                   d={d}
                   fill="none"
@@ -908,19 +862,8 @@ const GraphViewV3 = () => {
                   strokeWidth={width}
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
                 />
-                {/* one restrained highlight is enough for the 2.5D feel */}
-                {!isTrunk && z > 0.82 && (
-                  <path
-                    d={d}
-                    fill="none"
-                    stroke="hsl(0 0% 100%)"
-                    strokeWidth={Math.max(0.45, width * 0.28)}
-                    strokeLinecap="round"
-                    opacity={0.22}
-                    transform="translate(-0.35 -0.55)"
-                  />
-                )}
               </g>
             );
           })}
@@ -933,12 +876,13 @@ const GraphViewV3 = () => {
             return (
               <path
                 key={`le-${idx}`}
-                d={branchPath(from, to, "branch")}
+                d={crossLinkPath(from, to)}
                 fill="none"
                 stroke="hsl(var(--muted-foreground) / 0.30)"
-                strokeWidth={1}
+                strokeWidth={1.2}
                 strokeDasharray="4 6"
                 strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
                 style={{ opacity: Math.min(dimFor(edge.from), dimFor(edge.to)), transition: "opacity 320ms ease" }}
               />
             );
@@ -978,7 +922,7 @@ const GraphViewV3 = () => {
                     ? { duration: 0 }
                     : { type: "spring", stiffness: 290, damping: 28 }
                 }
-                className="absolute cursor-pointer touch-none"
+                className="absolute cursor-grab active:cursor-grabbing touch-none"
                 data-graph-node
                 style={{
                   width: 1,
@@ -990,8 +934,14 @@ const GraphViewV3 = () => {
                 onPointerDown={(e) => {
                   e.stopPropagation();
                   didDrag.current = false;
-                  // V3: posición fija para no romper la continuidad del árbol.
-                  dragState.current = null;
+                  const cur = offsets[node.id] || { dx: 0, dy: 0 };
+                  dragState.current = {
+                    nodeId: node.id,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    baseDx: cur.dx,
+                    baseDy: cur.dy,
+                  };
                   startLongPress(node.id, e.clientX, e.clientY);
                 }}
                 onPointerUp={cancelLongPress}
@@ -1002,57 +952,56 @@ const GraphViewV3 = () => {
                 }}
               >
                 {isRoot ? (
-                  <div
-                    className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-2xl border bg-card/95 px-5 py-2.5 font-display font-semibold text-foreground shadow-sm"
-                    style={{
-                      borderColor: "hsl(262 30% 70% / 0.55)",
-                      boxShadow: "0 8px 26px hsl(262 30% 40% / 0.10)",
-                    }}
-                  >
-                    {node.label}
-                  </div>
-                ) : showChildLabel ? (
                   <>
                     <span
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${isMainNote ? "h-2.5 w-2.5" : "h-2 w-2"}`}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
                       style={{
-                        backgroundColor: `hsl(${node.color})`,
-                        boxShadow: isFocused
-                          ? `0 0 10px hsl(${node.color} / 0.38)`
-                          : `0 0 7px hsl(${node.color} / 0.16)`,
+                        width: 26,
+                        height: 26,
+                        backgroundColor: "hsl(218 72% 48%)",
+                        boxShadow: "0 3px 10px hsl(218 72% 38% / 0.18)",
                       }}
                     />
-                    <div
-                      className={`absolute -translate-y-1/2 flex items-center whitespace-nowrap rounded-full border bg-card/90 font-body text-foreground backdrop-blur-sm transition-shadow ${
-                        isMainNote ? "px-3 py-1.5 text-[12px] font-semibold" : "px-2.5 py-1 text-[10px] font-medium"
-                      } ${isLinkSource ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-background" : ""}`}
-                      style={{
-                        ...(node.side === -1 ? { right: 10 } : { left: 10 }),
-                        borderColor: `hsl(${node.color} / ${isFocused ? 0.68 : isMainNote ? 0.4 : 0.24})`,
-                        boxShadow: isFocused
-                          ? `0 4px 16px hsl(${node.color} / 0.14)`
-                          : `0 2px 10px hsl(${node.color} / 0.05)`,
-                      }}
-                    >
-                      {nodeNote?.icon && (
-                        <span className="mr-1 text-[10px] leading-none opacity-80">{nodeNote.icon}</span>
-                      )}
-                      <span className="max-w-[150px] overflow-hidden text-ellipsis">{node.label}</span>
-                      {childCount > 0 && (
-                        <span className="ml-1 text-[9px] font-normal text-muted-foreground">{childCount}</span>
-                      )}
-                    </div>
+                    <span className="absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap font-display text-[11px] font-semibold text-foreground/80">
+                      {node.label}
+                    </span>
                   </>
                 ) : (
-                  <span
-                    className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-card"
-                    style={{
-                      width: 6,
-                      height: 6,
-                      backgroundColor: `hsl(${node.color})`,
-                      boxShadow: `0 2px 7px hsl(${node.color} / 0.16)`,
-                    }}
-                  />
+                  <>
+                    {/* El nodo es el punto exacto de bifurcación, no una píldora que tapa la rama. */}
+                    <span
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${
+                        isLinkSource ? "ring-2 ring-primary/55 ring-offset-2 ring-offset-background" : ""
+                      }`}
+                      style={{
+                        width: isMainNote ? 22 : isFocused ? 11 : 8,
+                        height: isMainNote ? 22 : isFocused ? 11 : 8,
+                        backgroundColor: `hsl(${node.color})`,
+                        boxShadow: isFocused ? `0 0 0 4px hsl(${node.color} / 0.10)` : "none",
+                      }}
+                    />
+
+                    {showChildLabel && (
+                      <span
+                        className={`absolute top-1/2 -translate-y-1/2 whitespace-nowrap font-body text-foreground/85 ${
+                          isMainNote ? "text-[11px] font-semibold" : "text-[9px] font-medium"
+                        }`}
+                        style={
+                          node.side === -1
+                            ? { right: isMainNote ? 16 : 9, textAlign: "right" }
+                            : { left: isMainNote ? 16 : 9, textAlign: "left" }
+                        }
+                      >
+                        {nodeNote?.icon ? `${nodeNote.icon} ` : ""}
+                        <span className="inline-block max-w-[132px] overflow-hidden text-ellipsis align-bottom">
+                          {node.label}
+                        </span>
+                        {isMainNote && childCount > 0 && (
+                          <span className="ml-1 text-[9px] font-normal text-muted-foreground">{childCount}</span>
+                        )}
+                      </span>
+                    )}
+                  </>
                 )}
               </motion.div>
             );
@@ -1583,4 +1532,4 @@ const GraphViewV3 = () => {
   );
 };
 
-export default GraphViewV3;
+export default GraphView;
