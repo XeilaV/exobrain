@@ -70,6 +70,17 @@ const ROOT_R = 30;
 const CAT_R = 22;
 const NOTE_R = 12;
 
+const TREE_BRANCH_PALETTE = [
+  { start: "316 66% 68%", end: "316 73% 82%" }, // pink — Psico
+  { start: "262 84% 68%", end: "255 92% 80%" }, // violet — Ideas
+  { start: "188 58% 55%", end: "188 62% 76%" }, // teal — Reflexiones
+  { start: "31 74% 62%", end: "31 82% 79%" }, // orange — Tareas
+  { start: "145 38% 55%", end: "145 42% 75%" }, // green
+  { start: "220 84% 69%", end: "220 88% 82%" }, // blue
+];
+
+const svgSafeId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "-");
+
 const GraphView = () => {
   const {
     notes,
@@ -187,8 +198,9 @@ const GraphView = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNoteId]);
 
-  // Build a real tree: one shared trunk, main branches emerging at different
-  // heights, and descendants fanning out as smaller ramifications.
+  // V3: straight-line branching tree. The shape comes from node placement;
+  // SVG edges are simple straight segments, like Obsidian, but every root starts
+  // from the shared ExoBrain trunk.
   const { positions, edges, parentMap } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
@@ -199,30 +211,23 @@ const GraphView = () => {
 
     if (rootNotes.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
-    const fallbackPalette = [
-      "262 62% 62%", // violet
-      "196 58% 50%", // cyan
-      "24 78% 58%", // orange
-      "332 62% 60%", // pink
-      "145 42% 50%", // green
-      "220 68% 62%", // blue
-    ];
-
-    const colorForRoot = (root: Note, index: number) => {
-      const legacyCategory = categories.find((c) => c.id === root.categoryId);
-      return root.color || legacyCategory?.color || fallbackPalette[index % fallbackPalette.length];
-    };
-
     const descendantsCount = (noteId: string): number => {
       const children = notes.filter((n) => n.parentNoteId === noteId);
       return children.reduce((sum, child) => sum + 1 + descendantsCount(child.id), 0);
     };
 
-    // Shared vertical trunk. Exobrain is the base, not a radial hub.
+    const colorForRoot = (rootId: string) => {
+      const originalIndex = Math.max(
+        0,
+        rootNotes.findIndex((root) => root.id === rootId),
+      );
+      return TREE_BRANCH_PALETTE[originalIndex % TREE_BRANCH_PALETTE.length].start;
+    };
+
     const trunkX = W / 2;
-    const rootY = isMobile ? H - 88 : H - 72;
-    const trunkTopY = isMobile ? Math.max(96, H * 0.18) : Math.max(96, H * 0.16);
-    const trunkBottomY = rootY - (isMobile ? 34 : 38);
+    const rootY = isMobile ? H - 92 : H - 72;
+    const trunkTopY = isMobile ? Math.max(72, H * 0.1) : Math.max(72, H * 0.08);
+    const trunkBottomY = rootY - (isMobile ? 42 : 46);
 
     pos.push({
       id: "root",
@@ -230,124 +235,90 @@ const GraphView = () => {
       y: rootY,
       type: "root",
       label: brainName || "ExoBrain",
-      color: "265 24% 44%",
+      color: "220 78% 58%",
       depth: -1,
       z: 1,
     });
 
-    // One virtual point at the crown so SVG can draw the uninterrupted trunk.
     pos.push({
       id: "trunk-top",
       x: trunkX,
       y: trunkTopY,
       type: "category",
       label: "",
-      color: "262 35% 58%",
+      color: "258 74% 68%",
       depth: -1,
       isVirtual: true,
-      z: 0.9,
+      z: 1,
     });
     parent["trunk-top"] = "root";
     eds.push({ from: "root", to: "trunk-top", kind: "trunk" });
 
-    // Balance heavy subtrees between both sides so the crown does not become a list.
-    const weightedRoots = visibleRoots.map((root, originalIndex) => ({
-      root,
-      originalIndex,
-      weight: 1 + descendantsCount(root.id),
-    }));
+    const ROOT_SLOTS: Array<{ side: -1 | 1; attachT: number; angle: number }> = [
+      { side: -1, attachT: 0.72, angle: -2.9 }, // Psico — lower left
+      { side: 1, attachT: 0.25, angle: -0.95 }, // Ideas — upper right
+      { side: 1, attachT: 0.5, angle: -0.15 }, // Reflexiones — middle right
+      { side: -1, attachT: 0.38, angle: -2.35 }, // Tareas — upper left
+      { side: -1, attachT: 0.22, angle: -2.58 },
+      { side: 1, attachT: 0.67, angle: 0.05 },
+      { side: -1, attachT: 0.56, angle: -3.02 },
+      { side: 1, attachT: 0.36, angle: -0.48 },
+    ];
 
-    const left: typeof weightedRoots = [];
-    const right: typeof weightedRoots = [];
-    let leftWeight = 0;
-    let rightWeight = 0;
-    weightedRoots
-      .slice()
-      .sort((a, b) => b.weight - a.weight)
-      .forEach((item) => {
-        if (leftWeight <= rightWeight) {
-          left.push(item);
-          leftWeight += item.weight;
-        } else {
-          right.push(item);
-          rightWeight += item.weight;
-        }
-      });
-
-    // Restore chronological/visual order inside each side.
-    left.sort((a, b) => a.originalIndex - b.originalIndex);
-    right.sort((a, b) => a.originalIndex - b.originalIndex);
-
-    // Alternamos lados subiendo por el tronco: cada rama principal nace a una altura
-    // distinta, como en un árbol real (nunca dos ramas en el mismo punto).
-    const interleaved: { root: Note; originalIndex: number; weight: number; side: -1 | 1 }[] = [];
-    const maxLen = Math.max(left.length, right.length);
-    for (let i = 0; i < maxLen; i++) {
-      if (left[i]) interleaved.push({ ...left[i], side: -1 });
-      if (right[i]) interleaved.push({ ...right[i], side: 1 });
-    }
-
-    const trunkSpan = Math.max(180, trunkBottomY - trunkTopY);
-    const attachLow = trunkBottomY - trunkSpan * 0.1;
-    const attachHigh = trunkTopY + trunkSpan * 0.12;
-
-    const allBySide = interleaved.map((item, i) => ({
-      ...item,
-      heightT: interleaved.length <= 1 ? 0.35 : i / (interleaved.length - 1),
-    }));
-
-    const clampUpperAngle = (angle: number, side: -1 | 1) => {
-      // Keep descendants in the crown: sideways/upwards, never hanging beneath the parent.
-      if (side === 1) return Math.max(-1.58, Math.min(0.08, angle));
-      return Math.max(-3.22, Math.min(-1.58, angle));
+    const childSlots = (count: number): number[] => {
+      const presets: Record<number, number[]> = {
+        1: [0.1],
+        2: [-0.56, 0.52],
+        3: [-0.78, 0.02, 0.68],
+        4: [-0.88, -0.3, 0.3, 0.82],
+        5: [-0.96, -0.52, -0.05, 0.43, 0.88],
+        6: [-1.0, -0.62, -0.24, 0.18, 0.56, 0.94],
+        7: [-1.02, -0.7, -0.38, -0.05, 0.29, 0.62, 0.96],
+        8: [-1.04, -0.75, -0.46, -0.17, 0.14, 0.43, 0.72, 1.0],
+      };
+      if (presets[count]) return presets[count];
+      return Array.from({ length: count }, (_, i) => (count <= 1 ? 0 : -1.05 + (2.1 * i) / (count - 1)));
     };
 
     const placeChildren = (
       parentNote: Note,
       parentX: number,
       parentY: number,
-      outwardAngle: number,
-      color: string,
+      dirX: number,
+      dirY: number,
       depth: number,
       branchRootId: string,
       side: -1 | 1,
-      branchZ: number,
     ) => {
       const children = notes.filter((n) => n.parentNoteId === parentNote.id);
       if (children.length === 0 || collapsedIds.has(parentNote.id)) return;
 
-      const count = children.length;
-      // El abanico se estrecha con la profundidad; nunca hijas apiladas en vertical.
-      const spread = Math.min(depth === 1 ? 1.55 : Math.max(0.5, 1.3 - depth * 0.12), 0.45 + count * 0.16);
-      const baseRadius = isMobile
-        ? depth === 1
-          ? 96
-          : Math.max(62, 90 - depth * 6)
-        : depth === 1
-          ? 138
-          : Math.max(80, 122 - depth * 9);
-      // Ramas con más descendencia necesitan más aire.
-      const weights = children.map((c) => 1 + descendantsCount(c.id));
-      const totalWeight = weights.reduce((a, b) => a + b, 0);
+      const slots = childSlots(children.length);
+      const dirLen = Math.hypot(dirX, dirY) || 1;
+      const ux = dirX / dirLen;
+      const uy = dirY / dirLen;
+      const nx = -uy;
+      const ny = ux;
+      const baseLength = isMobile ? Math.max(54, 88 - depth * 7) : Math.max(72, 126 - depth * 10);
 
-      let acc = 0;
       children.forEach((child, i) => {
-        const w = weights[i];
-        const t = totalWeight <= 0 ? 0 : (acc + w / 2) / totalWeight - 0.5;
-        acc += w;
-        const radius = baseRadius + Math.min(isMobile ? 46 : 92, Math.sqrt(w) * (isMobile ? 12 : 20));
-        // Small deterministic radius variation makes the crown less diagrammatic while
-        // preserving predictable positions between renders.
-        const radialJitter = ((i % 3) - 1) * (isMobile ? 8 : 15);
-        const rawAngle = outwardAngle + t * spread;
-        const angle = clampUpperAngle(rawAngle, side);
-        const childR = radius + radialJitter;
-        const x = parentX + Math.cos(angle) * childR;
-        const y = parentY + Math.sin(angle) * childR;
+        const descendants = descendantsCount(child.id);
+        const t = slots[i] ?? 0;
+        const length = baseLength + Math.min(isMobile ? 26 : 52, Math.sqrt(descendants + 1) * (isMobile ? 6 : 10));
+        const forward = length * (0.9 + 0.1 * (1 - Math.min(1, Math.abs(t))));
+        const lateral = length * t * 0.72;
+        let x = parentX + ux * forward + nx * lateral;
+        let y = parentY + uy * forward + ny * lateral;
+
+        const trunkClearance = isMobile ? 26 : 38;
+        if (side === 1) x = Math.max(x, trunkX + trunkClearance);
+        else x = Math.min(x, trunkX - trunkClearance);
+
         const childId = `note-${child.id}`;
         const parentId = `note-${parentNote.id}`;
         const childChildren = notes.filter((n) => n.parentNoteId === child.id);
-        const childExpanded = childChildren.length > 0 && !collapsedIds.has(child.id);
+        const expanded = childChildren.length > 0 && !collapsedIds.has(child.id);
+        const color = colorForRoot(branchRootId);
 
         pos.push({
           id: childId,
@@ -361,29 +332,45 @@ const GraphView = () => {
           parentNoteId: child.parentNoteId,
           noteType: child.noteType,
           hasChildren: childChildren.length > 0,
-          isCollapsed: !childExpanded,
+          isCollapsed: !expanded,
           isMain: false,
           depth,
           branchRootId,
           side,
-          z: Math.max(0.62, branchZ - depth * 0.035),
+          z: Math.max(0.76, 1 - depth * 0.025),
         });
         parent[childId] = parentId;
         eds.push({ from: parentId, to: childId, kind: "branch" });
-
-        placeChildren(child, x, y, angle, color, depth + 1, branchRootId, side, branchZ);
+        placeChildren(child, x, y, x - parentX, y - parentY, depth + 1, branchRootId, side);
       });
     };
 
-    allBySide.forEach((item, globalIndex) => {
-      const { root, side, heightT, originalIndex } = item;
-      const color = colorForRoot(root, originalIndex);
-      const sideT = heightT;
+    visibleRoots.forEach((root, visibleIndex) => {
+      const originalIndex = Math.max(
+        0,
+        rootNotes.findIndex((candidate) => candidate.id === root.id),
+      );
+      const fallbackSide: -1 | 1 = originalIndex % 2 === 0 ? -1 : 1;
+      const extra = visibleIndex - ROOT_SLOTS.length;
+      const slot = ROOT_SLOTS[originalIndex] ?? {
+        side: fallbackSide,
+        attachT: Math.max(0.16, Math.min(0.8, 0.2 + Math.floor(Math.max(0, extra) / 2) * 0.09)),
+        angle: fallbackSide === 1 ? -0.42 : -2.7,
+      };
 
-      // Branches emerge progressively along the trunk, each at its own height.
-      const attachY = attachLow + (attachHigh - attachLow) * heightT;
+      const trunkSpan = trunkBottomY - trunkTopY;
+      const attachY = trunkTopY + trunkSpan * slot.attachT;
       const attachId = `attach-${root.id}`;
-      const branchZ = 0.76 + ((originalIndex * 37) % 24) / 100; // 0.76..0.99
+      const color = colorForRoot(root.id);
+      const weight = 1 + descendantsCount(root.id);
+      const mainLength = isMobile
+        ? Math.min(150, 92 + Math.sqrt(weight) * 9)
+        : Math.min(265, 150 + Math.sqrt(weight) * 15);
+      const mainX = trunkX + Math.cos(slot.angle) * mainLength;
+      const mainY = attachY + Math.sin(slot.angle) * mainLength;
+      const children = notes.filter((n) => n.parentNoteId === root.id);
+      const expanded = children.length > 0 && !collapsedIds.has(root.id);
+      const mainId = `note-${root.id}`;
 
       pos.push({
         id: attachId,
@@ -395,20 +382,10 @@ const GraphView = () => {
         depth: -1,
         isVirtual: true,
         branchRootId: root.id,
-        side,
-        z: branchZ,
+        side: slot.side,
+        z: 0.98,
       });
       parent[attachId] = "root";
-
-      // Main branches arc outward and upward from that shared trunk.
-      const horizontal = isMobile ? Math.min(W * 0.28, 128) : Math.min(W * 0.24, 250);
-      const vertical = isMobile ? 58 + sideT * 34 : 82 + sideT * 54;
-      const mainX = trunkX + side * horizontal;
-      const mainY = Math.max(trunkTopY + 42, attachY - vertical);
-      const mainAngle = Math.atan2(mainY - attachY, mainX - trunkX);
-      const children = notes.filter((n) => n.parentNoteId === root.id);
-      const expanded = children.length > 0 && !collapsedIds.has(root.id);
-      const mainId = `note-${root.id}`;
 
       pos.push({
         id: mainId,
@@ -426,17 +403,16 @@ const GraphView = () => {
         isMain: true,
         depth: 0,
         branchRootId: root.id,
-        side,
-        z: branchZ,
+        side: slot.side,
+        z: 1,
       });
       parent[mainId] = attachId;
       eds.push({ from: attachId, to: mainId, kind: "branch" });
-
-      placeChildren(root, mainX, mainY, mainAngle, color, 1, root.id, side, branchZ);
+      placeChildren(root, mainX, mainY, mainX - trunkX, mainY - attachY, 1, root.id, slot.side);
     });
 
     return { positions: pos, edges: eds, parentMap: parent };
-  }, [notes, categories, rootNotes, visibleRoots, brainName, size.w, size.h, collapsedIds]);
+  }, [notes, rootNotes, visibleRoots, brainName, size.w, size.h, collapsedIds]);
 
   // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
   // node moves its whole subtree along with it.
@@ -811,31 +787,20 @@ const GraphView = () => {
     [contextMenu, notes, toggleNoteCollapsed, linkingNoteId, linkNotes],
   );
 
-  // Smooth branch path. Main branches leave the shared trunk almost vertically
-  // and then bend outward; inner ramifications continue in the direction of growth.
+  // Straight SVG segments: the layout creates the tree silhouette.
   const branchPath = (from: NodePos, to: NodePos, kind: "trunk" | "branch" = "branch") => {
-    if (kind === "trunk") {
-      const dy = to.y - from.y;
-      return `M ${from.x} ${from.y - ROOT_R * 0.55} C ${from.x - 2} ${from.y + dy * 0.34}, ${to.x + 2} ${from.y + dy * 0.72}, ${to.x} ${to.y}`;
-    }
-
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const leavesTrunk = from.isVirtual && from.id.startsWith("attach-");
-    if (leavesTrunk) {
-      const rise = Math.max(28, Math.abs(dy) * 0.42);
-      return `M ${from.x} ${from.y} C ${from.x} ${from.y - rise}, ${to.x - dx * 0.26} ${to.y - dy * 0.08}, ${to.x} ${to.y}`;
-    }
-
-    return `M ${from.x} ${from.y} C ${from.x + dx * 0.3} ${from.y + dy * 0.16}, ${from.x + dx * 0.74} ${from.y + dy * 0.88}, ${to.x} ${to.y}`;
+    if (kind === "trunk") return `M ${from.x} ${from.y - ROOT_R * 0.55} L ${to.x} ${to.y}`;
+    return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
   };
 
-  // Trazo afilado: grueso junto al tronco, casi un pelo en las hojas.
   const widthForDepth = (depth: number, isMain = false) => {
-    if (depth < 0) return 2.9;
-    if (isMain || depth === 0) return 2.5;
-    return Math.max(0.5, 1.9 / (1 + depth * 0.55));
+    if (isMain || depth <= 0) return 1.55;
+    if (depth === 1) return 1.25;
+    if (depth === 2) return 1.05;
+    if (depth === 3) return 0.9;
+    return 0.78;
   };
+
   // Rama con protagonismo: subárbol de la raíz del nodo enfocado
   const focusIds = useMemo(() => {
     if (!focusNoteId) return null;
@@ -856,6 +821,19 @@ const GraphView = () => {
   }, [focusNoteId, notes]);
 
   const dimFor = useCallback((id: string) => (focusIds && !focusIds.has(id) ? 0.16 : 1), [focusIds]);
+
+  const visualForRoot = useCallback(
+    (rootId?: string) => {
+      const index = rootId
+        ? Math.max(
+            0,
+            rootNotes.findIndex((root) => root.id === rootId),
+          )
+        : 0;
+      return TREE_BRANCH_PALETTE[index % TREE_BRANCH_PALETTE.length];
+    },
+    [rootNotes],
+  );
 
   // Nivel de detalle según zoom: la geometría no cambia, solo la legibilidad.
   // Cada nivel de profundidad pide un poco más de acercamiento para mostrar texto.
@@ -879,8 +857,12 @@ const GraphView = () => {
   return (
     <div
       ref={containerRef}
-      className="flex-1 h-full w-full canvas-wash overflow-hidden relative select-none"
-      style={{ touchAction: "none" }}
+      className="flex-1 h-full w-full overflow-hidden relative select-none"
+      style={{
+        touchAction: "none",
+        backgroundImage:
+          "radial-gradient(900px 640px at 51% 43%, rgba(255,255,255,0.97), rgba(247,248,252,0.78) 52%, rgba(240,243,248,0.96) 100%), radial-gradient(720px 520px at 16% 28%, rgba(124,106,244,0.055), transparent 72%), radial-gradient(760px 560px at 85% 38%, rgba(83,198,216,0.05), transparent 74%)",
+      }}
       onPointerDown={(e) => {
         if (e.button !== 0 && e.pointerType === "mouse") return;
         const target = e.target as HTMLElement;
@@ -981,9 +963,37 @@ const GraphView = () => {
         {/* Shared trunk + organic ramifications. Thin lines, no literal tree illustration. */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0, overflow: "visible" }}>
           <defs>
-            <filter id="branch-soft-depth" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="1.15" />
+            <filter id="branch-soft-depth" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="2.2" />
             </filter>
+            <linearGradient
+              id="tree-trunk-gradient"
+              gradientUnits="userSpaceOnUse"
+              x1={size.w / 2}
+              y1={size.h}
+              x2={size.w / 2}
+              y2={0}
+            >
+              <stop offset="0%" stopColor="hsl(220 84% 58%)" stopOpacity="0.96" />
+              <stop offset="100%" stopColor="hsl(258 82% 74%)" stopOpacity="0.72" />
+            </linearGradient>
+            {rootNotes.map((root, index) => {
+              const visual = TREE_BRANCH_PALETTE[index % TREE_BRANCH_PALETTE.length];
+              return (
+                <linearGradient
+                  key={`gradient-${root.id}`}
+                  id={`tree-branch-${svgSafeId(root.id)}`}
+                  gradientUnits="userSpaceOnUse"
+                  x1={0}
+                  y1={size.h}
+                  x2={size.w}
+                  y2={0}
+                >
+                  <stop offset="0%" stopColor={`hsl(${visual.start})`} stopOpacity="0.98" />
+                  <stop offset="100%" stopColor={`hsl(${visual.end})`} stopOpacity="0.72" />
+                </linearGradient>
+              );
+            })}
           </defs>
 
           {edges.map((edge, idx) => {
@@ -994,27 +1004,31 @@ const GraphView = () => {
             const kind = edge.kind ?? "branch";
             const isTrunk = kind === "trunk";
             const isMain = to.type === "note" && to.isMain;
-            const width = isTrunk ? 2.75 : widthForDepth(to.depth, isMain);
+            const width = isTrunk ? 1.45 : widthForDepth(to.depth, isMain);
             const z = Math.min(from.z ?? 1, to.z ?? 1);
             const focusDim = isTrunk ? 1 : Math.min(dimFor(edge.from), dimFor(edge.to));
             const isActive = !!focusIds && focusIds.has(edge.to);
-            const baseOpacity = isTrunk ? 0.5 : isMain ? 0.78 : 0.56;
-            const opacity = isActive ? Math.min(0.96, baseOpacity + 0.16) : baseOpacity * z * focusDim;
-            const stroke = isTrunk ? "hsl(262 32% 58%)" : `hsl(${to.color})`;
+            const baseOpacity = isTrunk ? 0.72 : isMain ? 0.94 : 0.82;
+            const opacity = isActive ? 1 : baseOpacity * z * focusDim;
+            const rootId = to.branchRootId || from.branchRootId;
+            const stroke = isTrunk
+              ? "url(#tree-trunk-gradient)"
+              : rootId
+                ? `url(#tree-branch-${svgSafeId(rootId)})`
+                : `hsl(${to.color})`;
             const d = branchPath(from, to, kind);
 
             return (
-              <g key={`be-${idx}`} style={{ opacity, transition: "opacity 320ms ease" }}>
-                {/* very soft under-line gives depth without neon */}
+              <g key={`be-${idx}`} style={{ opacity, transition: "opacity 260ms ease" }}>
                 {!isTrunk && (
                   <path
                     d={d}
                     fill="none"
                     stroke={stroke}
-                    strokeWidth={width + 3.2}
+                    strokeWidth={width + 2.0}
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    opacity={isActive ? 0.09 : 0.045}
+                    opacity={isActive ? 0.12 : 0.065}
                     filter="url(#branch-soft-depth)"
                   />
                 )}
@@ -1026,18 +1040,6 @@ const GraphView = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
-                {/* one restrained highlight is enough for the 2.5D feel */}
-                {!isTrunk && z > 0.82 && (
-                  <path
-                    d={d}
-                    fill="none"
-                    stroke="hsl(0 0% 100%)"
-                    strokeWidth={Math.max(0.45, width * 0.28)}
-                    strokeLinecap="round"
-                    opacity={0.22}
-                    transform="translate(-0.35 -0.55)"
-                  />
-                )}
               </g>
             );
           })}
@@ -1136,13 +1138,13 @@ const GraphView = () => {
                   </div>
                 ) : showChildLabel ? (
                   <div
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center whitespace-nowrap rounded-full border bg-card/95 font-body text-foreground shadow-sm transition-shadow ${
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center whitespace-nowrap rounded-full border bg-card/90 backdrop-blur-sm font-body text-foreground shadow-sm transition-shadow ${
                       isMainNote
                         ? "gap-2 px-3 py-1.5 text-[12px] font-semibold"
                         : "gap-1.5 px-2.5 py-1 text-[10px] font-medium"
                     } ${isLinkSource ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-background" : ""}`}
                     style={{
-                      borderColor: `hsl(${node.color} / ${isFocused ? 0.72 : isMainNote ? 0.48 : 0.3})`,
+                      borderColor: `hsl(${node.color} / ${isFocused ? 0.52 : isMainNote ? 0.28 : 0.16})`,
                       boxShadow: isFocused
                         ? `0 5px 18px hsl(${node.color} / 0.18)`
                         : `0 3px 12px hsl(${node.color} / 0.08)`,
@@ -1164,7 +1166,7 @@ const GraphView = () => {
                     style={{
                       width: 6,
                       height: 6,
-                      backgroundColor: `hsl(${node.color})`,
+                      backgroundColor: `hsl(${visualForRoot(node.branchRootId).start})`,
                       boxShadow: `0 2px 7px hsl(${node.color} / 0.16)`,
                     }}
                   />
