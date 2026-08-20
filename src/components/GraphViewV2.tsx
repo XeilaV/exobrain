@@ -308,22 +308,28 @@ const GraphView = () => {
       branchZ: number,
     ) => {
       const children = notes.filter((n) => n.parentNoteId === parentNote.id);
-      const expanded = parentNote.isCollapsed === false && children.length > 0;
-      if (!expanded) return;
+      if (children.length === 0 || collapsedIds.has(parentNote.id)) return;
 
       const count = children.length;
-      const spread = Math.min(depth === 1 ? 1.5 : 1.18, 0.5 + count * 0.12);
+      // El abanico se estrecha con la profundidad; nunca hijas apiladas en vertical.
+      const spread = Math.min(depth === 1 ? 1.55 : Math.max(0.5, 1.3 - depth * 0.12), 0.45 + count * 0.16);
       const baseRadius = isMobile
         ? depth === 1
-          ? 92
-          : Math.max(68, 88 - depth * 5)
+          ? 96
+          : Math.max(62, 90 - depth * 6)
         : depth === 1
-          ? 132
-          : Math.max(86, 116 - depth * 7);
-      const radius = baseRadius + Math.min(isMobile ? 42 : 88, count * (isMobile ? 5 : 8));
+          ? 138
+          : Math.max(80, 122 - depth * 9);
+      // Ramas con más descendencia necesitan más aire.
+      const weights = children.map((c) => 1 + descendantsCount(c.id));
+      const totalWeight = weights.reduce((a, b) => a + b, 0);
 
+      let acc = 0;
       children.forEach((child, i) => {
-        const t = count === 1 ? 0 : i / (count - 1) - 0.5;
+        const w = weights[i];
+        const t = totalWeight <= 0 ? 0 : (acc + w / 2) / totalWeight - 0.5;
+        acc += w;
+        const radius = baseRadius + Math.min(isMobile ? 46 : 92, Math.sqrt(w) * (isMobile ? 12 : 20));
         // Small deterministic radius variation makes the crown less diagrammatic while
         // preserving predictable positions between renders.
         const radialJitter = ((i % 3) - 1) * (isMobile ? 8 : 15);
@@ -335,7 +341,7 @@ const GraphView = () => {
         const childId = `note-${child.id}`;
         const parentId = `note-${parentNote.id}`;
         const childChildren = notes.filter((n) => n.parentNoteId === child.id);
-        const childExpanded = child.isCollapsed === false && childChildren.length > 0;
+        const childExpanded = childChildren.length > 0 && !collapsedIds.has(child.id);
 
         pos.push({
           id: childId,
