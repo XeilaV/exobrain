@@ -15,6 +15,8 @@ import {
   LogIn,
   Brain,
   TreePine,
+  Save,
+
   Sun,
   Moon,
   History,
@@ -71,9 +73,9 @@ interface Edge {
   mirror?: boolean;
 }
 
-const ROOT_R = 14;
-const CAT_R = 12;
-const NOTE_R = 5;
+const ROOT_R = 30;
+const CAT_R = 22;
+const NOTE_R = 12;
 
 const GraphView = () => {
   const {
@@ -84,6 +86,10 @@ const GraphView = () => {
     moveNote,
     canMoveTo,
     updateNote,
+    updateNotePosition,
+    saveNotePositions,
+    clearAllPositions,
+
     linkNotes,
     toggleNoteCollapsed,
     setSelectedNoteId,
@@ -133,11 +139,18 @@ const GraphView = () => {
   const didInitialFitRef = useRef(false);
   const viewZoomRef = useRef(1);
 
-  // Drag offsets per node id (session-local)
+  // Desplazamientos de sesión mientras se arrastra. Al soltar se convierten en
+  // coordenadas absolutas guardadas (notes.pos_x / pos_y) y se limpian.
   const [offsets, setOffsets] = useState<Record<string, { dx: number; dy: number }>>({});
+  const offsetsRef = useRef(offsets);
+  offsetsRef.current = offsets;
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+  const seededRef = useRef<Set<string>>(new Set());
   const dragState = useRef<{ nodeId: string; startX: number; startY: number; baseDx: number; baseDy: number } | null>(
     null,
   );
+
   const panState = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchState = useRef<{
@@ -148,6 +161,54 @@ const GraphView = () => {
     centerX: number;
     centerY: number;
   } | null>(null);
+
+  // Posiciones finales de los nodos en el mundo del árbol (para poder persistirlas).
+  const finalPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+
+  /** Guarda la posición absoluta del nodo arrastrado y de todo su subárbol. */
+  const persistDragged = useCallback(
+    (nodeId: string) => {
+      if (!nodeId.startsWith("note-")) return;
+      const rootNoteId = nodeId.replace("note-", "");
+      const ids: string[] = [];
+      const visit = (id: string) => {
+        ids.push(id);
+        notesRef.current.filter((n) => n.parentNoteId === id).forEach((c) => visit(c.id));
+      };
+      visit(rootNoteId);
+      const entries = ids
+        .map((id) => {
+          const p = finalPositionsRef.current.get(`note-${id}`);
+          return p ? { id, x: p.x, y: p.y } : null;
+        })
+        .filter(Boolean) as { id: string; x: number; y: number }[];
+      if (entries.length === 0) return;
+      // Las coordenadas pasan a ser el dato oficial: se limpian los offsets de sesión.
+      setOffsets((prev) => {
+        const next = { ...prev };
+        ids.forEach((id) => delete next[`note-${id}`]);
+        return next;
+      });
+      void saveNotePositions(entries);
+    },
+    [saveNotePositions],
+  );
+
+  /** Guarda de golpe toda la disposición actual del árbol. */
+  const saveCurrentLayout = useCallback(async () => {
+    const entries: { id: string; x: number; y: number }[] = [];
+    finalPositionsRef.current.forEach((p, id) => {
+      if (id.startsWith("note-")) entries.push({ id: id.replace("note-", ""), x: p.x, y: p.y });
+    });
+    if (entries.length === 0) {
+      toast.info("No hay posiciones que guardar");
+      return;
+    }
+    setOffsets({});
+    await saveNotePositions(entries);
+    toast.success("Disposición guardada");
+  }, [saveNotePositions]);
+
 
   // Hidden main-branch filter
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
@@ -205,7 +266,14 @@ const GraphView = () => {
 
     if (rootNotes.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
-    const fallbackPalette = ["262 62% 62%", "196 58% 50%", "24 78% 58%", "332 62% 60%", "145 42% 50%", "220 68% 62%"];
+    const fallbackPalette = [
+      "262 62% 62%",
+      "196 58% 50%",
+      "24 78% 58%",
+      "332 62% 60%",
+      "145 42% 50%",
+      "220 68% 62%",
+    ];
     const colorForRoot = (root: Note, index: number) => {
       const legacyCategory = categories.find((c) => c.id === root.categoryId);
       return root.color || legacyCategory?.color || fallbackPalette[index % fallbackPalette.length];
@@ -214,12 +282,7 @@ const GraphView = () => {
     rootNotes.forEach((r, i) => rootColors.set(r.id, colorForRoot(r, i)));
 
     const skeleton = buildTreeSkeleton(
-      notes.map((n) => ({
-        id: n.id,
-        parentId: n.parentNoteId ?? null,
-        title: n.title,
-        color: rootColors.get(n.id) ?? null,
-      })),
+      notes.map((n) => ({ id: n.id, parentId: n.parentNoteId ?? null })),
       {
         rootX: W / 2,
         rootY: H - (isMobile ? 96 : 84),
@@ -250,7 +313,7 @@ const GraphView = () => {
           y: j.y,
           type: "root",
           label: brainName || "ExoBrain",
-          color: "218 72% 48%",
+          color: "265 24% 44%",
           depth: -1,
           z: 1,
         });
@@ -264,11 +327,9 @@ const GraphView = () => {
           y: j.y,
           type: "category",
           label: "",
-          color:
-            j.branchRootId === "trunk" ? "218 72% 48%" : rootColors.get(j.branchRootId ?? "") || fallbackPalette[0],
-          depth: Math.max(0, j.depth - 1),
+          color: "262 32% 58%",
+          depth: -1,
           isVirtual: true,
-          branchRootId: j.branchRootId,
           z: 1,
         });
         return;
@@ -278,10 +339,12 @@ const GraphView = () => {
       if (!note) return;
       const children = notes.filter((n) => n.parentNoteId === note.id);
       const color = rootColors.get(j.branchRootId ?? note.id) || fallbackPalette[0];
+      // Si la nota tiene posición manual guardada, manda sobre el reparto automático.
+      const hasSaved = note.posX != null && note.posY != null;
       pos.push({
         id: `note-${note.id}`,
-        x: j.x,
-        y: j.y,
+        x: hasSaved ? Number(note.posX) : j.x,
+        y: hasSaved ? Number(note.posY) : j.y,
         type: "note",
         label: note.title,
         color,
@@ -307,6 +370,7 @@ const GraphView = () => {
 
     return { positions: pos, edges: eds, parentMap: parent };
   }, [notes, categories, rootNotes, hiddenCategoryIds, brainName, size.w, size.h, collapsedIds]);
+
 
   // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
   // node moves its whole subtree along with it.
@@ -334,6 +398,30 @@ const GraphView = () => {
   }, [positions, offsets, parentMap]);
 
   const getPos = (id: string) => positionsWithOffsets.find((p) => p.id === id);
+
+  // Mantener el mapa de posiciones finales para poder persistirlas al soltar.
+  useEffect(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    positionsWithOffsets.forEach((p) => map.set(p.id, { x: p.x, y: p.y }));
+    finalPositionsRef.current = map;
+  }, [positionsWithOffsets]);
+
+  // Siembra inicial: fija en la base de datos la posición automática de las notas
+  // que aún no tienen coordenadas, para que el árbol no se recoloque al recargar.
+  useEffect(() => {
+    if (loading || notes.length === 0) return;
+    if (dragState.current) return;
+    const pending: { id: string; x: number; y: number }[] = [];
+    notes.forEach((n) => {
+      if (n.posX != null && n.posY != null) return;
+      if (seededRef.current.has(n.id)) return;
+      const p = finalPositionsRef.current.get(`note-${n.id}`);
+      if (!p) return;
+      seededRef.current.add(n.id);
+      pending.push({ id: n.id, x: p.x, y: p.y });
+    });
+    if (pending.length > 0) void saveNotePositions(pending);
+  }, [notes, loading, positionsWithOffsets, saveNotePositions]);
 
   const getNodeRadius = useCallback((node: NodePos) => {
     if (node.isVirtual) return 0;
@@ -584,7 +672,10 @@ const GraphView = () => {
     };
     const onUp = (e: PointerEvent) => {
       pointersRef.current.delete(e.pointerId);
+      const endedDrag = dragState.current;
       dragState.current = null;
+      if (endedDrag && didDrag.current) persistDragged(endedDrag.nodeId);
+
 
       // Cancel canvas long-press if pointer released before timer fired
       if (canvasLongPressTimer.current) {
@@ -613,7 +704,7 @@ const GraphView = () => {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [cancelLongPress]);
+  }, [cancelLongPress, persistDragged]);
 
   // Click handling with double-click detection
   const handleNodeClick = useCallback(
@@ -853,6 +944,12 @@ const GraphView = () => {
       >
         {/* Shared trunk + organic ramifications. Thin lines, no literal tree illustration. */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0, overflow: "visible" }}>
+          <defs>
+            <filter id="branch-soft-depth" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="1.15" />
+            </filter>
+          </defs>
+
           {edges.map((edge, idx) => {
             const from = getPos(edge.from);
             const to = getPos(edge.to);
@@ -861,31 +958,55 @@ const GraphView = () => {
             const kind = edge.kind ?? "branch";
             const isTrunk = kind === "trunk";
             const isMain = to.type === "note" && to.isMain;
-            const width = isTrunk ? 3 : Math.max(1.15, strokeForDepth(to.depth + 1, "branch"));
+            const width = isTrunk ? 2.6 : Math.max(0.5, strokeForDepth(to.depth + 1, "branch") * 1.6);
             const z = Math.min(from.z ?? 1, to.z ?? 1);
             const focusDim = isTrunk ? 1 : Math.min(dimFor(edge.from), dimFor(edge.to));
             const isActive = !!focusIds && focusIds.has(edge.to);
-            const baseOpacity = isTrunk ? 0.98 : isMain ? 0.96 : 0.9;
+            const baseOpacity = isTrunk ? 0.5 : isMain ? 0.78 : 0.56;
             const opacity = isActive ? Math.min(0.96, baseOpacity + 0.16) : baseOpacity * z * focusDim;
-            const stroke = isTrunk ? "hsl(218 72% 48%)" : `hsl(${to.color})`;
-            // Siempre se recalcula desde las posiciones finales. Así un desplazamiento
-            // heredado de una rama mueve también todos sus trazos y nunca deja notas flotando.
+            const stroke = isTrunk ? "hsl(262 32% 58%)" : `hsl(${to.color})`;
+            // La rama siempre se traza entre las posiciones actuales de madre e hija,
+            // así nunca se desconecta al mover un nodo o su subárbol.
             const d = edge.motif
               ? motifPath(from, to, edge.motif, !!edge.mirror)
-              : (edge.d ?? branchPath(from, to, kind));
+              : branchPath(from, to, kind);
 
             return (
-              <path
-                key={`be-${idx}`}
-                d={d}
-                fill="none"
-                stroke={stroke}
-                strokeWidth={width}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-                style={{ opacity, transition: "opacity 320ms ease" }}
-              />
+              <g key={`be-${idx}`} style={{ opacity, transition: "opacity 320ms ease" }}>
+                {/* very soft under-line gives depth without neon */}
+                {!isTrunk && (
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={stroke}
+                    strokeWidth={width + 3.2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={isActive ? 0.09 : 0.045}
+                    filter="url(#branch-soft-depth)"
+                  />
+                )}
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={stroke}
+                  strokeWidth={width}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                {/* one restrained highlight is enough for the 2.5D feel */}
+                {!isTrunk && z > 0.82 && (
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke="hsl(0 0% 100%)"
+                    strokeWidth={Math.max(0.45, width * 0.28)}
+                    strokeLinecap="round"
+                    opacity={0.22}
+                    transform="translate(-0.35 -0.55)"
+                  />
+                )}
+              </g>
             );
           })}
 
@@ -912,35 +1033,19 @@ const GraphView = () => {
         {/* Labels are the nodes: small, readable and sitting directly on the ramifications. */}
         <AnimatePresence>
           {positionsWithOffsets.map((node) => {
-            if (node.isVirtual) {
-              return (
-                <span
-                  key={node.id}
-                  className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 rounded-full"
-                  style={{
-                    left: node.x,
-                    top: node.y,
-                    width: node.branchRootId === "trunk" || node.depth > 1 ? 0 : 7,
-                    height: node.branchRootId === "trunk" || node.depth > 1 ? 0 : 7,
-                    backgroundColor:
-                      node.branchRootId === "trunk" || node.depth > 1 ? "transparent" : `hsl(${node.color})`,
-                    zIndex: 2,
-                  }}
-                />
-              );
-            }
+            if (node.isVirtual) return null;
 
             const isRoot = node.type === "root";
             const isMainNote = node.type === "note" && node.isMain;
             const nodeNote = node.noteId ? notes.find((n) => n.id === node.noteId) : null;
+            const childCount = nodeNote ? notes.filter((n) => n.parentNoteId === nodeNote.id).length : 0;
             const dim = dimFor(node.id);
             const z = node.z ?? 1;
             const isFocused = !!focusIds && focusIds.has(node.id);
             const isLinkSource = linkingNoteId && node.noteId === linkingNoteId;
-            const showChildLabel = isMainNote || isFocused || (viewZoom >= 1.3 && labelVisibleAtDepth(node.depth));
-            const baseScale = focusIds ? (isFocused ? 1.04 : 0.98) : 1;
-            const visualOpacity = dim * (focusIds ? 1 : Math.max(0.76, z));
-            const labelOnLeft = node.x < size.w / 2;
+            const showChildLabel = isMainNote || isFocused || labelVisibleAtDepth(node.depth);
+            const baseScale = focusIds ? (isFocused ? (isMainNote ? 1.06 : 1.025) : 0.96) : 0.96 + z * 0.04;
+            const visualOpacity = dim * (focusIds ? 1 : Math.max(0.68, z));
 
             return (
               <motion.div
@@ -958,10 +1063,13 @@ const GraphView = () => {
                     ? { duration: 0 }
                     : { type: "spring", stiffness: 290, damping: 28 }
                 }
-                className="absolute -ml-3 -mt-3 h-6 w-6 cursor-grab active:cursor-grabbing touch-none"
+                className="absolute cursor-grab active:cursor-grabbing touch-none"
                 data-graph-node
                 style={{
+                  width: 1,
+                  height: 1,
                   zIndex: isRoot ? 8 : isMainNote ? 6 : 4,
+                  filter: dim < 1 ? "blur(0.55px)" : z < 0.82 ? "blur(0.18px)" : "none",
                   transition: "filter 300ms ease",
                 }}
                 onPointerDown={(e) => {
@@ -984,37 +1092,51 @@ const GraphView = () => {
                   handleNodeClick(node.id, e.clientX, e.clientY);
                 }}
               >
-                <span
-                  className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full ${
-                    isLinkSource ? "ring-2 ring-primary/45 ring-offset-2 ring-offset-background" : ""
-                  }`}
-                  style={{
-                    width: isRoot ? 28 : isMainNote ? 24 : 9,
-                    height: isRoot ? 28 : isMainNote ? 24 : 9,
-                    backgroundColor: isRoot ? "hsl(218 72% 48%)" : `hsl(${node.color})`,
-                    boxShadow: isFocused ? `0 0 0 4px hsl(${node.color} / 0.14)` : "none",
-                  }}
-                />
-
                 {isRoot ? (
-                  <span className="absolute left-1/2 top-[34px] -translate-x-1/2 whitespace-nowrap font-display text-[11px] font-semibold text-foreground">
-                    {node.label}
-                  </span>
-                ) : showChildLabel ? (
-                  <span
-                    className={`absolute top-1/2 -translate-y-1/2 whitespace-nowrap font-body text-foreground ${
-                      isMainNote ? "text-[11px] font-semibold" : "text-[9px] font-medium"
-                    }`}
-                    style={
-                      labelOnLeft
-                        ? { right: isMainNote ? 30 : 23, textAlign: "right" }
-                        : { left: isMainNote ? 30 : 23, textAlign: "left" }
-                    }
+                  <div
+                    className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-2xl border bg-card/95 px-5 py-2.5 font-display font-semibold text-foreground shadow-sm"
+                    style={{
+                      borderColor: "hsl(262 30% 70% / 0.55)",
+                      boxShadow: "0 8px 26px hsl(262 30% 40% / 0.10)",
+                    }}
                   >
-                    {nodeNote?.icon && <span className="mr-1 opacity-75">{nodeNote.icon}</span>}
                     {node.label}
-                  </span>
-                ) : null}
+                  </div>
+                ) : showChildLabel ? (
+                  <div
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center whitespace-nowrap rounded-full border bg-card/95 font-body text-foreground shadow-sm transition-shadow ${
+                      isMainNote
+                        ? "gap-2 px-3 py-1.5 text-[12px] font-semibold"
+                        : "gap-1.5 px-2.5 py-1 text-[10px] font-medium"
+                    } ${isLinkSource ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-background" : ""}`}
+                    style={{
+                      borderColor: `hsl(${node.color} / ${isFocused ? 0.72 : isMainNote ? 0.48 : 0.3})`,
+                      boxShadow: isFocused
+                        ? `0 5px 18px hsl(${node.color} / 0.18)`
+                        : `0 3px 12px hsl(${node.color} / 0.08)`,
+                    }}
+                  >
+                    <span
+                      className={isMainNote ? "h-2 w-2 shrink-0 rounded-full" : "h-1.5 w-1.5 shrink-0 rounded-full"}
+                      style={{ backgroundColor: `hsl(${node.color})` }}
+                    />
+                    {nodeNote?.icon && <span className="text-[10px] leading-none opacity-80">{nodeNote.icon}</span>}
+                    <span className="max-w-[150px] overflow-hidden text-ellipsis">{node.label}</span>
+                    {childCount > 0 && (
+                      <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">{childCount}</span>
+                    )}
+                  </div>
+                ) : (
+                  <span
+                    className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-card"
+                    style={{
+                      width: 6,
+                      height: 6,
+                      backgroundColor: `hsl(${node.color})`,
+                      boxShadow: `0 2px 7px hsl(${node.color} / 0.16)`,
+                    }}
+                  />
+                )}
               </motion.div>
             );
           })}
@@ -1316,16 +1438,36 @@ const GraphView = () => {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            setOffsets({});
-            setFocusNoteId(null);
-            fitFullTree();
-            setShowFilterPanel(false);
+            void saveCurrentLayout();
+          }}
+          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
+          title="Guardar disposición actual del árbol"
+        >
+          <Save size={16} />
+        </button>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmDialog({
+              message: "¿Restablecer el árbol al reparto automático? Se perderán las posiciones guardadas.",
+              onConfirm: () => {
+                setOffsets({});
+                seededRef.current.clear();
+                void clearAllPositions();
+                setFocusNoteId(null);
+                fitFullTree();
+                setShowFilterPanel(false);
+                setConfirmDialog(null);
+              },
+            });
           }}
           className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
           title="Restablecer vista del árbol"
         >
           <TreePine size={16} />
         </button>
+
 
         <button
           onClick={(e) => {

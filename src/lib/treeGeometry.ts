@@ -1,9 +1,73 @@
+// Geometría del árbol de ExoBrain.
+//
+// Los motivos de curva de este archivo NO son fórmulas inventadas: se han extraído
+// directamente de los `path d` de `Group 8.svg` (referencia del usuario). Cada path
+// cúbico del SVG se ha normalizado (origen en el inicio del tramo, extremo en (1,0),
+// escala = longitud del tramo) conservando sus puntos de control Bézier tal cual.
+// En runtime no se lee ningún SVG: los motivos viven aquí como datos y se reutilizan
+// mediante escala, rotación y espejo.
+
 export type Vec = { x: number; y: number };
 
+/** Cadena de curvas cúbicas normalizadas: [[c1, c2, end], ...] con inicio implícito en (0,0). */
 export interface BranchMotif {
   c: number[][][];
   bend: number;
 }
+
+export const BRANCH_MOTIFS: BranchMotif[] = [{"c":[[[0.0734,-0.0222],[0.2497,-0.0539],[0.3681,-0.0029]],[[0.5161,0.0609],[0.6373,0.1351],[1.0,0.0]]],"bend":0.0195},{"c":[[[0.0734,-0.0222],[0.2497,-0.054],[0.3681,-0.0029]],[[0.5161,0.0609],[0.6373,0.1351],[1.0,0.0]]],"bend":0.0195},{"c":[[[0.0734,0.0222],[0.2497,0.0539],[0.3681,0.0029]],[[0.5161,-0.0609],[0.6373,-0.1351],[1.0,-0.0]]],"bend":-0.0195},{"c":[[[0.0734,0.0222],[0.2497,0.0539],[0.3681,0.0029]],[[0.5161,-0.0609],[0.6373,-0.1351],[1.0,-0.0]]],"bend":-0.0195},{"c":[[[0.1088,0.0133],[0.2444,0.0344],[0.4564,-0.0282]],[[0.5971,-0.0699],[0.8054,-0.126],[1.0,0.0]]],"bend":-0.0294},{"c":[[[0.1262,0.0219],[0.267,0.0591],[0.3786,0.0656]],[[0.6658,0.0821],[0.7087,-0.0504],[1.0,0.0]]],"bend":0.0297},{"c":[[[0.1262,0.0219],[0.267,0.0591],[0.3786,0.0656]],[[0.6658,0.0821],[0.7087,-0.0504],[1.0,0.0]]],"bend":0.0297},{"c":[[[0.1262,-0.0219],[0.267,-0.0591],[0.3786,-0.0656]],[[0.6658,-0.0821],[0.7087,0.0504],[1.0,-0.0]]],"bend":-0.0297},{"c":[[[0.1262,-0.0219],[0.267,-0.0591],[0.3786,-0.0656]],[[0.6658,-0.0821],[0.7087,0.0504],[1.0,0.0]]],"bend":-0.0297},{"c":[[[0.2069,-0.0122],[0.7526,-0.0445],[0.8243,-0.0488]],[[0.9138,-0.0541],[0.9376,-0.023],[1.0,-0.0]]],"bend":-0.0304},{"c":[[[0.1771,-0.0351],[0.2847,-0.1345],[0.5314,-0.0745]],[[0.6936,-0.0351],[0.8571,0.0582],[1.0,0.0]]],"bend":-0.0368},{"c":[[[0.1112,0.0494],[0.2824,0.1419],[0.4892,0.0786]],[[0.7476,-0.0005],[0.835,-0.0333],[1.0,-0.0]]],"bend":0.0394},{"c":[[[0.1112,-0.0494],[0.2824,-0.1419],[0.4892,-0.0786]],[[0.7476,0.0005],[0.835,0.0333],[1.0,-0.0]]],"bend":-0.0394},{"c":[[[0.1112,-0.0494],[0.2824,-0.1419],[0.4892,-0.0786]],[[0.7476,0.0005],[0.835,0.0333],[1.0,-0.0]]],"bend":-0.0394},{"c":[[[0.0776,0.033],[0.6508,0.0876],[1.0,0.0]]],"bend":0.0402},{"c":[[[0.0776,0.033],[0.6508,0.0876],[1.0,0.0]]],"bend":0.0402},{"c":[[[0.0776,-0.033],[0.6508,-0.0876],[1.0,0.0]]],"bend":-0.0402},{"c":[[[0.0776,-0.033],[0.6508,-0.0876],[1.0,0.0]]],"bend":-0.0402},{"c":[[[0.0644,0.0648],[0.2321,0.1789],[0.3871,0.1165]],[[0.581,0.0386],[0.7191,-0.0716],[1.0,0.0]]],"bend":0.0545},{"c":[[[0.0644,-0.0648],[0.2321,-0.1789],[0.3871,-0.1165]],[[0.581,-0.0386],[0.7191,0.0716],[1.0,0.0]]],"bend":-0.0545},{"c":[[[0.0644,-0.0648],[0.2321,-0.1789],[0.3871,-0.1165]],[[0.581,-0.0386],[0.7191,0.0716],[1.0,0.0]]],"bend":-0.0545},{"c":[[[0.3638,-0.1673],[0.8582,-0.0242],[1.0,0.0]]],"bend":-0.0638},{"c":[[[0.0391,-0.0156],[0.1522,-0.0395],[0.2484,0.0446]],[[0.5771,0.3319],[0.819,0.1054],[1.0,0.0]]],"bend":0.0711},{"c":[[[0.0391,-0.0156],[0.1521,-0.0396],[0.2484,0.0446]],[[0.5771,0.3319],[0.819,0.1054],[1.0,0.0]]],"bend":0.0711},{"c":[[[0.0391,0.0156],[0.1522,0.0395],[0.2484,-0.0446]],[[0.5771,-0.3319],[0.819,-0.1054],[1.0,-0.0]]],"bend":-0.0711},{"c":[[[0.0391,0.0156],[0.1522,0.0395],[0.2484,-0.0446]],[[0.5771,-0.3319],[0.819,-0.1054],[1.0,-0.0]]],"bend":-0.0711},{"c":[[[0.2992,-0.0188],[0.7154,-0.2013],[1.0,0.0]]],"bend":-0.0734},{"c":[[[0.2992,0.0188],[0.7154,0.2013],[1.0,0.0]]],"bend":0.0734},{"c":[[[0.2992,0.0188],[0.7154,0.2013],[1.0,0.0]]],"bend":0.0734},{"c":[[[0.2658,0.0782],[0.341,0.2582],[0.5973,0.137]],[[0.721,0.0785],[0.8509,-0.0667],[1.0,-0.0]]],"bend":0.0809},{"c":[[[0.2658,0.0782],[0.341,0.2582],[0.5973,0.137]],[[0.721,0.0785],[0.8509,-0.0667],[1.0,-0.0]]],"bend":0.0809},{"c":[[[0.2658,-0.0782],[0.341,-0.2582],[0.5973,-0.137]],[[0.721,-0.0785],[0.8509,0.0667],[1.0,0.0]]],"bend":-0.0809},{"c":[[[0.2658,-0.0782],[0.341,-0.2582],[0.5973,-0.137]],[[0.721,-0.0785],[0.8509,0.0667],[1.0,0.0]]],"bend":-0.0809},{"c":[[[0.0686,0.0682],[0.2464,0.1958],[0.4091,0.1604]],[[0.6123,0.1161],[0.7404,-0.0536],[1.0,-0.0]]],"bend":0.0811},{"c":[[[0.0686,0.0682],[0.2464,0.1958],[0.4091,0.1604]],[[0.6123,0.1161],[0.7404,-0.0536],[1.0,-0.0]]],"bend":0.0811},{"c":[[[0.0686,-0.0682],[0.2464,-0.1958],[0.4091,-0.1604]],[[0.6123,-0.1161],[0.7404,0.0536],[1.0,0.0]]],"bend":-0.0811},{"c":[[[0.0686,-0.0682],[0.2464,-0.1958],[0.4091,-0.1604]],[[0.6123,-0.1161],[0.7404,0.0536],[1.0,0.0]]],"bend":-0.0811},{"c":[[[0.0686,-0.0682],[0.2464,-0.1958],[0.4091,-0.1604]],[[0.6123,-0.1161],[0.7404,0.0536],[1.0,0.0]]],"bend":-0.0811},{"c":[[[0.0686,-0.0682],[0.2464,-0.1958],[0.4091,-0.1604]],[[0.6123,-0.1161],[0.7404,0.0536],[1.0,0.0]]],"bend":-0.0811},{"c":[[[0.0692,0.0683],[0.2483,0.1959],[0.4106,0.1604]],[[0.6134,0.1161],[0.7399,-0.0536],[1.0,0.0]]],"bend":0.0812},{"c":[[[0.0692,-0.0683],[0.2483,-0.1959],[0.4106,-0.1604]],[[0.6134,-0.1161],[0.7399,0.0536],[1.0,0.0]]],"bend":-0.0812},{"c":[[[0.0692,-0.0683],[0.2483,-0.1959],[0.4106,-0.1604]],[[0.6134,-0.1161],[0.7399,0.0536],[1.0,0.0]]],"bend":-0.0812},{"c":[[[0.3109,-0.3318],[0.786,0.0161],[1.0,0.0]]],"bend":-0.1052},{"c":[[[0.3109,-0.3318],[0.786,0.0161],[1.0,0.0]]],"bend":-0.1052},{"c":[[[0.3109,0.3318],[0.786,-0.0161],[1.0,0.0]]],"bend":0.1052},{"c":[[[0.3109,0.3318],[0.786,-0.0161],[1.0,0.0]]],"bend":0.1052},{"c":[[[0.3337,0.2126],[0.6735,0.2164],[1.0,0.0]]],"bend":0.143}];
+
+
+/* ------------------------------------------------------------------ */
+/* Aplicación de motivos                                               */
+/* ------------------------------------------------------------------ */
+
+const hash = (s: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967295;
+};
+
+/**
+ * Construye el `d` de un segmento aplicando un motivo normalizado entre dos puntos.
+ * El motivo se escala a la distancia, se rota a la dirección y opcionalmente se
+ * refleja; sus puntos de control no se aproximan ni se simplifican.
+ */
+export const motifPath = (from: Vec, to: Vec, motif: BranchMotif, mirror: boolean): string => {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ca = dx / len;
+  const sa = dy / len;
+  const m = mirror ? -1 : 1;
+  const map = (p: number[]) => {
+    const px = p[0] * len;
+    const py = p[1] * m * len;
+    return { x: from.x + px * ca - py * sa, y: from.y + px * sa + py * ca };
+  };
+  let d = `M ${from.x.toFixed(2)} ${from.y.toFixed(2)}`;
+  motif.c.forEach((seg) => {
+    const c1 = map(seg[0]);
+    const c2 = map(seg[1]);
+    const e = map(seg[2]);
+    d += ` C ${c1.x.toFixed(2)} ${c1.y.toFixed(2)}, ${c2.x.toFixed(2)} ${c2.y.toFixed(2)}, ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
+  });
+  return d;
+};
+
+/** Motivo estable para un identificador dado, filtrando por curvatura deseada. */
+export const pickMotif = (seed: string, maxBend: number): BranchMotif => {
+  const pool = BRANCH_MOTIFS.filter((m) => Math.abs(m.bend) <= maxBend);
+  const list = pool.length ? pool : BRANCH_MOTIFS;
+  return list[Math.floor(hash(seed) * list.length) % list.length];
+};
+
+/* ------------------------------------------------------------------ */
+/* Esqueleto del árbol                                                 */
+/* ------------------------------------------------------------------ */
 
 export interface TreeJunction {
   id: string;
@@ -12,6 +76,7 @@ export interface TreeJunction {
   noteId?: string;
   branchRootId?: string;
   depth: number;
+  /** dirección de crecimiento en radianes (pantalla: -PI/2 = hacia arriba) */
   angle: number;
 }
 
@@ -23,6 +88,7 @@ export interface BranchSegment {
   branchRootId: string;
   depth: number;
   kind: "trunk" | "branch";
+  /** motivo aplicado, para poder re-dibujar el mismo trazo si el nodo se arrastra */
   motif: BranchMotif;
   mirror: boolean;
 }
@@ -30,7 +96,6 @@ export interface BranchSegment {
 export interface TreeNoteInput {
   id: string;
   parentId: string | null;
-  title?: string;
   color?: string | null;
 }
 
@@ -47,354 +112,17 @@ export interface TreeSkeleton {
   segments: BranchSegment[];
   byNote: Map<string, TreeJunction>;
   rootJunction: TreeJunction;
+  /** rama principal a la que pertenece cada nota */
   branchRootOf: Map<string, string>;
 }
 
-const BASE_ROOT = { x: 356, y: 704 };
+const TAU = Math.PI * 2;
 const UP = -Math.PI / 2;
 
-const pointKey = (x: number, y: number) => `${x.toFixed(2)}:${y.toFixed(2)}`;
-const angleBetween = (a: Vec, b: Vec) => Math.atan2(b.y - a.y, b.x - a.x);
-
-export const motifPath = (from: Vec, to: Vec, motif: BranchMotif, mirror = false): string => {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const ca = dx / len;
-  const sa = dy / len;
-  const m = mirror ? -1 : 1;
-
-  const map = (p: number[]) => {
-    const px = p[0] * len;
-    const py = p[1] * m * len;
-    return {
-      x: from.x + px * ca - py * sa,
-      y: from.y + px * sa + py * ca,
-    };
-  };
-
-  let d = `M ${from.x.toFixed(2)} ${from.y.toFixed(2)}`;
-  motif.c.forEach((seg) => {
-    const c1 = map(seg[0]);
-    const c2 = map(seg[1]);
-    const end = map(seg[2]);
-    d += ` C ${c1.x.toFixed(2)} ${c1.y.toFixed(2)}, ${c2.x.toFixed(2)} ${c2.y.toFixed(2)}, ${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
-  });
-  return d;
-};
-
-const motifFromTangents = (from: Vec, to: Vec, startAngle: number, endAngle: number, strength = 0.42): BranchMotif => {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const ux = dx / len;
-  const uy = dy / len;
-  const vx = -uy;
-  const vy = ux;
-
-  const c1 = {
-    x: from.x + Math.cos(startAngle) * len * strength,
-    y: from.y + Math.sin(startAngle) * len * strength,
-  };
-  const c2 = {
-    x: to.x - Math.cos(endAngle) * len * strength,
-    y: to.y - Math.sin(endAngle) * len * strength,
-  };
-
-  const norm = (p: Vec) => {
-    const px = p.x - from.x;
-    const py = p.y - from.y;
-    return [(px * ux + py * uy) / len, (px * vx + py * vy) / len];
-  };
-
-  const n1 = norm(c1);
-  const n2 = norm(c2);
-  return {
-    c: [[n1, n2, [1, 0]]],
-    bend: (Math.abs(n1[1]) + Math.abs(n2[1])) / 2,
-  };
-};
-
-// Kept for compatibility with GraphViewV2. The traced layout builds its own motifs.
-export const pickMotif = (_seed: string, _maxBend: number): BranchMotif => ({
-  c: [
-    [
-      [0.34, 0],
-      [0.66, 0],
-      [1, 0],
-    ],
-  ],
-  bend: 0,
-});
-
-interface Profile {
-  name: "pink" | "yellow" | "green" | "peach";
-  root: [number, number];
-  trunkAttach: [number, number];
-  side: -1 | 1;
-  localHeading: number;
-  localScale: number;
-  paths: Array<Array<[number, number]>>;
-  terminals: Array<[number, number]>;
-  terminalPriority: number[];
-}
-
-const PROFILES: Profile[] = [
-  {
-    name: "pink",
-    root: [304, 460],
-    trunkAttach: [356, 558],
-    side: -1,
-    localHeading: Math.PI - 0.05,
-    localScale: 22,
-    paths: [
-      [
-        [304, 460],
-        [285, 428],
-        [259, 398],
-        [274, 323],
-        [264, 263],
-      ],
-      [
-        [274, 323],
-        [250, 294],
-        [224, 284],
-      ],
-      [
-        [259, 398],
-        [228, 359],
-        [167, 305],
-      ],
-      [
-        [259, 398],
-        [224, 367],
-        [168, 348],
-      ],
-      [
-        [304, 460],
-        [266, 435],
-        [211, 429],
-        [121, 388],
-        [47, 373],
-      ],
-      [
-        [121, 388],
-        [91, 409],
-        [63, 411],
-      ],
-      [
-        [211, 429],
-        [180, 444],
-        [143, 433],
-      ],
-      [
-        [211, 429],
-        [180, 470],
-        [134, 479],
-      ],
-    ],
-    terminals: [
-      [264, 263],
-      [224, 284],
-      [167, 305],
-      [168, 348],
-      [47, 373],
-      [63, 411],
-      [143, 433],
-      [134, 479],
-    ],
-    terminalPriority: [0, 4, 1, 2, 3, 5, 6, 7],
-  },
-  {
-    name: "yellow",
-    root: [334, 238],
-    trunkAttach: [356, 318],
-    side: -1,
-    localHeading: Math.PI - 0.35,
-    localScale: 22,
-    paths: [
-      [
-        [334, 238],
-        [289, 177],
-        [304, 103],
-        [290, 39],
-      ],
-      [
-        [304, 103],
-        [280, 70],
-        [254, 62],
-      ],
-      [
-        [289, 177],
-        [252, 131],
-        [219, 86],
-      ],
-      [
-        [289, 177],
-        [243, 143],
-        [198, 126],
-      ],
-      [
-        [334, 238],
-        [285, 213],
-        [207, 211],
-        [164, 257],
-      ],
-      [
-        [207, 211],
-        [180, 179],
-        [151, 165],
-        [76, 152],
-      ],
-      [
-        [151, 165],
-        [120, 185],
-        [92, 188],
-      ],
-    ],
-    terminals: [
-      [290, 39],
-      [254, 62],
-      [219, 86],
-      [198, 126],
-      [164, 257],
-      [76, 152],
-      [92, 188],
-    ],
-    terminalPriority: [3, 4, 5, 0, 1, 2, 6],
-  },
-  {
-    name: "green",
-    root: [379, 306],
-    trunkAttach: [356, 365],
-    side: 1,
-    localHeading: -0.35,
-    localScale: 20,
-    paths: [
-      [
-        [379, 306],
-        [400, 274],
-        [423, 245],
-        [409, 169],
-        [423, 108],
-      ],
-      [
-        [409, 169],
-        [430, 140],
-        [462, 131],
-      ],
-      [
-        [423, 245],
-        [455, 208],
-        [515, 194],
-      ],
-      [
-        [379, 306],
-        [421, 281],
-        [467, 275],
-        [539, 280],
-      ],
-      [
-        [467, 275],
-        [505, 247],
-        [562, 234],
-        [637, 221],
-      ],
-      [
-        [562, 234],
-        [586, 257],
-        [620, 257],
-      ],
-      [
-        [467, 275],
-        [500, 305],
-        [549, 325],
-      ],
-    ],
-    terminals: [
-      [423, 108],
-      [462, 131],
-      [515, 194],
-      [539, 280],
-      [637, 221],
-      [620, 257],
-      [549, 325],
-    ],
-    terminalPriority: [2, 6, 3, 0, 1, 4, 5],
-  },
-  {
-    name: "peach",
-    root: [402, 444],
-    trunkAttach: [356, 558],
-    side: 1,
-    localHeading: -0.15,
-    localScale: 20,
-    paths: [
-      [
-        [402, 444],
-        [414, 404],
-        [445, 377],
-      ],
-      [
-        [402, 444],
-        [435, 414],
-        [490, 413],
-        [563, 417],
-      ],
-      [
-        [490, 413],
-        [540, 378],
-        [585, 372],
-        [661, 357],
-      ],
-      [
-        [585, 372],
-        [610, 393],
-        [644, 395],
-      ],
-      [
-        [490, 413],
-        [522, 454],
-        [571, 464],
-      ],
-    ],
-    terminals: [
-      [445, 377],
-      [563, 417],
-      [661, 357],
-      [644, 395],
-      [571, 464],
-    ],
-    terminalPriority: [1, 4, 0, 3, 2],
-  },
-];
-
-const hueOf = (color?: string | null) => {
-  if (!color) return null;
-  const h = Number.parseFloat(color.trim().split(/\s+/)[0]);
-  return Number.isFinite(h) ? ((h % 360) + 360) % 360 : null;
-};
-
-const preferredProfile = (root: TreeNoteInput, index: number, used: Set<string>) => {
-  const hue = hueOf(root.color);
-  let name: Profile["name"] | null = null;
-  if (hue !== null) {
-    if (hue >= 285) name = "pink";
-    else if (hue >= 25 && hue <= 75) name = "yellow";
-    else if (hue >= 80 && hue <= 190) name = "green";
-    else if (hue < 25 || hue >= 345) name = "peach";
-  }
-
-  const fallback: Profile["name"][] = ["pink", "yellow", "green", "peach"];
-  if (!name || used.has(name)) name = fallback.find((x) => !used.has(x)) ?? fallback[index % fallback.length];
-  used.add(name);
-  return PROFILES.find((p) => p.name === name)!;
-};
-
 export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions = {}): TreeSkeleton => {
-  const rootX = opts.rootX ?? 356;
-  const rootY = opts.rootY ?? 704;
-  const scale = opts.compact ? 0.72 : 1;
+  const rootX = opts.rootX ?? 0;
+  const rootY = opts.rootY ?? 0;
+  const compact = !!opts.compact;
   const collapsed = opts.collapsed ?? new Set<string>();
   const hidden = opts.hiddenRootIds ?? new Set<string>();
 
@@ -411,248 +139,188 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
     const cached = weightCache.get(id);
     if (cached !== undefined) return cached;
     const kids = childrenOf.get(id) ?? [];
-    const total = 1 + kids.reduce((sum, child) => sum + weightOf(child.id), 0);
-    weightCache.set(id, total);
-    return total;
+    let w = 1;
+    kids.forEach((k) => (w += weightOf(k.id)));
+    weightCache.set(id, w);
+    return w;
   };
 
   const junctions: TreeJunction[] = [];
   const segments: BranchSegment[] = [];
   const byNote = new Map<string, TreeJunction>();
   const branchRootOf = new Map<string, string>();
-  const coordMap = new Map<string, TreeJunction>();
-  const segmentKeys = new Set<string>();
-  let virtualCounter = 0;
-  let segmentCounter = 0;
 
-  const P = ([x, y]: [number, number]): Vec => ({
-    x: rootX + (x - BASE_ROOT.x) * scale,
-    y: rootY + (y - BASE_ROOT.y) * scale,
-  });
-
-  const rootJunction: TreeJunction = {
-    id: "trunk-root",
-    x: rootX,
-    y: rootY,
-    depth: 0,
-    angle: UP,
-    branchRootId: "trunk",
-  };
+  const rootJunction: TreeJunction = { id: "trunk-0", x: rootX, y: rootY, depth: 0, angle: UP };
   junctions.push(rootJunction);
-  coordMap.set(pointKey(rootX, rootY), rootJunction);
-
-  const getOrCreate = (
-    p: Vec,
-    branchRootId: string,
-    depth: number,
-    note?: TreeNoteInput,
-    angle = UP,
-    preferredId?: string,
-  ) => {
-    const key = pointKey(p.x, p.y);
-    let j = coordMap.get(key);
-    if (!j) {
-      j = {
-        id: preferredId ?? `v-${virtualCounter++}`,
-        x: p.x,
-        y: p.y,
-        branchRootId,
-        depth,
-        angle,
-      };
-      coordMap.set(key, j);
-      junctions.push(j);
-    }
-    if (note) {
-      j.noteId = note.id;
-      j.branchRootId = branchRootId;
-      j.depth = depth;
-      j.angle = angle;
-      byNote.set(note.id, j);
-      branchRootOf.set(note.id, branchRootId);
-    }
-    return j;
-  };
-
-  const addSegment = (
-    from: TreeJunction,
-    to: TreeJunction,
-    startAngle: number,
-    endAngle: number,
-    branchRootId: string,
-    depth: number,
-    kind: "trunk" | "branch",
-    strength = 0.42,
-  ) => {
-    const key = `${from.id}>${to.id}:${kind}`;
-    if (segmentKeys.has(key)) return;
-    segmentKeys.add(key);
-    const motif = motifFromTangents(from, to, startAngle, endAngle, strength);
-    segments.push({
-      id: `seg-${segmentCounter++}`,
-      fromJunctionId: from.id,
-      toJunctionId: to.id,
-      d: motifPath(from, to, motif, false),
-      branchRootId,
-      depth,
-      kind,
-      motif,
-      mirror: false,
-    });
-  };
-
-  const connectPath = (
-    rawPoints: Array<[number, number]>,
-    branchRootId: string,
-    depth: number,
-    kind: "trunk" | "branch",
-  ) => {
-    const points = rawPoints.map(P);
-    const js = points.map((p, i) =>
-      getOrCreate(p, branchRootId, depth, undefined, UP, i === 0 ? undefined : undefined),
-    );
-    const tangentAt = (i: number) => {
-      if (i === 0) return angleBetween(points[0], points[1]);
-      if (i === points.length - 1) return angleBetween(points[points.length - 2], points[points.length - 1]);
-      return angleBetween(points[i - 1], points[i + 1]);
-    };
-    for (let i = 0; i < js.length - 1; i++) {
-      addSegment(js[i], js[i + 1], tangentAt(i), tangentAt(i + 1), branchRootId, depth, kind, 0.4);
-      js[i + 1].angle = tangentAt(i + 1);
-    }
-    return js;
-  };
-
-  // Reference trunk, traced from the supplied design.
-  connectPath(
-    [
-      [356, 704],
-      [356, 558],
-      [356, 365],
-      [356, 318],
-    ],
-    "trunk",
-    0,
-    "trunk",
-  );
 
   const roots = (childrenOf.get(null) ?? []).filter((n) => !hidden.has(n.id));
-  const usedProfiles = new Set<string>();
 
-  const localGrow = (
-    parent: TreeNoteInput,
+  // --- Tronco: vertical, ligeramente irregular, partido en tramos ---
+  // Paso del tronco algo mayor para que las cabezas de rama no se crucen.
+  const trunkStep = (compact ? 88 : 124) * (roots.length > 6 ? 0.94 : 1);
+
+  let prev = rootJunction;
+  const trunkPoints: TreeJunction[] = [rootJunction];
+
+  roots.forEach((root, i) => {
+    const wobble = (hash(`${root.id}-trunk`) - 0.5) * (compact ? 14 : 22);
+    const j: TreeJunction = {
+      id: `trunk-${i + 1}`,
+      x: rootX + wobble,
+      y: prev.y - trunkStep * (0.85 + hash(`${root.id}-h`) * 0.4),
+      depth: 0,
+      angle: UP,
+    };
+    junctions.push(j);
+    const motif = pickMotif(`trunk-${root.id}`, 0.05);
+    const mirror = hash(`${root.id}-m`) > 0.5;
+    segments.push({
+      id: `seg-trunk-${i}`,
+      fromJunctionId: prev.id,
+      toJunctionId: j.id,
+      d: motifPath(prev, j, motif, mirror),
+      branchRootId: "trunk",
+      depth: 0,
+      kind: "trunk",
+      motif,
+      mirror,
+    });
+    trunkPoints.push(j);
+    prev = j;
+  });
+
+  // Punta del tronco
+  if (roots.length > 0) {
+    const tip: TreeJunction = {
+      id: "trunk-tip",
+      x: prev.x + (hash("tip") - 0.5) * 18,
+      y: prev.y - trunkStep * 0.55,
+      depth: 0,
+      angle: UP,
+    };
+    junctions.push(tip);
+    segments.push({
+      id: "seg-trunk-tip",
+      fromJunctionId: prev.id,
+      toJunctionId: tip.id,
+      d: motifPath(prev, tip, pickMotif("trunk-tip", 0.05), false),
+      branchRootId: "trunk",
+      depth: 0,
+      kind: "trunk",
+      motif: pickMotif("trunk-tip", 0.05),
+      mirror: false,
+    });
+  }
+
+  // --- Copa: recursión por motivos ---
+  const grow = (
+    note: TreeNoteInput,
     from: TreeJunction,
-    profile: Profile,
-    branchRootId: string,
+    angle: number,
+    length: number,
     depth: number,
-    localScale: number,
+    branchRootId: string,
   ) => {
-    if (collapsed.has(parent.id)) return;
-    const kids = [...(childrenOf.get(parent.id) ?? [])].sort((a, b) => weightOf(b.id) - weightOf(a.id));
-    if (kids.length === 0) return;
+    const end = {
+      x: from.x + Math.cos(angle) * length,
+      y: from.y + Math.sin(angle) * length,
+    };
+    const j: TreeJunction = {
+      id: `j-${note.id}`,
+      x: end.x,
+      y: end.y,
+      noteId: note.id,
+      branchRootId,
+      depth,
+      angle,
+    };
+    junctions.push(j);
+    byNote.set(note.id, j);
+    branchRootOf.set(note.id, branchRootId);
 
-    const target = profile.localHeading;
-    const stemLength = localScale * (0.55 + 0.09 * Math.min(kids.length, 5)) * scale;
-    let previous = from;
-    let previousPoint: Vec = { x: from.x, y: from.y };
-    const branchPoints: TreeJunction[] = [];
-
-    kids.forEach((kid, i) => {
-      const t = (i + 1) / (kids.length + 0.4);
-      const curve = (t - 0.5) * 0.28 * -profile.side;
-      const a = target + curve;
-      const p = {
-        x: from.x + Math.cos(a) * stemLength * t,
-        y: from.y + Math.sin(a) * stemLength * t + (i - (kids.length - 1) / 2) * 3 * scale,
-      };
-      const bp = getOrCreate(p, branchRootId, depth, undefined, a);
-      addSegment(previous, bp, previous.angle || target, a, branchRootId, depth, "branch", 0.44);
-      previous = bp;
-      previousPoint = p;
-      branchPoints.push(bp);
+    const maxBend = depth <= 1 ? 0.09 : 0.16;
+    const motif = pickMotif(`${note.id}-${depth}`, maxBend);
+    const mirror = hash(`${note.id}-mir`) > 0.5;
+    segments.push({
+      id: `seg-${note.id}`,
+      fromJunctionId: from.id,
+      toJunctionId: j.id,
+      d: motifPath(from, j, motif, mirror),
+      branchRootId,
+      depth,
+      kind: "branch",
+      motif,
+      mirror,
     });
 
+    if (collapsed.has(note.id)) return;
+    const kids = childrenOf.get(note.id) ?? [];
+    if (kids.length === 0) return;
+
+    const weights = kids.map((k) => weightOf(k.id));
+    const total = weights.reduce((a, b) => a + b, 0) || 1;
+    // Apertura del ramaje: amplia en el primer nivel para que las hijas no se
+    // apilen, y progresivamente más contenida al profundizar.
+    const baseSpread = depth === 1 ? 2.0 : depth === 2 ? 1.35 : 1.05;
+    const spread = Math.min(baseSpread * (0.7 + Math.min(1, total / 8) * 0.7), 2.4);
+    // Separación angular mínima entre hermanas, mayor cuanta más descendencia hay.
+    const minGap = Math.min(0.85, (depth === 1 ? 0.42 : 0.3) + Math.min(0.3, total * 0.03));
+    const angles: number[] = [];
+
+    let acc = 0;
     kids.forEach((kid, i) => {
-      const bp = branchPoints[i];
-      const spread = (i - (kids.length - 1) / 2) * 0.16;
-      const a = target + spread;
-      const dist = localScale * (0.42 + 0.07 * Math.min(4, Math.sqrt(weightOf(kid.id)))) * scale;
-      const p = {
-        x: bp.x + Math.cos(a) * dist,
-        y: bp.y + Math.sin(a) * dist + (i % 2 === 0 ? -1 : 1) * dist * 0.35,
-      };
-      const child = getOrCreate(p, branchRootId, depth, kid, a, `j-${kid.id}`);
-      addSegment(bp, child, target, a, branchRootId, depth, "branch", 0.46);
-      if (!collapsed.has(kid.id)) localGrow(kid, child, profile, branchRootId, depth + 1, localScale * 0.58);
+      const w = weights[i];
+      const t = kids.length === 1 ? 0 : (acc + w / 2) / total - 0.5;
+      acc += w;
+      // Irregularidad determinista: la copa nunca es un abanico perfecto.
+      const jitter = (hash(`${kid.id}-a`) - 0.5) * (depth === 1 ? 0.42 : 0.3);
+      const single = kids.length === 1 ? (hash(`${kid.id}-s`) - 0.5) * 0.8 : 0;
+      let a = angle + t * spread + jitter + single;
+      // Nunca crecer hacia abajo: se mantiene la silueta de copa.
+      const limit = 1.32;
+      const rel = ((a - UP + Math.PI * 3) % TAU) - Math.PI;
+      if (rel > limit) a = UP + limit;
+      if (rel < -limit) a = UP - limit;
+      // Anti-solape determinista: empujar si queda demasiado cerca de una hermana.
+      angles.forEach((prevA) => {
+        const diff = a - prevA;
+        if (Math.abs(diff) < minGap) a = prevA + (diff >= 0 ? minGap : -minGap);
+      });
+      angles.push(a);
+
+      // Tramos cortos: decrecimiento marcado con la profundidad.
+      const decay = depth === 1 ? 0.58 : depth === 2 ? 0.66 : 0.7;
+      const len =
+        length *
+        (decay + hash(`${kid.id}-l`) * 0.18) *
+        (1 + Math.min(0.4, Math.sqrt(w) * 0.12));
+      grow(kid, j, a, Math.max(compact ? 34 : 46, len), depth + 1, branchRootId);
     });
   };
 
-  roots.forEach((root, index) => {
-    const profile = preferredProfile(root, index, usedProfiles);
-    const rootPoint = P(profile.root);
-    const rootAngle = angleBetween(P(profile.trunkAttach), rootPoint);
-    const rootNoteJ = getOrCreate(rootPoint, root.id, 1, root, rootAngle, `j-${root.id}`);
-
-    // Blue connection from the trunk to the main branch node.
-    const trunkStart = getOrCreate(P(profile.trunkAttach), "trunk", 0, undefined, UP);
-    addSegment(trunkStart, rootNoteJ, UP, rootAngle, "trunk", 0, "trunk", 0.48);
-
-    if (collapsed.has(root.id)) return;
-
-    // Fixed traced branch silhouette. Shared coordinates are reused so the paths
-    // really bifurcate instead of crossing as independent connectors.
-    profile.paths.forEach((path) => connectPath(path, root.id, 2, "branch"));
-
-    const terminalHeading = new Map<string, number>();
-    profile.paths.forEach((path) => {
-      const a = path[path.length - 2];
-      const b = path[path.length - 1];
-      terminalHeading.set(pointKey(P(b).x, P(b).y), angleBetween(P(a), P(b)));
-    });
-
-    const kids = [...(childrenOf.get(root.id) ?? [])].sort((a, b) => weightOf(b.id) - weightOf(a.id));
-    const usedTerminalIndexes = new Set<number>();
-
-    kids.forEach((kid, childIndex) => {
-      const preferredIndex = profile.terminalPriority[childIndex];
-      const terminalIndex =
-        preferredIndex !== undefined && !usedTerminalIndexes.has(preferredIndex)
-          ? preferredIndex
-          : profile.terminals.findIndex((_p, i) => !usedTerminalIndexes.has(i));
-
-      if (terminalIndex >= 0) {
-        usedTerminalIndexes.add(terminalIndex);
-        const p = P(profile.terminals[terminalIndex]);
-        const key = pointKey(p.x, p.y);
-        const heading = terminalHeading.get(key) ?? profile.localHeading;
-        const terminal = getOrCreate(p, root.id, 2, kid, heading, `j-${kid.id}`);
-        if (!collapsed.has(kid.id)) localGrow(kid, terminal, profile, root.id, 3, profile.localScale);
-      } else {
-        // More first-level notes than the reference has endpoints: extend the
-        // canopy locally rather than stretching or re-laying out the whole tree.
-        const baseAngle = profile.localHeading + (childIndex - kids.length / 2) * 0.12;
-        const distance = (46 + (childIndex - profile.terminals.length) * 8) * scale;
-        const p = {
-          x: rootNoteJ.x + Math.cos(baseAngle) * distance,
-          y: rootNoteJ.y + Math.sin(baseAngle) * distance,
-        };
-        const child = getOrCreate(p, root.id, 2, kid, baseAngle, `j-${kid.id}`);
-        addSegment(rootNoteJ, child, profile.localHeading, baseAngle, root.id, 2, "branch", 0.48);
-        if (!collapsed.has(kid.id)) localGrow(kid, child, profile, root.id, 3, profile.localScale);
-      }
-    });
+  roots.forEach((root, i) => {
+    const from = trunkPoints[i + 1] ?? rootJunction;
+    const side = i % 2 === 0 ? 1 : -1;
+    const tilt = 0.6 + hash(`${root.id}-t`) * 0.45;
+    const angle = UP + side * tilt;
+    const w = weightOf(root.id);
+    const length = (compact ? 84 : 118) * (1 + Math.min(0.55, Math.sqrt(w) * 0.12));
+    grow(root, from, angle, length, 1, root.id);
   });
+
 
   return { junctions, segments, byNote, rootJunction, branchRootOf };
 };
 
+/** Grosor de trazo según profundidad (referencia: prototipo oscuro del usuario). */
 export const strokeForDepth = (depth: number, kind: "trunk" | "branch") => {
-  if (kind === "trunk") return 3;
-  if (depth <= 1) return 2.35;
-  if (depth === 2) return 2.05;
-  if (depth === 3) return 1.7;
-  return Math.max(1.15, 1.55 - (depth - 4) * 0.1);
+  if (kind === "trunk") return 1.7;
+  if (depth <= 1) return 1.4;
+  if (depth === 2) return 1.1;
+  return Math.max(0.65, 0.95 - (depth - 3) * 0.08);
 };
 
-export const BRANCH_PALETTE = ["#FAADE2", "#F5E076", "#45C9BE", "#E7B48C"];
-export const paletteColorFor = (_id: string, index: number) => BRANCH_PALETTE[index % BRANCH_PALETTE.length];
+/** Paleta de ramas del prototipo oscuro. */
+export const BRANCH_PALETTE = ["#7A6BFF", "#42E1C6", "#FFB06B", "#F57BC8", "#F3D75F", "#6BB8FF", "#B98BFF", "#7FE08A"];
+
+export const paletteColorFor = (id: string, index: number) => BRANCH_PALETTE[index % BRANCH_PALETTE.length];
