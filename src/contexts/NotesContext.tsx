@@ -105,7 +105,9 @@ const dbToNote = (row: any): Note => ({
   noteType: (row.note_type as NoteType) ?? "text",
   isCollapsed: row.is_collapsed ?? true,
   icon: row.icon ?? null,
-  createdAt: row.created_at,
+  posDx: row.pos_dx !== null && row.pos_dx !== undefined ? Number(row.pos_dx) : null,
+  posDy: row.pos_dy !== null && row.pos_dy !== undefined ? Number(row.pos_dy) : null,
+
   updatedAt: row.updated_at,
 });
 
