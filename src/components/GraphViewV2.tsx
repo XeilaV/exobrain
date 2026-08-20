@@ -510,31 +510,6 @@ const GraphView = () => {
     [getNodeRadius],
   );
 
-  const focusBranch = useCallback(
-    (nodeId: string) => {
-      const subtreeIds = getSubtreeIds(nodeId);
-      const branchNodes = positionsWithOffsets.filter((node) => subtreeIds.has(node.id));
-      const bounds = getNodesBounds(branchNodes);
-      if (!bounds) return;
-
-      const isMobile = size.w < 640;
-      const panelReserve = !isMobile && openPostIt ? 390 : 0;
-      const availableW = Math.max(240, size.w - panelReserve - (isMobile ? 36 : 90));
-      const availableH = Math.max(240, size.h - (isMobile ? 120 : 100));
-      const branchW = Math.max(1, bounds.maxX - bounds.minX);
-      const branchH = Math.max(1, bounds.maxY - bounds.minY);
-      const zoom = Math.min(1.42, Math.max(0.88, Math.min(availableW / branchW, availableH / branchH) * 0.82));
-      const targetX = (size.w - panelReserve) / 2;
-      const targetY = size.h * 0.48;
-      const branchCenterX = (bounds.minX + bounds.maxX) / 2;
-      const branchCenterY = (bounds.minY + bounds.maxY) / 2;
-
-      setViewZoom(zoom);
-      setPan({ x: targetX - branchCenterX * zoom, y: targetY - branchCenterY * zoom });
-    },
-    [getNodesBounds, getSubtreeIds, positionsWithOffsets, size.w, size.h, openPostIt],
-  );
-
   const fitFullTree = useCallback(() => {
     const bounds = getNodesBounds(positionsWithOffsets);
     if (!bounds) return;
@@ -547,7 +522,7 @@ const GraphView = () => {
     const availableH = Math.max(1, size.h - topMargin - bottomMargin);
     const treeW = Math.max(1, bounds.maxX - bounds.minX);
     const treeH = Math.max(1, bounds.maxY - bounds.minY);
-    const zoom = Math.min(1, Math.max(0.4, Math.min(availableW / treeW, availableH / treeH)));
+    const zoom = Math.min(1, Math.max(0.25, Math.min(availableW / treeW, availableH / treeH)));
     const treeCenterX = (bounds.minX + bounds.maxX) / 2;
     const treeCenterY = (bounds.minY + bounds.maxY) / 2;
     const targetX = size.w / 2;
@@ -557,50 +532,50 @@ const GraphView = () => {
     setPan({ x: targetX - treeCenterX * zoom, y: targetY - treeCenterY * zoom });
   }, [getNodesBounds, positionsWithOffsets, size.w, size.h]);
 
-  const hasOpenVisibleBranch = useMemo(() => {
-    return positionsWithOffsets.some(
-      (node) =>
-        node.id !== "hub" &&
-        (node.type === "note" || node.type === "category") &&
-        node.hasChildren &&
-        node.isCollapsed === false,
-    );
-  }, [positionsWithOffsets]);
-
   const layoutSignature = useMemo(() => {
-    return positions
-      .map((node) => `${node.id}:${Math.round(node.x)}:${Math.round(node.y)}:${node.isCollapsed ? 1 : 0}`)
-      .join("|");
+    return positions.map((node) => `${node.id}:${Math.round(node.x)}:${Math.round(node.y)}`).join("|");
   }, [positions]);
 
+  // Solo encuadramos el árbol la primera vez que hay layout. A partir de ahí la
+  // navegación es siempre manual: ni la selección ni el plegado tocan pan/zoom.
   useEffect(() => {
     if (positionsWithOffsets.length === 0) return;
+    if (didInitialFitRef.current) return;
+    fitFullTree();
+    didInitialFitRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutSignature, size.w, size.h]);
 
-    const expandedNodeId = lastExpandedRef.current;
-    if (expandedNodeId) {
-      if (!positionsWithOffsets.some((node) => node.id === expandedNodeId)) return;
-      focusBranch(expandedNodeId);
-      lastExpandedRef.current = null;
-      didInitialFitRef.current = true;
-      previousHasOpenBranchRef.current = hasOpenVisibleBranch;
-      return;
-    }
+  // Zoom con rueda / pinch de trackpad anclado al cursor (listener nativo no pasivo).
+  const fitRef = useRef(fitFullTree);
+  useEffect(() => {
+    fitRef.current = fitFullTree;
+  }, [fitFullTree]);
 
-    if (lastCollapsedRef.current) {
-      fitFullTree();
-      lastCollapsedRef.current = null;
-      didInitialFitRef.current = true;
-      previousHasOpenBranchRef.current = hasOpenVisibleBranch;
-      return;
-    }
+  const zoomAt = useCallback((px: number, py: number, factor: number) => {
+    setViewZoom((z) => {
+      const next = Math.max(0.2, Math.min(4, z * factor));
+      const k = next / z;
+      setPan((p) => ({ x: px - (px - p.x) * k, y: py - (py - p.y) * k }));
+      viewZoomRef.current = next;
+      return next;
+    });
+  }, []);
 
-    if (!didInitialFitRef.current || (!hasOpenVisibleBranch && previousHasOpenBranchRef.current)) {
-      fitFullTree();
-      didInitialFitRef.current = true;
-    }
-
-    previousHasOpenBranchRef.current = hasOpenVisibleBranch;
-  }, [layoutSignature, size.w, size.h, hasOpenVisibleBranch]);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1);
+      const factor = Math.exp(-dy * (e.ctrlKey ? 0.0025 : 0.0015));
+      setIsPanning(true);
+      zoomAt(e.clientX - rect.left, e.clientY - rect.top, factor);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [zoomAt]);
 
   // Long-press handlers
   const startLongPress = useCallback(
