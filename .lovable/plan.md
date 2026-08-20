@@ -1,33 +1,33 @@
-# Arreglar el guardado de posiciones y las ramas que se desconectan
+# Guardar exactamente la posición de cada nodo
 
-Los dos fallos que describes tienen causas distintas y ambas están confirmadas leyendo el código actual.
+El objetivo será únicamente este: después de recolocar el árbol y recargar, todos los nodos deben aparecer exactamente en las mismas coordenadas del mapa.
 
-## Por qué las ramas se desconectan al mover
+## Guardado absoluto, no relativo
 
-Cada rama guarda su trazo dibujado de forma estática. Al arrastrar un nodo, el trazo solo se vuelve a calcular si el desplazamiento pertenece **al propio nodo o a su madre directa**. Pero mover una madre desplaza también a hijas, nietas y siguientes niveles (herencia de desplazamiento), y esos tramos siguen dibujados en su sitio antiguo: el nodo se va y la rama se queda.
+El sistema actual guarda desplazamientos respecto al reparto automático. Eso no garantiza la misma posición porque el reparto base puede cambiar al reconstruirse.
 
-Arreglo: recalcular siempre el trazo a partir de la posición real de los dos extremos, usando el mismo motivo Bézier ya asignado. El dibujo no cambia cuando nada se ha movido, y deja de romperse cuando algo se mueve.
+Se sustituirá por coordenadas absolutas del espacio del árbol:
 
-## Por qué al recargar los nodos cambian de sitio
+- Al terminar de arrastrar un nodo, se guardará su posición final `x/y`.
+- Si se mueve una madre, se guardarán también las posiciones finales de todas sus hijas, nietas y descendientes que se hayan desplazado con ella.
+- Al cargar la app, una nota con posición guardada usará directamente esas coordenadas; el reparto automático solo se usará para notas que nunca hayan sido colocadas manualmente.
+- El botón **Guardar disposición** persistirá las coordenadas finales de todos los nodos visibles como respaldo manual.
+- **Restablecer todo** borrará esas coordenadas y devolverá el árbol al reparto automático.
 
-Lo que se guarda es un desplazamiento en píxeles respecto al reparto automático, pero ese reparto automático **no es estable**:
+La cámara (zoom y pan) seguirá siendo independiente: guardar nodos no obliga a guardar la vista.
 
-- Depende del tamaño de la ventana: la raíz se coloca en el centro horizontal y a una distancia fija del borde inferior, y las ramas usan longitudes distintas en móvil. Con otra ventana, otro reparto base, y el desplazamiento guardado ya no cae donde tú lo dejaste.
-- Depende de lo plegado/oculto que estuviera el árbol en la sesión: al plegar o esconder una rama se recalculan pesos y ángulos de las hermanas, así que el reparto base con el que guardaste no es el que se reconstruye al recargar.
+## Mantener las ramas conectadas
 
-Arreglo:
+Cada tramo se recalculará siempre entre las coordenadas finales reales de su madre y su hija, reutilizando su motivo Bézier. Así la rama permanece unida mientras se arrastra y después de recargar.
 
-1. Construir el esqueleto en un **espacio de coordenadas fijo** (origen propio, longitudes constantes), y adaptar al viewport y al móvil solo con la cámara (zoom/pan). El reparto base pasa a ser idéntico en cualquier pantalla.
-2. Generar la geometría **siempre con todas las notas**, ignorando plegados y filtros de visibilidad; plegar u ocultar pasa a ser solo cuestión de qué se pinta. Así el reparto base no se mueve nunca y el desplazamiento guardado sigue siendo válido.
-3. Aplicar los desplazamientos guardados en la hidratación inicial ya funciona; con la base estable, empezará a coincidir.
+## No crear versiones por posición
 
-## Efecto secundario a corregir
-
-Cada arrastre guarda en la nota y eso dispara una entrada nueva en el historial de versiones. Se ajustará para que un cambio que solo toque la posición no genere versión, y el historial deje de llenarse de ruido.
+Los cambios exclusivos de coordenadas no crearán entradas en el historial. El historial continuará registrando cambios reales de la nota: título, contenido, checklist, jerarquía, enlaces, tipo, icono, color y demás datos editables.
 
 ## Detalles técnicos
 
-- `src/components/GraphViewV2.tsx`: eliminar la condición `moved` y calcular siempre `motifPath(from, to, edge.motif, edge.mirror)`; pasar `collapsed`/`hiddenRootIds` fuera de `buildTreeSkeleton` y filtrar en render; construir el esqueleto con `rootX: 0`, `rootY: 0` y `compact: false` fijos, encajando el árbol en pantalla mediante el `pan`/`viewZoom` inicial ya existente.
-- `src/lib/treeGeometry.ts`: quitar la dependencia de `compact` en longitudes (o fijarla), y devolver el `bbox` del esqueleto para el encuadre inicial.
-- Migración en la base de datos: en `snapshot_note_version()`, salir sin registrar versión cuando la actualización solo cambia `pos_dx`/`pos_dy`.
-- Verificación con navegador: arrastrar una rama madre y comprobar que los tramos hijos siguen unidos; recargar y comprobar que los nodos quedan en el mismo sitio; repetir con la ventana redimensionada.
+- Base de datos: añadir coordenadas absolutas `pos_x` y `pos_y` a `notes`, manteniendo los campos antiguos solo para compatibilidad durante el cambio.
+- Migración: actualizar `snapshot_note_version()` para ignorar actualizaciones que solo cambien posición.
+- `src/contexts/NotesContext.tsx` y tipos: leer, guardar en lote y limpiar las coordenadas absolutas.
+- `src/components/GraphViewV2.tsx`: aplicar coordenadas guardadas como posición final, guardar el subárbol completo al mover una madre y dibujar cada rama entre sus extremos finales.
+- Verificación en navegador: mover una nota; mover una madre con varios niveles; guardar; recargar; confirmar coordenadas idénticas y ramas conectadas; comprobar que esos movimientos no añaden versiones.
