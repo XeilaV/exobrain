@@ -635,7 +635,10 @@ const GraphView = () => {
     };
     const onUp = (e: PointerEvent) => {
       pointersRef.current.delete(e.pointerId);
+      const endedDrag = dragState.current;
       dragState.current = null;
+      if (endedDrag && didDrag.current) persistOffset(endedDrag.nodeId);
+
 
       // Cancel canvas long-press if pointer released before timer fired
       if (canvasLongPressTimer.current) {
