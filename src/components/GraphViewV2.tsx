@@ -190,11 +190,11 @@ const GraphView = () => {
   // Esqueleto del árbol: geometría estática construida con los motivos Bézier
   // extraídos de `Group 8.svg` (ver src/lib/treeGeometry.ts). Ni la selección ni
   // el zoom recalculan posiciones: solo cámara, opacidad y etiquetas.
-  const { positions, edges, parentMap } = useMemo(() => {
+  const { positions, edges } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
     const parent: Record<string, string> = {};
-    if (rootNotes.length === 0) return { positions: pos, edges: eds, parentMap: parent };
+    if (rootNotes.length === 0) return { positions: pos, edges: eds };
 
     const fallbackPalette = [
       "262 62% 62%",
@@ -298,7 +298,7 @@ const GraphView = () => {
       parent[to] = from;
     });
 
-    return { positions: pos, edges: eds, parentMap: parent };
+    return { positions: pos, edges: eds };
   }, [notes, categories, rootNotes, hiddenCategoryIds, brainName, collapsedIds]);
 
 
@@ -326,29 +326,6 @@ const GraphView = () => {
     if (node.type === "note" && node.isMain) return CAT_R;
     return NOTE_R;
   }, []);
-
-  const getSubtreeIds = useCallback(
-    (nodeId: string) => {
-      const ids = new Set<string>();
-      const visitNote = (noteId: string) => {
-        ids.add(`note-${noteId}`);
-        notes.filter((n) => n.parentNoteId === noteId).forEach((child) => visitNote(child.id));
-      };
-
-      if (nodeId.startsWith("note-")) {
-        visitNote(nodeId.replace("note-", ""));
-      } else if (nodeId.startsWith("cat-")) {
-        const categoryId = nodeId.replace("cat-", "");
-        ids.add(nodeId);
-        notes.filter((n) => n.categoryId === categoryId && !n.parentNoteId).forEach((note) => visitNote(note.id));
-      } else {
-        positionsWithOffsets.forEach((node) => ids.add(node.id));
-      }
-
-      return ids;
-    },
-    [notes, positionsWithOffsets],
-  );
 
   const getNodesBounds = useCallback(
     (nodes: NodePos[]) => {
@@ -496,7 +473,6 @@ const GraphView = () => {
           return p;
         });
         panState.current = null;
-        dragState.current = null;
         cancelLongPress();
         didPan.current = true;
         setIsPanning(true);
@@ -540,24 +516,6 @@ const GraphView = () => {
         return;
       }
 
-      const ds = dragState.current;
-      if (ds) {
-        const rawDx = e.clientX - ds.startX;
-        const rawDy = e.clientY - ds.startY;
-        if (!didDrag.current && Math.hypot(rawDx, rawDy) > 5) {
-          didDrag.current = true;
-          cancelLongPress();
-        }
-        if (didDrag.current) {
-          const zoom = viewZoomRef.current || 1;
-          const dx = rawDx / zoom;
-          const dy = rawDy / zoom;
-          setOffsets((prev) => ({
-            ...prev,
-            [ds.nodeId]: { dx: ds.baseDx + dx, dy: ds.baseDy + dy },
-          }));
-        }
-      }
       const ps = panState.current;
       if (!ps) return;
       const rawDx = e.clientX - ps.startX;
@@ -569,11 +527,6 @@ const GraphView = () => {
     };
     const onUp = (e: PointerEvent) => {
       pointersRef.current.delete(e.pointerId);
-      const endedDrag = dragState.current;
-      dragState.current = null;
-      if (endedDrag && didDrag.current) persistDragged(endedDrag.nodeId);
-
-
       // Cancel canvas long-press if pointer released before timer fired
       if (canvasLongPressTimer.current) {
         clearTimeout(canvasLongPressTimer.current);
@@ -601,15 +554,11 @@ const GraphView = () => {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [cancelLongPress, persistDragged]);
+  }, [cancelLongPress]);
 
   // Click handling with double-click detection
   const handleNodeClick = useCallback(
     (nodeId: string, clientX: number, clientY: number) => {
-      if (didDrag.current) {
-        didDrag.current = false;
-        return;
-      }
       if (didLongPress.current) {
         didLongPress.current = false;
         return;
@@ -752,7 +701,7 @@ const GraphView = () => {
         // Always track pointer for pinch detection
         pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-        // Second pointer -> start pinch (cancel any in-flight pan, node drag or canvas long-press)
+          // Second pointer -> start pinch (cancel any in-flight pan or canvas long-press)
         if (pointersRef.current.size >= 2) {
           const pts = Array.from(pointersRef.current.values());
           const [p1, p2] = pts;
@@ -766,7 +715,6 @@ const GraphView = () => {
             centerY: (p1.y + p2.y) / 2,
           };
           panState.current = null;
-          dragState.current = null;
           cancelLongPress();
           if (canvasLongPressTimer.current) {
             clearTimeout(canvasLongPressTimer.current);
@@ -955,12 +903,8 @@ const GraphView = () => {
                   top: node.y,
                 }}
                 exit={{ opacity: 0, scale: 0.88 }}
-                transition={
-                  dragState.current?.nodeId === node.id
-                    ? { duration: 0 }
-                    : { type: "spring", stiffness: 290, damping: 28 }
-                }
-                className="absolute cursor-grab active:cursor-grabbing touch-none"
+                transition={{ type: "spring", stiffness: 290, damping: 28 }}
+                className="absolute cursor-pointer touch-none"
                 data-graph-node
                 style={{
                   width: 1,
@@ -971,15 +915,6 @@ const GraphView = () => {
                 }}
                 onPointerDown={(e) => {
                   e.stopPropagation();
-                  didDrag.current = false;
-                  const cur = offsets[node.id] || { dx: 0, dy: 0 };
-                  dragState.current = {
-                    nodeId: node.id,
-                    startX: e.clientX,
-                    startY: e.clientY,
-                    baseDx: cur.dx,
-                    baseDy: cur.dy,
-                  };
                   startLongPress(node.id, e.clientX, e.clientY);
                 }}
                 onPointerUp={cancelLongPress}
@@ -1331,40 +1266,6 @@ const GraphView = () => {
             </div>
           )}
         </div>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            void saveCurrentLayout();
-          }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
-          title="Guardar disposición actual del árbol"
-        >
-          <Save size={16} />
-        </button>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmDialog({
-              message: "¿Restablecer el árbol al reparto automático? Se perderán las posiciones guardadas.",
-              onConfirm: () => {
-                setOffsets({});
-                seededRef.current.clear();
-                void clearAllPositions();
-                setFocusNoteId(null);
-                fitFullTree();
-                setShowFilterPanel(false);
-                setConfirmDialog(null);
-              },
-            });
-          }}
-          className="p-2.5 md:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-xl surface-glass hover:bg-muted/40 text-muted-foreground transition-all flex items-center justify-center"
-          title="Restablecer vista del árbol"
-        >
-          <TreePine size={16} />
-        </button>
-
 
         <button
           onClick={(e) => {
