@@ -1453,6 +1453,7 @@ const GraphView = () => {
               message: "¿Restablecer el árbol al reparto automático? Se perderán las posiciones guardadas.",
               onConfirm: () => {
                 setOffsets({});
+                seededRef.current.clear();
                 void clearAllPositions();
                 setFocusNoteId(null);
                 fitFullTree();
