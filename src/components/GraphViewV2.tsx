@@ -189,6 +189,9 @@ const GraphView = () => {
 
   // Build a real tree: one shared trunk, main branches emerging at different
   // heights, and descendants fanning out as smaller ramifications.
+  // Esqueleto del árbol: geometría estática construida con los motivos Bézier
+  // extraídos de `Group 8.svg` (ver src/lib/treeGeometry.ts). Ni la selección ni
+  // el zoom recalculan posiciones: solo cámara, opacidad y etiquetas.
   const { positions, edges, parentMap } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
@@ -200,243 +203,108 @@ const GraphView = () => {
     if (rootNotes.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
     const fallbackPalette = [
-      "262 62% 62%", // violet
-      "196 58% 50%", // cyan
-      "24 78% 58%", // orange
-      "332 62% 60%", // pink
-      "145 42% 50%", // green
-      "220 68% 62%", // blue
+      "262 62% 62%",
+      "196 58% 50%",
+      "24 78% 58%",
+      "332 62% 60%",
+      "145 42% 50%",
+      "220 68% 62%",
     ];
-
     const colorForRoot = (root: Note, index: number) => {
       const legacyCategory = categories.find((c) => c.id === root.categoryId);
       return root.color || legacyCategory?.color || fallbackPalette[index % fallbackPalette.length];
     };
+    const rootColors = new Map<string, string>();
+    rootNotes.forEach((r, i) => rootColors.set(r.id, colorForRoot(r, i)));
 
-    const descendantsCount = (noteId: string): number => {
-      const children = notes.filter((n) => n.parentNoteId === noteId);
-      return children.reduce((sum, child) => sum + 1 + descendantsCount(child.id), 0);
+    const skeleton = buildTreeSkeleton(
+      notes.map((n) => ({ id: n.id, parentId: n.parentNoteId ?? null })),
+      {
+        rootX: W / 2,
+        rootY: H - (isMobile ? 96 : 84),
+        compact: isMobile,
+        collapsed: collapsedIds,
+        hiddenRootIds: hiddenCategoryIds,
+      },
+    );
+
+    const posIdFor = (junctionId: string) => {
+      const j = skeleton.junctions.find((x) => x.id === junctionId);
+      if (!j) return junctionId;
+      if (j.id === skeleton.rootJunction.id) return "root";
+      return j.noteId ? `note-${j.noteId}` : j.id;
     };
 
-    // Shared vertical trunk. Exobrain is the base, not a radial hub.
-    const trunkX = W / 2;
-    const rootY = isMobile ? H - 88 : H - 72;
-    const trunkTopY = isMobile ? Math.max(96, H * 0.18) : Math.max(96, H * 0.16);
-    const trunkBottomY = rootY - (isMobile ? 34 : 38);
-
-    pos.push({
-      id: "root",
-      x: trunkX,
-      y: rootY,
-      type: "root",
-      label: brainName || "ExoBrain",
-      color: "265 24% 44%",
-      depth: -1,
-      z: 1,
-    });
-
-    // One virtual point at the crown so SVG can draw the uninterrupted trunk.
-    pos.push({
-      id: "trunk-top",
-      x: trunkX,
-      y: trunkTopY,
-      type: "category",
-      label: "",
-      color: "262 35% 58%",
-      depth: -1,
-      isVirtual: true,
-      z: 0.9,
-    });
-    parent["trunk-top"] = "root";
-    eds.push({ from: "root", to: "trunk-top", kind: "trunk" });
-
-    // Balance heavy subtrees between both sides so the crown does not become a list.
-    const weightedRoots = visibleRoots.map((root, originalIndex) => ({
-      root,
-      originalIndex,
-      weight: 1 + descendantsCount(root.id),
-    }));
-
-    const left: typeof weightedRoots = [];
-    const right: typeof weightedRoots = [];
-    let leftWeight = 0;
-    let rightWeight = 0;
-    weightedRoots
-      .slice()
-      .sort((a, b) => b.weight - a.weight)
-      .forEach((item) => {
-        if (leftWeight <= rightWeight) {
-          left.push(item);
-          leftWeight += item.weight;
-        } else {
-          right.push(item);
-          rightWeight += item.weight;
-        }
-      });
-
-    // Restore chronological/visual order inside each side.
-    left.sort((a, b) => a.originalIndex - b.originalIndex);
-    right.sort((a, b) => a.originalIndex - b.originalIndex);
-
-    // Alternamos lados subiendo por el tronco: cada rama principal nace a una altura
-    // distinta, como en un árbol real (nunca dos ramas en el mismo punto).
-    const interleaved: { root: Note; originalIndex: number; weight: number; side: -1 | 1 }[] = [];
-    const maxLen = Math.max(left.length, right.length);
-    for (let i = 0; i < maxLen; i++) {
-      if (left[i]) interleaved.push({ ...left[i], side: -1 });
-      if (right[i]) interleaved.push({ ...right[i], side: 1 });
-    }
-
-    const trunkSpan = Math.max(180, trunkBottomY - trunkTopY);
-    const attachLow = trunkBottomY - trunkSpan * 0.1;
-    const attachHigh = trunkTopY + trunkSpan * 0.12;
-
-    const allBySide = interleaved.map((item, i) => ({
-      ...item,
-      heightT: interleaved.length <= 1 ? 0.35 : i / (interleaved.length - 1),
-    }));
-
-    const clampUpperAngle = (angle: number, side: -1 | 1) => {
-      // Keep descendants in the crown: sideways/upwards, never hanging beneath the parent.
-      if (side === 1) return Math.max(-1.58, Math.min(0.08, angle));
-      return Math.max(-3.22, Math.min(-1.58, angle));
+    const branchZ = (branchRootId?: string) => {
+      if (!branchRootId || branchRootId === "trunk") return 1;
+      const idx = rootNotes.findIndex((r) => r.id === branchRootId);
+      return 0.78 + ((Math.max(0, idx) * 37) % 22) / 100;
     };
 
-    const placeChildren = (
-      parentNote: Note,
-      parentX: number,
-      parentY: number,
-      outwardAngle: number,
-      color: string,
-      depth: number,
-      branchRootId: string,
-      side: -1 | 1,
-      branchZ: number,
-    ) => {
-      const children = notes.filter((n) => n.parentNoteId === parentNote.id);
-      if (children.length === 0 || collapsedIds.has(parentNote.id)) return;
-
-      const count = children.length;
-      // El abanico se estrecha con la profundidad; nunca hijas apiladas en vertical.
-      const spread = Math.min(depth === 1 ? 1.55 : Math.max(0.5, 1.3 - depth * 0.12), 0.45 + count * 0.16);
-      const baseRadius = isMobile
-        ? depth === 1
-          ? 96
-          : Math.max(62, 90 - depth * 6)
-        : depth === 1
-          ? 138
-          : Math.max(80, 122 - depth * 9);
-      // Ramas con más descendencia necesitan más aire.
-      const weights = children.map((c) => 1 + descendantsCount(c.id));
-      const totalWeight = weights.reduce((a, b) => a + b, 0);
-
-      let acc = 0;
-      children.forEach((child, i) => {
-        const w = weights[i];
-        const t = totalWeight <= 0 ? 0 : (acc + w / 2) / totalWeight - 0.5;
-        acc += w;
-        const radius = baseRadius + Math.min(isMobile ? 46 : 92, Math.sqrt(w) * (isMobile ? 12 : 20));
-        // Small deterministic radius variation makes the crown less diagrammatic while
-        // preserving predictable positions between renders.
-        const radialJitter = ((i % 3) - 1) * (isMobile ? 8 : 15);
-        const rawAngle = outwardAngle + t * spread;
-        const angle = clampUpperAngle(rawAngle, side);
-        const childR = radius + radialJitter;
-        const x = parentX + Math.cos(angle) * childR;
-        const y = parentY + Math.sin(angle) * childR;
-        const childId = `note-${child.id}`;
-        const parentId = `note-${parentNote.id}`;
-        const childChildren = notes.filter((n) => n.parentNoteId === child.id);
-        const childExpanded = childChildren.length > 0 && !collapsedIds.has(child.id);
-
+    skeleton.junctions.forEach((j) => {
+      if (j.id === skeleton.rootJunction.id) {
         pos.push({
-          id: childId,
-          x,
-          y,
-          type: "note",
-          label: child.title,
-          color,
-          categoryId: child.categoryId ?? undefined,
-          noteId: child.id,
-          parentNoteId: child.parentNoteId,
-          noteType: child.noteType,
-          hasChildren: childChildren.length > 0,
-          isCollapsed: !childExpanded,
-          isMain: false,
-          depth,
-          branchRootId,
-          side,
-          z: Math.max(0.62, branchZ - depth * 0.035),
+          id: "root",
+          x: j.x,
+          y: j.y,
+          type: "root",
+          label: brainName || "ExoBrain",
+          color: "265 24% 44%",
+          depth: -1,
+          z: 1,
         });
-        parent[childId] = parentId;
-        eds.push({ from: parentId, to: childId, kind: "branch" });
+        return;
+      }
 
-        placeChildren(child, x, y, angle, color, depth + 1, branchRootId, side, branchZ);
-      });
-    };
+      if (!j.noteId) {
+        pos.push({
+          id: j.id,
+          x: j.x,
+          y: j.y,
+          type: "category",
+          label: "",
+          color: "262 32% 58%",
+          depth: -1,
+          isVirtual: true,
+          z: 1,
+        });
+        return;
+      }
 
-    allBySide.forEach((item, globalIndex) => {
-      const { root, side, heightT, originalIndex } = item;
-      const color = colorForRoot(root, originalIndex);
-      const sideT = heightT;
-
-      // Branches emerge progressively along the trunk, each at its own height.
-      const attachY = attachLow + (attachHigh - attachLow) * heightT;
-      const attachId = `attach-${root.id}`;
-      const branchZ = 0.76 + ((originalIndex * 37) % 24) / 100; // 0.76..0.99
-
+      const note = notes.find((n) => n.id === j.noteId);
+      if (!note) return;
+      const children = notes.filter((n) => n.parentNoteId === note.id);
+      const color = rootColors.get(j.branchRootId ?? note.id) || fallbackPalette[0];
       pos.push({
-        id: attachId,
-        x: trunkX,
-        y: attachY,
-        type: "category",
-        label: "",
-        color,
-        depth: -1,
-        isVirtual: true,
-        branchRootId: root.id,
-        side,
-        z: branchZ,
-      });
-      parent[attachId] = "root";
-
-      // Main branches arc outward and upward from that shared trunk.
-      const horizontal = isMobile ? Math.min(W * 0.28, 128) : Math.min(W * 0.24, 250);
-      const vertical = isMobile ? 58 + sideT * 34 : 82 + sideT * 54;
-      const mainX = trunkX + side * horizontal;
-      const mainY = Math.max(trunkTopY + 42, attachY - vertical);
-      const mainAngle = Math.atan2(mainY - attachY, mainX - trunkX);
-      const children = notes.filter((n) => n.parentNoteId === root.id);
-      const expanded = children.length > 0 && !collapsedIds.has(root.id);
-      const mainId = `note-${root.id}`;
-
-      pos.push({
-        id: mainId,
-        x: mainX,
-        y: mainY,
+        id: `note-${note.id}`,
+        x: j.x,
+        y: j.y,
         type: "note",
-        label: root.title,
+        label: note.title,
         color,
-        categoryId: root.categoryId ?? undefined,
-        noteId: root.id,
-        parentNoteId: root.parentNoteId,
-        noteType: root.noteType,
+        categoryId: note.categoryId ?? undefined,
+        noteId: note.id,
+        parentNoteId: note.parentNoteId,
+        noteType: note.noteType,
         hasChildren: children.length > 0,
-        isCollapsed: !expanded,
-        isMain: true,
-        depth: 0,
-        branchRootId: root.id,
-        side,
-        z: branchZ,
+        isCollapsed: collapsedIds.has(note.id) || children.length === 0,
+        isMain: j.depth === 1,
+        depth: Math.max(0, j.depth - 1),
+        branchRootId: j.branchRootId,
+        z: Math.max(0.6, branchZ(j.branchRootId) - Math.max(0, j.depth - 1) * 0.035),
       });
-      parent[mainId] = attachId;
-      eds.push({ from: attachId, to: mainId, kind: "branch" });
+    });
 
-      placeChildren(root, mainX, mainY, mainAngle, color, 1, root.id, side, branchZ);
+    skeleton.segments.forEach((seg) => {
+      const from = posIdFor(seg.fromJunctionId);
+      const to = posIdFor(seg.toJunctionId);
+      eds.push({ from, to, kind: seg.kind, d: seg.d, motif: seg.motif, mirror: seg.mirror });
+      parent[to] = from;
     });
 
     return { positions: pos, edges: eds, parentMap: parent };
-  }, [notes, categories, rootNotes, visibleRoots, brainName, size.w, size.h, collapsedIds]);
+  }, [notes, categories, rootNotes, hiddenCategoryIds, brainName, size.w, size.h, collapsedIds]);
+
 
   // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
   // node moves its whole subtree along with it.
