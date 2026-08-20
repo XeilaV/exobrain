@@ -762,15 +762,17 @@ const GraphView = () => {
       if (clickTimer.current) {
         clearTimeout(clickTimer.current);
         clickTimer.current = null;
-        // Double click
+        // Double click: plegar/desplegar manualmente (no altera pan ni zoom)
         if (nodeId.startsWith("note-")) {
           const nId = nodeId.replace("note-", "");
-          const note = notes.find((n) => n.id === nId);
           const hasChildren = notes.some((n) => n.parentNoteId === nId);
-          if (hasChildren && note) {
-            lastExpandedRef.current = note.isCollapsed ? nodeId : null;
-            lastCollapsedRef.current = note.isCollapsed ? null : nodeId;
-            setFocusNoteId(note.isCollapsed ? nId : null);
+          if (hasChildren) {
+            setCollapsedIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(nId)) next.delete(nId);
+              else next.add(nId);
+              return next;
+            });
             toggleNoteCollapsed(nId);
           }
         } else if (nodeId === "root") {
@@ -795,14 +797,8 @@ const GraphView = () => {
             });
             return;
           }
+          // Selección puramente visual: resalta la rama y atenúa el resto.
           setFocusNoteId(nId);
-          // En escritorio el panel lateral ocupa la derecha: desplazamos el mapa
-          // para que el nodo activo siga siendo visible.
-          if (window.innerWidth >= 768) {
-            const panelW = 400;
-            const overlapX = clientX - (window.innerWidth - panelW - 24);
-            if (overlapX > -40) setPan((p) => ({ x: p.x - (overlapX + 80), y: p.y }));
-          }
           setOpenPostIt({ noteId: nId, x: clientX, y: clientY });
         } else if (nodeId === "root") {
           // single click on root opens rename
