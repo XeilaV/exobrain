@@ -107,8 +107,9 @@ const dbToNote = (row: any): Note => ({
   icon: row.icon ?? null,
   posDx: row.pos_dx !== null && row.pos_dx !== undefined ? Number(row.pos_dx) : null,
   posDy: row.pos_dy !== null && row.pos_dy !== undefined ? Number(row.pos_dy) : null,
-
+  createdAt: row.created_at,
   updatedAt: row.updated_at,
+
 });
 
 const dbToCategory = (row: any): Category => ({
