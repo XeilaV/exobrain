@@ -1073,7 +1073,7 @@ const GraphView = () => {
             const z = node.z ?? 1;
             const isFocused = !!focusIds && focusIds.has(node.id);
             const isLinkSource = linkingNoteId && node.noteId === linkingNoteId;
-            const showChildLabel = isMainNote || showLeafLabels || isFocused;
+            const showChildLabel = isMainNote || isFocused || labelVisibleAtDepth(node.depth);
             const baseScale = focusIds ? (isFocused ? (isMainNote ? 1.06 : 1.025) : 0.96) : 0.96 + z * 0.04;
             const visualOpacity = dim * (focusIds ? 1 : Math.max(0.68, z));
 
