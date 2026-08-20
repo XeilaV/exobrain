@@ -855,8 +855,9 @@ const GraphView = () => {
 
   const dimFor = useCallback((id: string) => (focusIds && !focusIds.has(id) ? 0.16 : 1), [focusIds]);
 
-  // Nivel de detalle según zoom: con la vista alejada solo ramas principales
-  const showLeafLabels = viewZoom > 0.62;
+  // Nivel de detalle según zoom: la geometría no cambia, solo la legibilidad.
+  // Cada nivel de profundidad pide un poco más de acercamiento para mostrar texto.
+  const labelVisibleAtDepth = useCallback((depth: number) => viewZoom >= 0.5 + Math.max(0, depth) * 0.16, [viewZoom]);
 
   // Link edges (horizontal between notes)
   const linkEdges = useMemo(() => {
