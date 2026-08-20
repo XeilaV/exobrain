@@ -667,7 +667,7 @@ const GraphView = () => {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [cancelLongPress]);
+  }, [cancelLongPress, persistOffset]);
 
   // Click handling with double-click detection
   const handleNodeClick = useCallback(
