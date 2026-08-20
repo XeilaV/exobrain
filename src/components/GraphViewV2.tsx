@@ -36,7 +36,7 @@ import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { buildTreeSkeleton, segmentPath, STROKE_WIDTH, type SegmentKind } from "@/lib/treeShape";
+import { buildTreeSkeleton, motifPath, strokeForDepth, type BranchMotif } from "@/lib/treeGeometry";
 
 type NodeType = "root" | "category" | "note";
 
@@ -64,9 +64,11 @@ interface NodePos {
 interface Edge {
   from: string;
   to: string;
-  kind?: SegmentKind;
-  /** Path base del layout. En render se recalcula siempre desde las posiciones finales. */
+  kind?: "trunk" | "branch";
+  /** trazo precalculado a partir del motivo SVG */
   d?: string;
+  motif?: BranchMotif;
+  mirror?: boolean;
 }
 
 const ROOT_R = 30;
@@ -190,9 +192,9 @@ const GraphView = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNoteId]);
 
-  // Esqueleto del árbol: geometría determinista por sectores. Cada rama principal
-  // dispone de su propia banda y esa banda crece cuando aumenta su subárbol.
-  // Selección y zoom solo cambian cámara/opacidad/etiquetas, no la jerarquía.
+  // Esqueleto del árbol: geometría estática construida con los motivos Bézier
+  // extraídos de `Group 8.svg` (ver src/lib/treeGeometry.ts). Ni la selección ni
+  // el zoom recalculan posiciones: solo cámara, opacidad y etiquetas.
   const { positions, edges, parentMap } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
@@ -203,7 +205,14 @@ const GraphView = () => {
 
     if (rootNotes.length === 0) return { positions: pos, edges: eds, parentMap: parent };
 
-    const fallbackPalette = ["262 62% 62%", "196 58% 50%", "24 78% 58%", "332 62% 60%", "145 42% 50%", "220 68% 62%"];
+    const fallbackPalette = [
+      "262 62% 62%",
+      "196 58% 50%",
+      "24 78% 58%",
+      "332 62% 60%",
+      "145 42% 50%",
+      "220 68% 62%",
+    ];
     const colorForRoot = (root: Note, index: number) => {
       const legacyCategory = categories.find((c) => c.id === root.categoryId);
       return root.color || legacyCategory?.color || fallbackPalette[index % fallbackPalette.length];
@@ -285,7 +294,6 @@ const GraphView = () => {
         isMain: j.depth === 1,
         depth: Math.max(0, j.depth - 1),
         branchRootId: j.branchRootId,
-        side: j.side ?? (j.x >= W / 2 ? 1 : -1),
         z: Math.max(0.6, branchZ(j.branchRootId) - Math.max(0, j.depth - 1) * 0.035),
       });
     });
@@ -293,12 +301,13 @@ const GraphView = () => {
     skeleton.segments.forEach((seg) => {
       const from = posIdFor(seg.fromJunctionId);
       const to = posIdFor(seg.toJunctionId);
-      eds.push({ from, to, kind: seg.kind, d: seg.d });
+      eds.push({ from, to, kind: seg.kind, d: seg.d, motif: seg.motif, mirror: seg.mirror });
       parent[to] = from;
     });
 
     return { positions: pos, edges: eds, parentMap: parent };
   }, [notes, categories, rootNotes, hiddenCategoryIds, brainName, size.w, size.h, collapsedIds]);
+
 
   // Apply drag offsets — propagate ancestor offsets to descendants so dragging a
   // node moves its whole subtree along with it.
@@ -363,8 +372,8 @@ const GraphView = () => {
       return nodes.reduce(
         (bounds, node) => {
           const r = getNodeRadius(node);
-          const labelPadX = node.isVirtual ? 0 : node.type === "root" ? 54 : node.isMain ? 46 : 18;
-          const labelPadY = node.isVirtual ? 0 : node.type === "root" ? 22 : node.isMain ? 16 : 10;
+          const labelPadX = node.isVirtual ? 0 : node.type === "root" ? 86 : node.isMain ? 92 : 78;
+          const labelPadY = node.isVirtual ? 0 : node.type === "root" ? 24 : node.isMain ? 20 : 16;
           return {
             minX: Math.min(bounds.minX, node.x - Math.max(r, labelPadX)),
             maxX: Math.max(bounds.maxX, node.x + Math.max(r, labelPadX)),
@@ -390,7 +399,7 @@ const GraphView = () => {
     const availableH = Math.max(1, size.h - topMargin - bottomMargin);
     const treeW = Math.max(1, bounds.maxX - bounds.minX);
     const treeH = Math.max(1, bounds.maxY - bounds.minY);
-    const zoom = Math.min(1, Math.max(0.1, Math.min(availableW / treeW, availableH / treeH)));
+    const zoom = Math.min(1, Math.max(0.25, Math.min(availableW / treeW, availableH / treeH)));
     const treeCenterX = (bounds.minX + bounds.maxX) / 2;
     const treeCenterY = (bounds.minY + bounds.maxY) / 2;
     const targetX = size.w / 2;
@@ -418,7 +427,7 @@ const GraphView = () => {
 
   const zoomAt = useCallback((px: number, py: number, factor: number) => {
     setViewZoom((z) => {
-      const next = Math.max(0.1, Math.min(4, z * factor));
+      const next = Math.max(0.2, Math.min(4, z * factor));
       const k = next / z;
       setPan((p) => ({ x: px - (px - p.x) * k, y: py - (py - p.y) * k }));
       viewZoomRef.current = next;
@@ -673,12 +682,30 @@ const GraphView = () => {
     [contextMenu, notes, toggleNoteCollapsed, linkingNoteId, linkNotes],
   );
 
-  // Los enlaces cruzados no forman parte del árbol jerárquico. Se dibujan
-  // aparte, en gris discontinuo, para que nunca se confundan con una rama.
-  const crossLinkPath = (from: NodePos, to: NodePos) => {
+  // Smooth branch path. Main branches leave the shared trunk almost vertically
+  // and then bend outward; inner ramifications continue in the direction of growth.
+  const branchPath = (from: NodePos, to: NodePos, kind: "trunk" | "branch" = "branch") => {
+    if (kind === "trunk") {
+      const dy = to.y - from.y;
+      return `M ${from.x} ${from.y - ROOT_R * 0.55} C ${from.x - 2} ${from.y + dy * 0.34}, ${to.x + 2} ${from.y + dy * 0.72}, ${to.x} ${to.y}`;
+    }
+
     const dx = to.x - from.x;
     const dy = to.y - from.y;
-    return `M ${from.x} ${from.y} C ${from.x + dx * 0.34} ${from.y + dy * 0.08}, ${from.x + dx * 0.66} ${from.y + dy * 0.92}, ${to.x} ${to.y}`;
+    const leavesTrunk = from.isVirtual && from.id.startsWith("attach-");
+    if (leavesTrunk) {
+      const rise = Math.max(28, Math.abs(dy) * 0.42);
+      return `M ${from.x} ${from.y} C ${from.x} ${from.y - rise}, ${to.x - dx * 0.26} ${to.y - dy * 0.08}, ${to.x} ${to.y}`;
+    }
+
+    return `M ${from.x} ${from.y} C ${from.x + dx * 0.3} ${from.y + dy * 0.16}, ${from.x + dx * 0.74} ${from.y + dy * 0.88}, ${to.x} ${to.y}`;
+  };
+
+  // Trazo afilado: grueso junto al tronco, casi un pelo en las hojas.
+  const widthForDepth = (depth: number, isMain = false) => {
+    if (depth < 0) return 2.9;
+    if (isMain || depth === 0) return 2.5;
+    return Math.max(0.5, 1.9 / (1 + depth * 0.55));
   };
   // Rama con protagonismo: subárbol de la raíz del nodo enfocado
   const focusIds = useMemo(() => {
@@ -839,22 +866,39 @@ const GraphView = () => {
             if (!from || !to) return null;
 
             const kind = edge.kind ?? "branch";
-            const isStructuralBlue = kind === "trunk" || kind === "connector";
-            const width = STROKE_WIDTH;
+            const isTrunk = kind === "trunk";
+            const isMain = to.type === "note" && to.isMain;
+            const width = isTrunk ? 2.6 : Math.max(0.5, strokeForDepth(to.depth + 1, "branch") * 1.6);
             const z = Math.min(from.z ?? 1, to.z ?? 1);
-            const focusDim = isStructuralBlue ? 1 : Math.min(dimFor(edge.from), dimFor(edge.to));
+            const focusDim = isTrunk ? 1 : Math.min(dimFor(edge.from), dimFor(edge.to));
             const isActive = !!focusIds && focusIds.has(edge.to);
-            const baseOpacity = isStructuralBlue ? 0.92 : 0.84;
-            const opacity = isActive ? 1 : baseOpacity * z * focusDim;
-            const stroke = isStructuralBlue ? "hsl(218 72% 48%)" : `hsl(${to.color})`;
-
-            // IMPORTANTE: el path se calcula SIEMPRE desde las posiciones finales.
-            // Si una madre se arrastra, su offset acumulado también mueve a hijas y
-            // esta misma geometría vuelve a unir exactamente ambos junctions.
-            const d = segmentPath(from, to, kind, edge.to);
+            const baseOpacity = isTrunk ? 0.5 : isMain ? 0.78 : 0.56;
+            const opacity = isActive ? Math.min(0.96, baseOpacity + 0.16) : baseOpacity * z * focusDim;
+            const stroke = isTrunk ? "hsl(262 32% 58%)" : `hsl(${to.color})`;
+            // Geometría estática del motivo; solo se recalcula si el nodo se ha arrastrado.
+            const moved =
+              (offsets[edge.from] && (offsets[edge.from].dx || offsets[edge.from].dy)) ||
+              (offsets[edge.to] && (offsets[edge.to].dx || offsets[edge.to].dy));
+            const d =
+              edge.motif && (moved || !edge.d)
+                ? motifPath(from, to, edge.motif, !!edge.mirror)
+                : (edge.d ?? branchPath(from, to, kind));
 
             return (
               <g key={`be-${idx}`} style={{ opacity, transition: "opacity 320ms ease" }}>
+                {/* very soft under-line gives depth without neon */}
+                {!isTrunk && (
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={stroke}
+                    strokeWidth={width + 3.2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={isActive ? 0.09 : 0.045}
+                    filter="url(#branch-soft-depth)"
+                  />
+                )}
                 <path
                   d={d}
                   fill="none"
@@ -862,8 +906,19 @@ const GraphView = () => {
                   strokeWidth={width}
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
                 />
+                {/* one restrained highlight is enough for the 2.5D feel */}
+                {!isTrunk && z > 0.82 && (
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke="hsl(0 0% 100%)"
+                    strokeWidth={Math.max(0.45, width * 0.28)}
+                    strokeLinecap="round"
+                    opacity={0.22}
+                    transform="translate(-0.35 -0.55)"
+                  />
+                )}
               </g>
             );
           })}
@@ -876,13 +931,12 @@ const GraphView = () => {
             return (
               <path
                 key={`le-${idx}`}
-                d={crossLinkPath(from, to)}
+                d={branchPath(from, to, "branch")}
                 fill="none"
                 stroke="hsl(var(--muted-foreground) / 0.30)"
-                strokeWidth={1.2}
+                strokeWidth={1}
                 strokeDasharray="4 6"
                 strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
                 style={{ opacity: Math.min(dimFor(edge.from), dimFor(edge.to)), transition: "opacity 320ms ease" }}
               />
             );
@@ -952,56 +1006,49 @@ const GraphView = () => {
                 }}
               >
                 {isRoot ? (
-                  <>
+                  <div
+                    className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-2xl border bg-card/95 px-5 py-2.5 font-display font-semibold text-foreground shadow-sm"
+                    style={{
+                      borderColor: "hsl(262 30% 70% / 0.55)",
+                      boxShadow: "0 8px 26px hsl(262 30% 40% / 0.10)",
+                    }}
+                  >
+                    {node.label}
+                  </div>
+                ) : showChildLabel ? (
+                  <div
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center whitespace-nowrap rounded-full border bg-card/95 font-body text-foreground shadow-sm transition-shadow ${
+                      isMainNote
+                        ? "gap-2 px-3 py-1.5 text-[12px] font-semibold"
+                        : "gap-1.5 px-2.5 py-1 text-[10px] font-medium"
+                    } ${isLinkSource ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-background" : ""}`}
+                    style={{
+                      borderColor: `hsl(${node.color} / ${isFocused ? 0.72 : isMainNote ? 0.48 : 0.3})`,
+                      boxShadow: isFocused
+                        ? `0 5px 18px hsl(${node.color} / 0.18)`
+                        : `0 3px 12px hsl(${node.color} / 0.08)`,
+                    }}
+                  >
                     <span
-                      className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
-                      style={{
-                        width: 26,
-                        height: 26,
-                        backgroundColor: "hsl(218 72% 48%)",
-                        boxShadow: "0 3px 10px hsl(218 72% 38% / 0.18)",
-                      }}
+                      className={isMainNote ? "h-2 w-2 shrink-0 rounded-full" : "h-1.5 w-1.5 shrink-0 rounded-full"}
+                      style={{ backgroundColor: `hsl(${node.color})` }}
                     />
-                    <span className="absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap font-display text-[11px] font-semibold text-foreground/80">
-                      {node.label}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    {/* El nodo es el punto exacto de bifurcación, no una píldora que tapa la rama. */}
-                    <span
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${
-                        isLinkSource ? "ring-2 ring-primary/55 ring-offset-2 ring-offset-background" : ""
-                      }`}
-                      style={{
-                        width: isMainNote ? 15 : childCount > 0 ? 7 : 5,
-                        height: isMainNote ? 15 : childCount > 0 ? 7 : 5,
-                        backgroundColor: `hsl(${node.color})`,
-                        boxShadow: isFocused ? `0 0 0 4px hsl(${node.color} / 0.10)` : "none",
-                      }}
-                    />
-
-                    {showChildLabel && (
-                      <span
-                        className={`absolute top-1/2 -translate-y-1/2 whitespace-nowrap font-body text-foreground/85 ${
-                          isMainNote ? "text-[11px] font-semibold" : "text-[9px] font-medium"
-                        }`}
-                        style={
-                          node.side === -1
-                            ? { right: isMainNote ? 16 : 9, textAlign: "right" }
-                            : { left: isMainNote ? 16 : 9, textAlign: "left" }
-                        }
-                      >
-                        {nodeNote?.icon ? `${nodeNote.icon} ` : ""}
-                        <span className="inline-block max-w-[132px] overflow-hidden text-ellipsis align-bottom">
-                          {node.label}
-                        </span>
-                        {isMainNote && childCount > 0 && (
-                          <span className="ml-1 text-[9px] font-normal text-muted-foreground">{childCount}</span>
-                        )}
-                      </span>
+                    {nodeNote?.icon && <span className="text-[10px] leading-none opacity-80">{nodeNote.icon}</span>}
+                    <span className="max-w-[150px] overflow-hidden text-ellipsis">{node.label}</span>
+                    {childCount > 0 && (
+                      <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">{childCount}</span>
                     )}
-                  </>
+                  </div>
+                ) : (
+                  <span
+                    className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-card"
+                    style={{
+                      width: 6,
+                      height: 6,
+                      backgroundColor: `hsl(${node.color})`,
+                      boxShadow: `0 2px 7px hsl(${node.color} / 0.16)`,
+                    }}
+                  />
                 )}
               </motion.div>
             );
