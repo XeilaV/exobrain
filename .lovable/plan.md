@@ -2,17 +2,16 @@
 
 El objetivo será únicamente este: después de recolocar el árbol y recargar, todos los nodos deben aparecer exactamente en las mismas coordenadas del mapa.
 
-## Guardado absoluto, no relativo
+## Posición manual siempre
 
-El sistema actual guarda desplazamientos respecto al reparto automático. La posición quedará garantizada: no dependerá del reparto automático.
+El árbol pasará a ser de posición manual: la posición de cada nodo será un dato guardado, no un cálculo.
 
-Se sustituirá por coordenadas absolutas del espacio del árbol:
-
+- El reparto automático se usará una sola vez, para dar posición inicial a una nota que aún no tiene ninguna (la primera carga y cada nota nueva). En cuanto existe posición guardada, esa es la que manda siempre.
 - Al terminar de arrastrar un nodo, se guardará su posición final `x/y`.
 - Si se mueve una madre, se guardarán también las posiciones finales de todas sus hijas, nietas y descendientes que se hayan desplazado con ella.
-- Al cargar la app, una nota con posición guardada usará directamente esas coordenadas; el reparto automático solo se usará para notas que nunca hayan sido colocadas manualmente.
-- El botón **Guardar disposición** persistirá las coordenadas finales de todos los nodos visibles como respaldo manual.
-- **Restablecer todo** borrará esas coordenadas y devolverá el árbol al reparto automático.
+- Plegar, ocultar o mostrar ramas no recalculará ninguna posición: solo cambiará qué se ve.
+- El botón **Guardar disposición** persistirá las coordenadas finales de todos los nodos como respaldo manual.
+- **Restablecer todo** borrará las coordenadas y volverá a sembrar el árbol con el reparto automático.
 
 La cámara (zoom y pan) seguirá siendo independiente: guardar nodos no obliga a guardar la vista.
 
