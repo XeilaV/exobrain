@@ -15,8 +15,10 @@ El diagnóstico de colisiones se mantiene, pero el generador interno cambia: las
 Nueva pasada de extracción sobre `Group 8.svg` (solo en tiempo de implementación; el resultado queda como datos en `src/lib/treeGeometry.ts`):
 
 - Parsear todos los `path d` y muestrear sus extremos.
-- Agrupar por **puntos de unión**: paths cuyo punto inicial coincide (dentro de una tolerancia pequeña) con el punto final de otro forman una bifurcación real del dibujo.
+- Agrupar por **puntos de unión** por coincidencia geométrica de extremos, con tolerancia pequeña y **sin asumir orientación**: un path puede estar dibujado madre→hija o al revés. Se compara cada extremo (inicio y fin) contra los demás.
+- **Normalizar la dirección**: cuando un path esté invertido respecto a la unión, se invierte su Bézier matemáticamente (orden de segmentos y de puntos de control), de modo que la curva almacenada es exactamente la misma pero siempre va de la junction hacia la salida.
 - Cada bifurcación produce un `ForkMotif`: el eje de entrada (dirección de la rama madre entrante) define la orientación canónica, y cada salida se guarda con su curva cúbica completa y su punto final (`anchor`), normalizados respecto a ese eje y a la longitud de la salida más larga.
+
 
 ```text
 ForkMotif {
