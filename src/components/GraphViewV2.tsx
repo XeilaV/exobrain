@@ -36,7 +36,7 @@ import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { buildTreeSkeleton, motifPath, strokeForDepth, type BranchMotif } from "@/lib/treeGeometryV3";
+import { buildTreeSkeleton, motifPath, strokeForDepth, type BranchMotif } from "@/lib/treeGeometry";
 
 type NodeType = "root" | "category" | "note";
 
