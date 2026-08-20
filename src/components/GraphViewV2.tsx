@@ -339,10 +339,12 @@ const GraphView = () => {
       if (!note) return;
       const children = notes.filter((n) => n.parentNoteId === note.id);
       const color = rootColors.get(j.branchRootId ?? note.id) || fallbackPalette[0];
+      // Si la nota tiene posición manual guardada, manda sobre el reparto automático.
+      const hasSaved = note.posX != null && note.posY != null;
       pos.push({
         id: `note-${note.id}`,
-        x: j.x,
-        y: j.y,
+        x: hasSaved ? Number(note.posX) : j.x,
+        y: hasSaved ? Number(note.posY) : j.y,
         type: "note",
         label: note.title,
         color,
