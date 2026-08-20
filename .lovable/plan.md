@@ -34,7 +34,9 @@ Las curvas se copian tal cual (sin simplificar ni aproximar) y el conjunto se ap
 
 - **Sectores no solapados**: cada nota raíz recibe una cuña del arco superior proporcional a su peso (nº de descendientes). La cuña se subdivide al descender, de modo que un subtree nunca puede salir de su espacio.
 - **El sector solo hace tres cosas**: reservar espacio, elegir la orientación global de la bifurcación (bisectriz de la cuña) y calcular la escala máxima con la que el `extent` del motivo cabe dentro de la cuña.
-- **La posición de cada hija la decide el motivo**: se elige un `ForkMotif` con la aridad del nodo (o el más cercano, recortando/reutilizando salidas cuando no hay coincidencia exacta), se escala/rota/espeja como unidad y sus `anchor` transformados son las junctions de las hijas. **No hay `spread` ni `jitter` por hija.**
+- **La posición de cada hija la decide el motivo**: se elige un `ForkMotif` de la aridad exacta del nodo, se escala/rota/espeja como unidad y sus `anchor` transformados son las junctions de las hijas. **No hay `spread` ni `jitter` por hija.**
+- **Aridades no existentes**: nunca se duplica ni se reutiliza una salida para simular más hijos. Si no hay motivo con esa aridad, se **compone** encadenando bifurcaciones reales a través de junctions intermedias invisibles (sin nodo ni etiqueta): p. ej. 4 hijas = dos forks de 2 encadenados, 5 = fork de 2 + fork de 3. El reparto de hijas entre las sub-bifurcaciones se hace por peso, y la estructura resultante queda formada exclusivamente por motivos reales del SVG.
+
 - La variación entre bifurcaciones iguales viene de la elección determinista de motivo (hash del id) y del espejo, no de ruido angular.
 - **Decaimiento de longitud** por profundidad (≈0.72 por nivel) aplicado a la escala del motivo.
 - **Curvatura por profundidad**: en tramos largos se prefieren motivos de baja curvatura; los de curvatura fuerte se reservan para las ramitas cortas.
