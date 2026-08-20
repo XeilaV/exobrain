@@ -36,7 +36,7 @@ import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categoryColors";
 import { Note } from "@/types/notes";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { buildTreeSkeleton, segmentPath, strokeForDepth, type SegmentKind } from "@/lib/treeGeometry";
+import { buildTreeSkeleton, segmentPath, STROKE_WIDTH, type SegmentKind } from "@/lib/treeShape";
 
 type NodeType = "root" | "category" | "note";
 
