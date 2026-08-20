@@ -401,7 +401,7 @@ const GraphView = () => {
       const mainY = Math.max(trunkTopY + 42, attachY - vertical);
       const mainAngle = Math.atan2(mainY - attachY, mainX - trunkX);
       const children = notes.filter((n) => n.parentNoteId === root.id);
-      const expanded = root.isCollapsed === false && children.length > 0;
+      const expanded = children.length > 0 && !collapsedIds.has(root.id);
       const mainId = `note-${root.id}`;
 
       pos.push({
