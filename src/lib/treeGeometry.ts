@@ -156,7 +156,9 @@ export const buildTreeSkeleton = (notes: TreeNoteInput[], opts: SkeletonOptions 
   const roots = (childrenOf.get(null) ?? []).filter((n) => !hidden.has(n.id));
 
   // --- Tronco: vertical, ligeramente irregular, partido en tramos ---
-  const trunkStep = (compact ? 78 : 108) * (roots.length > 6 ? 0.92 : 1);
+  // Paso del tronco algo mayor para que las cabezas de rama no se crucen.
+  const trunkStep = (compact ? 88 : 124) * (roots.length > 6 ? 0.94 : 1);
+
   let prev = rootJunction;
   const trunkPoints: TreeJunction[] = [rootJunction];
 
