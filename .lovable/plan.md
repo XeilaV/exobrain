@@ -1,41 +1,43 @@
-# Replicar exactamente el diseño entregado
+# Replicar la captura como geometría canónica fija
 
-Sí es viable reproducir fielmente la captura y dejar esa composición como geometría canónica e inmóvil. En la proporción de referencia se copiarán posiciones, silueta, tronco, bifurcaciones, ramas, etiquetas, tamaños, colores y jerarquía visual. En otras pantallas se aplicará únicamente una escala uniforme de toda la composición: no se redistribuirá ni deformará.
+## Viabilidad y límite real
 
-La única limitación que debo expresar con precisión es que una captura rasterizada no contiene las coordenadas vectoriales originales de cada píxel. Por tanto, no es honesto prometer igualdad matemática píxel a píxel; sí una reconstrucción visualmente idéntica, calibrada contra la propia captura. La geometría Bézier de `Group 8.svg` seguirá aportando los trazados vectoriales reales donde corresponda.
+Sí se puede reproducir la composición de la captura con fidelidad visual de píxel en su tamaño de referencia (611 × 767) y mantenerla fija. La captura es raster, por lo que no contiene los puntos Bézier originales: no es posible prometer identidad matemática con el diseño fuente desconocido, pero sí una réplica visual calibrada contra sus píxeles.
 
-## Geometría canónica de la captura
+La réplica seguirá siendo interactiva. No se utilizará la captura como fondo ni se simularán los nodos: notas, selección, edición, plegado, filtros, pan y zoom continuarán funcionando.
 
-- Sustituir el esqueleto automático visible por una escena fija que incluya explícitamente todas las notas actuales, el origen **ExoBrain**, el tronco, cada punto de unión y cada segmento de rama.
-- Tomar las coordenadas absolutas ya guardadas de las notas como anclajes iniciales y calibrarlas contra la captura de referencia.
-- Definir también como datos fijos las coordenadas de los puntos de unión y los segmentos Bézier; no volver a derivarlos del número de raíces, profundidad, viewport, selección o estado de la interfaz.
-- Mantener cada bifurcación correctamente separada: la madre termina en la unión y cada hija comienza exactamente allí, con los nodos por encima.
-- Conservar la misma proporción espacial, longitudes cortas, silueta, orden de ramas y ausencia de cruces del diseño entregado.
+## Geometría exacta de la captura
 
-## Apariencia idéntica
+- Calcar el tronco violeta, sus puntos de unión y cada ramificación visible directamente sobre la captura.
+- Guardar posiciones de nodos, uniones y puntos de control Bézier como constantes canónicas en coordenadas del lienzo de referencia.
+- Asociar las cinco ramas principales a **Reflexiónes**, **Ideas**, **Tareas**, **Abuela Carmen** y **Psico**, respetando exactamente su ubicación y color en la captura.
+- Asignar los descendientes reales a los extremos y bifurcaciones correspondientes según su jerarquía; los títulos ocultos en la captura conservarán sus notas reales.
+- Hacer que cada rama madre termine en su unión y que cada hija comience ahí, sin trazos continuos ocultos.
 
-- Igualar el fondo claro, el tronco violeta, los colores concretos de cada rama y la intensidad/grosor de los trazos.
-- Replicar las cápsulas blancas, puntos de color, tipografía, tamaños, bordes, sombras y posición de cada etiqueta respecto a su rama.
-- Calibrar el encuadre inicial para que la base, la copa y los márgenes coincidan con la captura.
-- No reinterpretar el diseño ni aplicar otra estética “inspirada” en él.
+## Inmovilidad total
 
-## Inmovilidad real
+- Retirar `buildTreeSkeleton` de la composición renderizada y eliminar cualquier fallback que vuelva a generar o redistribuir el árbol.
+- La selección, apertura de notas, zoom, pan, filtros, plegado y cambios de viewport no modificarán ninguna coordenada.
+- Los nodos no serán arrastrables y no habrá acciones de guardar/restablecer disposición.
+- En otras pantallas se aplicará una única transformación uniforme de cámara: misma silueta y proporciones, sin deformación ni reajuste interno.
 
-- Eliminar del render final la intervención de `buildTreeSkeleton` sobre la composición canónica.
-- No recalcular geometría al cargar, redimensionar, seleccionar, hacer zoom, mover la cámara, filtrar, plegar o abrir una nota.
-- Mantener desactivado el arrastre de nodos y no recuperar controles de guardar/restablecer disposición.
-- El pan y el zoom actuarán únicamente como cámara.
-- El ajuste a móvil/escritorio será una transformación uniforme de toda la escena, nunca un reparto responsive de sus elementos.
+## Notas nuevas y cambios de jerarquía
 
-## Notas nuevas
+- Una nota nueva recibirá un punto fijo próximo a su madre mediante una extensión corta de esa rama.
+- Ningún nodo existente se moverá para abrir espacio.
+- Si se cambia una nota de madre con **Mover a…**, se conectará desde su posición fija actual a la nueva madre; no se redistribuirá el árbol.
+- Las coordenadas nuevas se guardarán inmediatamente para que cada recarga sea idéntica.
 
-- Una nota nueva no moverá ni reajustará ninguna pieza de la composición canónica.
-- Se colocará en una ranura local determinista junto a su madre y esa posición quedará persistida inmediatamente.
-- Si esa zona ya no dispone de espacio, se prolongará únicamente la rama nueva hacia fuera; no se desplazarán nodos existentes ni se reconstruirá el árbol.
+## Detalles técnicos
+
+- Crear una definición de escena canónica con nodos, uniones y curvas en el sistema 611 × 767 de la referencia.
+- `GraphViewV2` consumirá directamente esa escena y solo aplicará la matriz de cámara.
+- Las posiciones canónicas tendrán prioridad sobre las coordenadas actualmente guardadas, porque estas no corresponden espacialmente con la captura.
+- Mantener los motivos extraídos de `Group 8.svg` únicamente donde coincidan con el calco; las curvas visibles de la captura mandarán sobre cualquier generador.
 
 ## Verificación visual obligatoria
 
-- Renderizar la app con la misma proporción de la captura y compararla mediante superposición visual con la referencia.
-- Corregir iterativamente posiciones, anclajes, curvas, colores, cápsulas y márgenes hasta eliminar diferencias perceptibles.
-- Verificar después escritorio y móvil para confirmar que ambos muestran exactamente la misma silueta, solo escalada.
-- Confirmar mediante interacción y recargas que ninguna nota, unión o rama cambia de coordenadas y que selección, pan y zoom no alteran el diseño.
+- Renderizar a 611 × 767 y superponerlo con la captura al 50 % de opacidad.
+- Corregir iterativamente tronco, uniones, extremos, cápsulas y colores hasta que no haya desplazamientos perceptibles.
+- Verificar después escritorio y móvil: la composición solo cambia de escala/encuadre.
+- Recargar, seleccionar, plegar, filtrar, abrir notas y usar pan/zoom; comparar coordenadas antes y después para confirmar que permanecen idénticas.
