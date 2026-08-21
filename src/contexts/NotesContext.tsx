@@ -220,6 +220,29 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, 500);
   }, []);
 
+    const updateNotePosition = useCallback(async (id: string, dx: number | null, dy: number | null) => {
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, posDx: dx, posDy: dy } : n));
+    await supabase.from("notes").update({ pos_dx: dx, pos_dy: dy }).eq("id", id);
+  }, []);
+
+  const saveNotePositions = useCallback(async (entries: { id: string; dx: number; dy: number }[]) => {
+    if (entries.length === 0) return;
+    const map = new Map(entries.map(e => [e.id, e]));
+    setNotes(prev => prev.map(n => {
+      const e = map.get(n.id);
+      return e ? { ...n, posDx: e.dx, posDy: e.dy } : n;
+    }));
+    await Promise.all(
+      entries.map(e => supabase.from("notes").update({ pos_dx: e.dx, pos_dy: e.dy }).eq("id", e.id)),
+    );
+  }, []);
+
+  const clearAllPositions = useCallback(async () => {
+    if (!user) return;
+    setNotes(prev => prev.map(n => ({ ...n, posDx: null, posDy: null })));
+    await supabase.from("notes").update({ pos_dx: null, pos_dy: null }).eq("user_id", user.id);
+  }, [user]);
+
   const deleteNote = useCallback(async (id: string) => {
     setNotes(prev => prev.filter(n => n.id !== id).map(n => ({
       ...n,
@@ -584,6 +607,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       getSubcategories, getRootCategories, getCategoryPath,
       brainName, setBrainName, onboarded, setOnboarded,
       applyAiAction, getNoteVersions, restoreVersion, recoverDeletedVersion,
+      updateNotePosition, saveNotePositions, clearAllPositions,
     }}>
       {children}
     </NotesContext.Provider>
