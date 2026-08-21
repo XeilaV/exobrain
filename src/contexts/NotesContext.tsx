@@ -82,6 +82,9 @@ interface NotesContextType {
   getNoteVersions: (noteId: string) => Promise<NoteVersion[]>;
   restoreVersion: (noteId: string, versionId: string) => Promise<boolean>;
   recoverDeletedVersion: (versionId: string) => Promise<Note | null>;
+  updateNotePosition: (id: string, dx: number | null, dy: number | null) => Promise<void>;
+  saveNotePositions: (entries: { id: string; dx: number; dy: number }[]) => Promise<void>;
+  clearAllPositions: () => Promise<void>;
 }
 
 const NotesContext = createContext<NotesContextType | null>(null);
@@ -100,6 +103,8 @@ const dbToNote = (row: any): Note => ({
   categoryId: row.category_id ?? null,
   parentNoteId: row.parent_note_id ?? null,
   color: row.color ?? null,
+  posDx: row.pos_dx ?? null,
+  posDy: row.pos_dy ?? null,
   linkedNoteIds: row.linked_note_ids ?? [],
   checklist: (row.checklist as ChecklistItem[]) ?? [],
   noteType: (row.note_type as NoteType) ?? "text",
