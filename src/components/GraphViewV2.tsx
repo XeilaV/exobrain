@@ -379,6 +379,25 @@ const GraphView = () => {
     });
   }, [positions, offsets, parentMap]);
 
+    // Congela en BD, sin que el usuario tenga que arrastrarlas, cualquier nota
+  // que todavía no tenga posición propia (recién creada, o legacy de antes de
+  // este fix). En cuanto se persiste, hasSavedPos pasa a true en el próximo
+  // render y el skeleton deja de tocarla para siempre.
+  useEffect(() => {
+    const toPersist = positions
+      .filter((p) => p.type === "note" && p.noteId)
+      .map((p) => {
+        const note = notes.find((n) => n.id === p.noteId);
+        if (!note || (note.posDx != null && note.posDy != null)) return null;
+        return { id: note.id, dx: p.x, dy: p.y };
+      })
+      .filter((v): v is { id: string; dx: number; dy: number } => v !== null);
+
+    if (toPersist.length > 0) {
+      void saveNotePositions(toPersist);
+    }
+  }, [positions, notes, saveNotePositions]);
+  
   const getPos = (id: string) => positionsWithOffsets.find((p) => p.id === id);
 
   const getNodeRadius = useCallback((node: NodePos) => {
