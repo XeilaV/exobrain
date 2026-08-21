@@ -211,16 +211,15 @@ const GraphView = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNoteId]);
 
-  // V3: straight-line branching tree. The shape comes from node placement;
-  // SVG edges are simple straight segments, like Obsidian, but every root starts
-  // from the shared ExoBrain trunk.
-  // Esqueleto del árbol: geometría AUTOMÁTICA y genérica (ver src/lib/treeGeometry.ts),
-  // válida para cualquier número de raíces/hijas/nietas — nada de posiciones fijadas
-  // a mano por nombre de categoría. Sobre esa base se suma, nota a nota, el
-  // desplazamiento manual persistido (note.posDx/posDy), acumulado a través de toda
-  // la cadena de padres para que arrastrar una nota mueva también a su descendencia
-  // ya guardada. El resultado: automático por defecto, pero cualquier nota se puede
-  // "anclar" a mano y esa posición sobrevive a recargar la página.
+  // Congelado por nota: si note.posDx/posDy existen, ESA es la posición real y
+  // absoluta de la nota — el skeleton nunca vuelve a tocarla, sin importar
+  // cuántas hermanas tenga o cuántas notas se añadan/borren en el árbol.
+  // Solo las notas SIN posición guardada (recién creadas, o legacy) usan el
+  // skeleton como semilla: nacen en el hueco que le tocaría según el árbol
+  // automático, anclado a la posición REAL de su padre (no a la posición
+  // teórica del padre en el skeleton puro), para que la rama nueva salga bien
+  // aunque el padre lleve tiempo movido a mano. Esa semilla se persiste sola
+  // en el useEffect de más abajo, y desde ese instante deja de ser "auto".
   const { positions, edges, parentMap } = useMemo(() => {
     const pos: NodePos[] = [];
     const eds: Edge[] = [];
@@ -257,10 +256,12 @@ const GraphView = () => {
       return j.noteId ? `note-${j.noteId}` : j.id;
     };
 
-    // Acumula, en orden padre→hijo (el orden en que `buildTreeSkeleton` genera las
-    // junctions), el desplazamiento manual guardado de cada nota más el de todos
-    // sus ancestros.
-    const savedDeltaByNoteId = new Map<string, { dx: number; dy: number }>();
+    // Posición "pura" del skeleton por nota, solo para poder calcular el
+    // offset semilla de una nota nueva respecto a su padre.
+    const skeletonByNoteId = new Map<string, { x: number; y: number }>();
+    skeleton.junctions.forEach((j) => {
+      if (j.noteId) skeletonByNoteId.set(j.noteId, { x: j.x, y: j.y });
+    });
 
     skeleton.junctions.forEach((j) => {
       if (j.id === skeleton.rootJunction.id) {
@@ -295,18 +296,38 @@ const GraphView = () => {
       const note = notes.find((n) => n.id === j.noteId);
       if (!note) return;
 
-      const parentDelta = note.parentNoteId ? savedDeltaByNoteId.get(note.parentNoteId) ?? { dx: 0, dy: 0 } : { dx: 0, dy: 0 };
-      const ownDx = note.posDx ?? 0;
-      const ownDy = note.posDy ?? 0;
-      const totalDelta = { dx: parentDelta.dx + ownDx, dy: parentDelta.dy + ownDy };
-      savedDeltaByNoteId.set(note.id, totalDelta);
+      const hasSavedPos = note.posDx != null && note.posDy != null;
+      let x: number;
+      let y: number;
+
+      if (hasSavedPos) {
+        // Posición congelada: se usa tal cual, el skeleton no interviene.
+        x = note.posDx as number;
+        y = note.posDy as number;
+      } else {
+        // Nota sin posición propia todavía: nace en el hueco del skeleton,
+        // anclada a la posición REAL (ya resuelta) de su padre si la tiene.
+        const skeletonSelf = { x: j.x, y: j.y };
+        const skeletonParent = note.parentNoteId ? skeletonByNoteId.get(note.parentNoteId) : undefined;
+        const parentResolved = note.parentNoteId
+          ? pos.find((p) => p.id === `note-${note.parentNoteId}`)
+          : undefined;
+
+        if (skeletonParent && parentResolved) {
+          x = parentResolved.x + (skeletonSelf.x - skeletonParent.x);
+          y = parentResolved.y + (skeletonSelf.y - skeletonParent.y);
+        } else {
+          x = skeletonSelf.x;
+          y = skeletonSelf.y;
+        }
+      }
 
       const children = notes.filter((n) => n.parentNoteId === note.id);
       const color = colorForRoot(j.branchRootId ?? note.id);
       pos.push({
         id: `note-${note.id}`,
-        x: j.x + totalDelta.dx,
-        y: j.y + totalDelta.dy,
+        x,
+        y,
         type: "note",
         label: note.title,
         color,
